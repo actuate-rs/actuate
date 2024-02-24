@@ -20,7 +20,9 @@
 </div>
 
 <br />
-A reactive runtime for embedded systems
+
+A reactive diagram for robotics and control systems.
+Actuate leverages Rust's type system to create an efficient diagram that connects your application's systems.
 
 ```rust
 use actuate::{Diagram, PidController};
@@ -57,3 +59,15 @@ fn main() {
     }
 }
 ```
+
+## How it works
+Actuate connects systems together by their inputs and outputs.
+A system taking `&T` as a parameter will be linked to another system taking `&mut T`.
+
+Output: `&mut T` -> Input: `&T`
+
+## Inspiration
+This crate is inspired by [Drake](https://drake.mit.edu) and aims to provide a similar model of
+connecting systems together to form a complete diagram of your program.
+Similar to [Bevy](https://docs.rs/bevy/latest/bevy/), Actuate uses function parameter types to connect systems.
+In contrast to the ECS pattern, however, this crate requires each type be unique per `Diagram`.
