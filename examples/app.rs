@@ -26,4 +26,5 @@ fn main() {
         .add_system(c)
         .build();
     diagram.run();
+    diagram.run();
 }

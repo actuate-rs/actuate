@@ -2,7 +2,7 @@ use crate::{Id, World};
 use std::{
     cell::UnsafeCell,
     collections::{HashMap, HashSet},
-    fmt,
+    fmt, mem,
 };
 
 mod builder;
@@ -16,6 +16,7 @@ pub struct Diagram {
     world: World,
     inputs: Vec<(Id, Id)>,
     outputs: HashSet<Id>,
+    finished_systems: HashSet<Id>,
 }
 
 impl Diagram {
@@ -26,10 +27,13 @@ impl Diagram {
     pub fn run(&mut self) {
         let mut queue: Vec<_> = self.inputs.iter().map(|(_, id)| *id).collect();
         while let Some(id) = queue.pop() {
-            let node = self.nodes.get_mut(&id).unwrap();
-            unsafe { node.data.system.run_any(&UnsafeCell::new(&mut self.world)) };
-            queue.extend(node.children.iter().copied());
+            if self.finished_systems.insert(id) {
+                let node = self.nodes.get_mut(&id).unwrap();
+                unsafe { node.data.system.run_any(&UnsafeCell::new(&mut self.world)) };
+                queue.extend(node.children.iter().copied());
+            }
         }
+        mem::take(&mut self.finished_systems);
     }
 }
 

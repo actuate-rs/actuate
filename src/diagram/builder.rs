@@ -123,6 +123,7 @@ impl Builder {
             },
             inputs,
             outputs: mem::take(&mut self.outputs),
+            finished_systems: HashSet::new(),
         }
     }
 }
