@@ -23,7 +23,7 @@ impl Builder {
     /// Add a system to the diagram.
     pub fn add_system<'a, Marker>(&mut self, system: impl IntoSystem<'a, Marker>) -> &mut Self
     where
-        Self: 'a,
+        'static: 'a,
     {
         let s = system.into_system();
         let id = Id {

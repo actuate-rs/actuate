@@ -2,9 +2,10 @@ use crate::{Id, Query, World};
 use std::{cell::UnsafeCell, marker::PhantomData, mem};
 
 pub trait System<'a>: 'static {
-    type Query: Query<'a>;
+    type Input<'w>;
+    type Query<'w>: Query<'a, Output<'w> = Self::Input<'w>>;
 
-    fn run(&self, query: Self::Query);
+    fn run<'w>(&self, input: Self::Input<'w>);
 }
 
 pub struct FnSystem<F, Marker> {
@@ -14,13 +15,19 @@ pub struct FnSystem<F, Marker> {
 
 impl<'a, F, Q> System<'a> for FnSystem<F, (Q,)>
 where
-    F: Fn(Q) + 'static,
+    F: 'static,
+    &'a F: for<'w> Fn(Q) + for<'w> Fn(Q::Output<'w>),
     Q: Query<'a> + 'static,
 {
-    type Query = Q;
+    type Input<'w> = Q::Output<'w>;
+    type Query<'w> = Q;
 
-    fn run(&self, query: Self::Query) {
-        (self.f)(query)
+    fn run<'w>(&self, input: Self::Input<'w>) {
+        fn call_inner<QParam>(f: impl Fn(QParam), a0: QParam) {
+            f(a0)
+        }
+        let f: &'a F = unsafe { mem::transmute(&self.f) };
+        call_inner(f, input)
     }
 }
 
@@ -28,18 +35,28 @@ macro_rules! impl_system_for_fn_system {
     ($($t:tt: $idx:tt),*) => {
         impl<'a, F, $($t: Query<'a> + 'static),*> System<'a> for FnSystem<F, ($($t),*)>
         where
-            F: Fn($($t),*) + 'static,
+            F: 'static,
+            &'a F: for<'w> Fn($($t),*) + for<'w> Fn($($t::Output<'w>),*),
         {
-            type Query = ($($t),*);
+            type Input<'w> = ($($t::Output<'w>),*);
+            type Query<'w> = ($($t),*);
 
-            fn run(&self, query: Self::Query) {
-                (self.f)($(query.$idx),*)
+            fn run<'w>(&self, input: Self::Input<'w>) {
+                fn call_inner<'a, $($t),*>(
+                    f: impl Fn($($t),*),
+                    input: ($($t),*)
+               ){
+                   f($(input.$idx),*)
+               }
+               let f: &'a F = unsafe { mem::transmute(&self.f)};
+               call_inner(f, input)
             }
         }
 
         impl<'a, F, $($t: Query<'a> + 'static),*> IntoSystem<'a, ($($t),*)> for F
         where
-            F: Fn($($t),*) + 'static,
+            F: 'static,
+            &'a F: for<'w> Fn($($t),*) + for<'w> Fn($($t::Output<'w>),*),
         {
             type System = FnSystem<F, ($($t),*)>;
 
@@ -69,7 +86,8 @@ pub trait IntoSystem<'a, Marker> {
 
 impl<'a, F, Q> IntoSystem<'a, (Q,)> for F
 where
-    F: Fn(Q) + 'static,
+    F: 'static,
+    &'a F: for<'w> Fn(Q) + for<'w> Fn(Q::Output<'w>),
     Q: Query<'a> + 'static,
 {
     type System = FnSystem<F, (Q,)>;

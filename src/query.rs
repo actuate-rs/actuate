@@ -5,14 +5,18 @@ use std::{
 };
 
 pub trait Query<'a> {
+    type Output<'w>;
+
     fn reads(ids: &mut Vec<Id>);
 
     fn writes(ids: &mut Vec<Id>);
 
-    fn query(world: &UnsafeCell<&'a mut World>) -> Self;
+    fn query<'w>(world: &UnsafeCell<&'w mut World>) -> Self::Output<'w>;
 }
 
 impl<'a, T: 'static> Query<'a> for &'a T {
+    type Output<'w> = &'w T;
+
     fn reads(ids: &mut Vec<Id>) {
         ids.push(Id {
             type_id: TypeId::of::<T>(),
@@ -22,7 +26,7 @@ impl<'a, T: 'static> Query<'a> for &'a T {
 
     fn writes(_ids: &mut Vec<Id>) {}
 
-    fn query(world: &UnsafeCell<&'a mut World>) -> Self {
+    fn query<'w>(world: &UnsafeCell<&'w mut World>) -> Self::Output<'w> {
         let world = unsafe { &mut *world.get() };
         let id = Id {
             type_id: TypeId::of::<T>(),
@@ -33,6 +37,8 @@ impl<'a, T: 'static> Query<'a> for &'a T {
 }
 
 impl<'a, T: 'static> Query<'a> for &'a mut T {
+    type Output<'w> = &'w mut T;
+
     fn reads(ids: &mut Vec<Id>) {
         ids.push(Id {
             type_id: TypeId::of::<T>(),
@@ -47,7 +53,7 @@ impl<'a, T: 'static> Query<'a> for &'a mut T {
         })
     }
 
-    fn query(world: &UnsafeCell<&'a mut World>) -> Self {
+    fn query<'w>(world: &UnsafeCell<&'w mut World>) -> Self::Output<'w> {
         let world = unsafe { &mut *world.get() };
         let id = Id {
             type_id: TypeId::of::<T>(),
@@ -60,6 +66,8 @@ impl<'a, T: 'static> Query<'a> for &'a mut T {
 macro_rules! impl_query_for_tuple {
     ($($t:tt),*) => {
         impl<'a, $($t: Query<'a>),*> Query<'a> for ($($t),*) {
+            type Output<'w> = ($($t::Output<'w>),*);
+
             fn reads(ids: &mut Vec<Id>) {
                 $($t::reads(ids));*
             }
@@ -68,7 +76,7 @@ macro_rules! impl_query_for_tuple {
                 $($t::writes(ids));*
             }
 
-            fn query(world: &UnsafeCell<&'a mut World>) -> Self {
+            fn query<'w>(world: &UnsafeCell<&'w mut World>) -> Self::Output<'w> {
                 ($($t::query(world)),*)
             }
         }

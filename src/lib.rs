@@ -27,7 +27,10 @@ pub struct World {
 }
 
 impl World {
-    pub fn query<'a, Q: Query<'a>>(&'a mut self) -> Q {
+    pub fn query<'a, 'w, Q>(&'w mut self) -> Q::Output<'w>
+    where
+        Q: Query<'a>,
+    {
         Q::query(&UnsafeCell::new(self))
     }
 }
