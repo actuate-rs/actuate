@@ -9,7 +9,7 @@ use std::{
 
 #[derive(Default)]
 pub struct World {
-    states: HashMap<TypeId, Box<dyn Any>>,
+    states: HashMap<Id, Box<dyn Any>>,
 }
 
 impl World {
@@ -38,12 +38,11 @@ impl<'a, T: 'static> Query<'a> for &'a T {
 
     fn query(world: &UnsafeCell<&'a mut World>) -> Self {
         let world = unsafe { &mut *world.get() };
-        world
-            .states
-            .get(&TypeId::of::<T>())
-            .unwrap()
-            .downcast_ref()
-            .unwrap()
+        let id = Id {
+            type_id: TypeId::of::<T>(),
+            name: any::type_name::<T>(),
+        };
+        world.states.get(&id).unwrap().downcast_ref().unwrap()
     }
 }
 
@@ -59,12 +58,11 @@ impl<'a, T: 'static> Query<'a> for &'a mut T {
 
     fn query(world: &UnsafeCell<&'a mut World>) -> Self {
         let world = unsafe { &mut *world.get() };
-        world
-            .states
-            .get_mut(&TypeId::of::<T>())
-            .unwrap()
-            .downcast_mut()
-            .unwrap()
+        let id = Id {
+            type_id: TypeId::of::<T>(),
+            name: any::type_name::<T>(),
+        };
+        world.states.get_mut(&id).unwrap().downcast_mut().unwrap()
     }
 }
 
@@ -300,7 +298,9 @@ impl Builder {
 
         Diagram {
             nodes,
-            states: mem::take(&mut self.states),
+            world: World {
+                states: mem::take(&mut self.states),
+            },
             inputs,
             outputs: mem::take(&mut self.outputs),
         }
@@ -362,9 +362,24 @@ impl fmt::Debug for NodeDebugger<'_> {
 
 pub struct Diagram {
     nodes: HashMap<Id, Node>,
-    states: HashMap<Id, Box<dyn Any>>,
+    world: World,
     inputs: Vec<(Id, Id)>,
     outputs: HashSet<Id>,
+}
+
+impl Diagram {
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
+    pub fn run(&mut self) {
+        let mut queue: Vec<_> = self.inputs.iter().map(|(_, id)| *id).collect();
+        while let Some(id) = queue.pop() {
+            let node = self.nodes.get_mut(&id).unwrap();
+            unsafe { node.data.system.run_any(&UnsafeCell::new(&mut self.world)) };
+            queue.extend(node.children.iter().copied());
+        }
+    }
 }
 
 impl fmt::Debug for Diagram {
