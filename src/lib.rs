@@ -1,7 +1,7 @@
 use std::{
-    any::{Any, TypeId},
+    any::{self, Any, TypeId},
     cell::UnsafeCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     marker::PhantomData,
     mem,
 };
@@ -89,8 +89,17 @@ impl<'a, S: System<'a>> AnySystem for S {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Id {
+    type_id: TypeId,
+    name: &'static str,
+}
+
 #[derive(Default)]
 pub struct Builder {
+    states: HashMap<Id, Box<dyn Any>>,
+    inputs: HashSet<Id>,
+    outputs: HashSet<Id>,
     systems: HashMap<TypeId, Box<dyn AnySystem>>,
 }
 
@@ -101,5 +110,30 @@ impl Builder {
     {
         let s = system.into_system();
         self.systems.insert(s.type_id(), Box::new(s));
+    }
+
+    pub fn add_state(&mut self, state: impl Any) -> &mut Self {
+        let id = Id {
+            type_id: state.type_id(),
+            name: any::type_name_of_val(&state),
+        };
+        self.states.insert(id, Box::new(state));
+        self
+    }
+
+    pub fn add_input(&mut self, input: impl Any) -> &mut Self {
+        self.inputs.insert(Id {
+            type_id: input.type_id(),
+            name: any::type_name_of_val(&input),
+        });
+        self.add_state(input)
+    }
+
+    pub fn add_output(&mut self, input: impl Any) -> &mut Self {
+        self.outputs.insert(Id {
+            type_id: input.type_id(),
+            name: any::type_name_of_val(&input),
+        });
+        self.add_state(input)
     }
 }
