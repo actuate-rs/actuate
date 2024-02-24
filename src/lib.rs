@@ -12,10 +12,10 @@ mod query;
 pub use self::query::Query;
 
 mod gain;
-pub use self::gain::{gain, Gain};
+pub use self::gain::Gain;
 
 mod pid;
-pub use self::pid::{pid, Pid};
+pub use self::pid::PidController;
 
 pub mod system;
 pub use self::system::System;

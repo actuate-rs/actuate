@@ -1,29 +1,15 @@
-use crate::Plugin;
-use std::marker::PhantomData;
-
-pub struct Gain<T> {
+pub struct Gain {
     kp: f64,
-    _marker: PhantomData<T>,
 }
 
-impl<T> Gain<T> {
+impl Gain {
     pub fn new(kp: f64) -> Self {
-        Self {
-            kp,
-            _marker: PhantomData,
-        }
+        Self { kp }
     }
 }
 
-impl<T> Plugin for Gain<T>
-where
-    T: AsMut<f64> + 'static,
-{
-    fn build(self, diagram: &mut crate::diagram::Builder) {
-        diagram.add_state(self).add_system(gain::<T>);
+impl Gain {
+    pub fn gain(&self, value: &mut f64) {
+        *value *= self.kp;
     }
-}
-
-pub fn gain<T: AsMut<f64>>(value: &mut T, state: &Gain<T>) {
-    *value.as_mut() *= state.kp;
 }
