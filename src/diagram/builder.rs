@@ -20,6 +20,7 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Add a system to the diagram.
     pub fn add_system<'a, Marker>(&mut self, system: impl IntoSystem<'a, Marker>) -> &mut Self
     where
         Self: 'a,
@@ -33,6 +34,7 @@ impl Builder {
         self
     }
 
+    /// Add a state to the diagram.
     pub fn add_state(&mut self, state: impl Any) -> &mut Self {
         let id = Id {
             type_id: state.type_id(),
@@ -42,6 +44,8 @@ impl Builder {
         self
     }
 
+    /// Add an input state to the diagram.
+    /// Inputs run their connected systems first in the reactive graph.
     pub fn add_input(&mut self, input: impl Any) -> &mut Self {
         self.inputs.insert(Id {
             type_id: input.type_id(),
