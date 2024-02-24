@@ -1,4 +1,8 @@
-use actuate::{control::PidController, Diagram, Time, TimePlugin};
+use actuate::{
+    control::PidController,
+    time::{Time, TimePlugin},
+    Diagram,
+};
 
 struct State(f64);
 
@@ -8,10 +12,10 @@ struct TargetState(f64);
 struct StatePidController(PidController);
 
 fn state_pid_controller(
-    StatePidController(pid): &mut StatePidController,
     State(state): &mut State,
-    Time(time): &Time,
     TargetState(target): &TargetState,
+    Time(time): &Time,
+    StatePidController(pid): &mut StatePidController,
 ) {
     pid.control(*time, state, target)
 }

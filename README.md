@@ -26,19 +26,24 @@ Actuate leverages Rust's type system to create an efficient diagram that connect
 can run on embedded systems with `#![no_std]`.
 
 ```rust
-use actuate::{Diagram, PidController, Time, TimePlugin};
+use actuate::{
+    control::PidController,
+    time::{Time, TimePlugin},
+    Diagram,
+};
 
 struct State(f64);
 
 struct TargetState(f64);
 
+#[derive(Default)]
 struct StatePidController(PidController);
 
 fn state_pid_controller(
-    StatePidController(pid): &mut StatePidController,
     State(state): &mut State,
-    Time(time): &Time,
     TargetState(target): &TargetState,
+    Time(time): &Time,
+    StatePidController(pid): &mut StatePidController,
 ) {
     pid.control(*time, state, target)
 }
@@ -52,7 +57,7 @@ fn main() {
         .add_plugin(TimePlugin)
         .add_input(State(1.))
         .add_input(TargetState(5.))
-        .add_state(StatePidController(PidController::default()))
+        .add_state(StatePidController::default())
         .add_system(state_pid_controller)
         .add_system(debugger)
         .build();
