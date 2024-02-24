@@ -61,9 +61,15 @@ impl Builder {
             .map(|(system_id, system)| {
                 let mut reads = Vec::new();
                 system.reads_any(&mut reads);
+                if has_duplicates(&mut reads) {
+                    todo!()
+                }
 
                 let mut writes = Vec::new();
                 system.writes_any(&mut writes);
+                if has_duplicates(&mut writes) {
+                    todo!()
+                }
 
                 let node = NodeData {
                     reads,
@@ -121,4 +127,16 @@ impl Builder {
             finished_systems: HashSet::new(),
         }
     }
+}
+
+fn has_duplicates(vec: &mut Vec<Id>) -> bool {
+    vec.sort();
+
+    for i in 1..vec.len() {
+        if vec[i - 1] == vec[i] {
+            return true;
+        }
+    }
+
+    false
 }
