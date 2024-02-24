@@ -14,6 +14,9 @@ pub use self::query::Query;
 mod gain;
 pub use self::gain::{gain, Gain};
 
+mod pid;
+pub use self::pid::{pid, Pid};
+
 pub mod system;
 pub use self::system::System;
 
@@ -41,5 +44,5 @@ impl fmt::Debug for Id {
 }
 
 pub trait Plugin {
-    fn build( self, diagram: &mut diagram::Builder);
+    fn build(self, diagram: &mut diagram::Builder);
 }

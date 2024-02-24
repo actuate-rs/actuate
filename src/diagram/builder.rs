@@ -3,7 +3,8 @@ use super::{
     Diagram,
 };
 use crate::{
-    system::{AnySystem, IntoSystem}, Id, Plugin, World
+    system::{AnySystem, IntoSystem},
+    Id, Plugin, World,
 };
 use std::{
     any::{self, Any},

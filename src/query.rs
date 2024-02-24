@@ -74,3 +74,22 @@ impl<'a, Q1: Query<'a>, Q2: Query<'a>> Query<'a> for (Q1, Q2) {
         (Q1::query(world), Q2::query(world))
     }
 }
+
+impl<'a, Q1: Query<'a>, Q2: Query<'a>, Q3: Query<'a>> Query<'a> for (Q1, Q2, Q3) {
+    fn reads(ids: &mut Vec<Id>) {
+        Q1::reads(ids);
+        Q2::reads(ids);
+        Q3::reads(ids);
+    }
+
+    fn writes(ids: &mut Vec<Id>) {
+        Q1::writes(ids);
+        Q2::writes(ids);
+        Q3::writes(ids)
+    }
+
+    fn query(world: &UnsafeCell<&'a mut World>) -> Self {
+        // TODO: check for overlaps
+        (Q1::query(world), Q2::query(world), Q3::query(world))
+    }
+}

@@ -38,6 +38,20 @@ where
     }
 }
 
+impl<'a, F, Q1, Q2, Q3> System<'a> for FnSystem<F, (Q1, Q2, Q3)>
+where
+    F: Fn(Q1, Q2, Q3) + 'static,
+    Q1: Query<'a> + 'static,
+    Q2: Query<'a> + 'static,
+    Q3: Query<'a> + 'static,
+{
+    type Query = (Q1, Q2, Q3);
+
+    fn run(&self, query: Self::Query) {
+        (self.f)(query.0, query.1, query.2)
+    }
+}
+
 pub trait IntoSystem<'a, Marker> {
     type System: System<'a>;
 
@@ -66,6 +80,23 @@ where
     Q2: Query<'a> + 'static,
 {
     type System = FnSystem<F, (Q1, Q2)>;
+
+    fn into_system(self) -> Self::System {
+        FnSystem {
+            f: self,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, F, Q1, Q2, Q3> IntoSystem<'a, (Q1, Q2, Q3)> for F
+where
+    F: Fn(Q1, Q2, Q3) + 'static,
+    Q1: Query<'a> + 'static,
+    Q2: Query<'a> + 'static,
+    Q3: Query<'a> + 'static,
+{
+    type System = FnSystem<F, (Q1, Q2, Q3)>;
 
     fn into_system(self) -> Self::System {
         FnSystem {
