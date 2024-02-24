@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, marker::PhantomData, mem};
+use core::{cell::UnsafeCell, marker::PhantomData, mem};
 
 use crate::{Id, Query, World};
 

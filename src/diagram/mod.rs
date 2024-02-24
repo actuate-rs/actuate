@@ -15,7 +15,6 @@ pub struct Diagram {
     nodes: HashMap<Id, Node>,
     world: World,
     inputs: Vec<(Id, Id)>,
-    outputs: HashSet<Id>,
     finished_systems: HashSet<Id>,
 }
 

@@ -16,7 +16,6 @@ use std::{
 pub struct Builder {
     states: HashMap<Id, Box<dyn Any>>,
     inputs: HashSet<Id>,
-    outputs: HashSet<Id>,
     systems: HashMap<Id, Box<dyn AnySystem>>,
 }
 
@@ -45,14 +44,6 @@ impl Builder {
 
     pub fn add_input(&mut self, input: impl Any) -> &mut Self {
         self.inputs.insert(Id {
-            type_id: input.type_id(),
-            name: any::type_name_of_val(&input),
-        });
-        self.add_state(input)
-    }
-
-    pub fn add_output(&mut self, input: impl Any) -> &mut Self {
-        self.outputs.insert(Id {
             type_id: input.type_id(),
             name: any::type_name_of_val(&input),
         });
@@ -104,7 +95,7 @@ impl Builder {
                 let mut children = Vec::new();
                 for (other_id, other_node) in &node_datas {
                     for write_id in &node.writes {
-                        if other_node.reads.contains(&write_id) {
+                        if other_node.reads.contains(write_id) {
                             children.push(*other_id);
                         }
                     }
@@ -127,7 +118,6 @@ impl Builder {
                 states: mem::take(&mut self.states),
             },
             inputs,
-            outputs: mem::take(&mut self.outputs),
             finished_systems: HashSet::new(),
         }
     }
