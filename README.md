@@ -1,3 +1,7 @@
+# Actuate
+A reactive runtime for embedded systems
+
+```rust
 use actuate::{Diagram, Gain, Pid};
 
 struct State(f64);
@@ -33,3 +37,4 @@ fn main() {
         diagram.run();
     }
 }
+```
