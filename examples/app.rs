@@ -1,8 +1,8 @@
-use actuate::{Builder, World};
+use actuate::Builder;
 
-fn a(x: &i32) {}
+fn a(_x: &i32) {}
+
 fn main() {
-    let mut world = World::default();
-    world.query::<&i32>();
-    Builder::default().add_system(a);
+    let diagram = Builder::default().add_input(0).add_system(a).build();
+    dbg!(diagram);
 }
