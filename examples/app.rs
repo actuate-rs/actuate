@@ -1,30 +1,27 @@
-use actuate::Diagram;
+use actuate::{Diagram, Gain};
 
-struct X(i32);
+struct X(f64);
 
-struct Y(i32);
+impl AsMut<f64> for X {
+    fn as_mut(&mut self) -> &mut f64 {
+        &mut self.0
+    }
+}
 
-fn a(X(x): &X, Y(y): &mut Y) {
+
+fn a(X(x): &X) {
     println!("A: {x}");
-    *y += 1;
-}
 
-fn b(Y(y): &Y) {
-    println!("B: {y}")
 }
+ 
 
-fn c(X(x): &X, Y(y): &Y) {
-    println!("C: {x} {y}")
-}
 
 fn main() {
     let mut diagram = Diagram::builder()
-        .add_input(X(0))
-        .add_state(Y(0))
+        .add_input(X(1.))
         .add_system(a)
-        .add_system(b)
-        .add_system(c)
+        .add_plugin(Gain::<X>::new(2.))
         .build();
-    diagram.run();
+    dbg!(&diagram);
     diagram.run();
 }

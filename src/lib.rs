@@ -11,6 +11,9 @@ pub use self::diagram::Diagram;
 mod query;
 pub use self::query::Query;
 
+mod gain;
+pub use self::gain::{gain, Gain};
+
 pub mod system;
 pub use self::system::System;
 
@@ -35,4 +38,8 @@ impl fmt::Debug for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Id").field(&self.name).finish()
     }
+}
+
+pub trait Plugin {
+    fn build( self, diagram: &mut diagram::Builder);
 }

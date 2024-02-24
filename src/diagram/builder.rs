@@ -3,8 +3,7 @@ use super::{
     Diagram,
 };
 use crate::{
-    system::{AnySystem, IntoSystem},
-    Id, World,
+    system::{AnySystem, IntoSystem}, Id, Plugin, World
 };
 use std::{
     any::{self, Any},
@@ -57,6 +56,11 @@ impl Builder {
             name: any::type_name_of_val(&input),
         });
         self.add_state(input)
+    }
+
+    pub fn add_plugin(&mut self, plugin: impl Plugin) -> &mut Self {
+        plugin.build(self);
+        self
     }
 
     pub fn build(&mut self) -> Diagram {

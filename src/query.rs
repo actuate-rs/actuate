@@ -34,7 +34,12 @@ impl<'a, T: 'static> Query<'a> for &'a T {
 }
 
 impl<'a, T: 'static> Query<'a> for &'a mut T {
-    fn reads(_ids: &mut Vec<Id>) {}
+    fn reads(ids: &mut Vec<Id>) {
+        ids.push(Id {
+            type_id: TypeId::of::<T>(),
+            name: any::type_name::<T>(),
+        })
+    }
 
     fn writes(ids: &mut Vec<Id>) {
         ids.push(Id {
