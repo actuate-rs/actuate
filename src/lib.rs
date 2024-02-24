@@ -1,9 +1,12 @@
-use std::{
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
+
+use alloc::boxed::Box;
+use core::{
     any::{Any, TypeId},
     cell::UnsafeCell,
-    collections::HashMap,
     fmt,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub mod control;
@@ -16,6 +19,12 @@ pub use self::query::Query;
 
 pub mod system;
 pub use self::system::System;
+
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
 
 #[derive(Default)]
 pub struct World {
@@ -43,24 +52,33 @@ impl fmt::Debug for Id {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Time(pub u64);
-
 pub trait Plugin {
     fn build(self, diagram: &mut diagram::Builder);
 }
 
-fn time_system(Time(time): &mut Time) {
-    *time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as _;
-}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Time(pub u64);
 
-pub struct TimePlugin;
+#[cfg(feature = "std")]
+mod time_std {
+    use crate::{diagram, Plugin, Time};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-impl Plugin for TimePlugin {
-    fn build(self, diagram: &mut diagram::Builder) {
-        diagram.add_state(Time(0)).add_system(time_system);
+    pub struct TimePlugin;
+
+    impl Plugin for TimePlugin {
+        fn build(self, diagram: &mut diagram::Builder) {
+            diagram.add_state(Time(0)).add_system(time_system);
+        }
+    }
+
+    pub fn time_system(Time(time): &mut Time) {
+        *time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as _;
     }
 }
+
+#[cfg(feature = "std")]
+pub use self::time_std::{time_system, TimePlugin};

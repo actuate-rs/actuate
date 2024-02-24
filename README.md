@@ -22,7 +22,8 @@
 <br />
 
 A reactive diagram for robotics and control systems.
-Actuate leverages Rust's type system to create an efficient diagram that connects your application's systems.
+Actuate leverages Rust's type system to create an efficient diagram that connects your application's systems. This crate provides a library that
+can run on embedded systems with `#![no_std]`.
 
 ```rust
 use actuate::{Diagram, PidController, Time, TimePlugin};
@@ -67,6 +68,17 @@ Actuate connects systems together by their inputs and outputs.
 A system taking `&T` as a parameter will be linked to another system taking `&mut T`.
 
 Output: `&mut T` -> Input: `&T`
+
+## Installation
+On a device with `std` support:
+```
+cargo add actuate
+```
+
+In a `#![no_std]` enviornment:
+```
+cargo add actuate --no-default-features
+```
 
 ## Inspiration
 This crate is inspired by [Drake](https://drake.mit.edu) and aims to provide a similar model of

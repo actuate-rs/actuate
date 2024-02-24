@@ -1,15 +1,18 @@
 use crate::{Id, World};
-use std::{
-    cell::UnsafeCell,
-    collections::{HashMap, HashSet},
-    fmt, mem,
-};
+use alloc::vec::Vec;
+use core::{cell::UnsafeCell, fmt, mem};
+
+#[cfg(feature = "std")]
+use std::collections::{HashMap, HashSet};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{HashMap, HashSet};
 
 mod builder;
 pub use self::builder::Builder;
-use self::node::{Node, NodeDebugger};
 
 mod node;
+use self::node::{Node, NodeDebugger};
 
 pub struct Diagram {
     nodes: HashMap<Id, Node>,

@@ -6,11 +6,17 @@ use crate::{
     system::{AnySystem, IntoSystem},
     Id, Plugin, World,
 };
-use std::{
+use alloc::{boxed::Box, vec::Vec};
+use core::{
     any::{self, Any},
-    collections::{HashMap, HashSet},
     mem,
 };
+
+#[cfg(feature = "std")]
+use std::collections::{HashMap, HashSet};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{HashMap, HashSet};
 
 #[derive(Default)]
 pub struct Builder {

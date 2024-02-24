@@ -1,5 +1,6 @@
 use crate::{Id, World};
-use std::{
+use alloc::vec::Vec;
+use core::{
     any::{self, TypeId},
     cell::UnsafeCell,
 };

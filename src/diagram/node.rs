@@ -1,6 +1,7 @@
 use super::Diagram;
 use crate::{system::AnySystem, Id};
-use std::fmt;
+use alloc::{boxed::Box, vec::Vec};
+use core::fmt;
 
 pub(super) struct NodeData {
     pub(super) system: Box<dyn AnySystem>,

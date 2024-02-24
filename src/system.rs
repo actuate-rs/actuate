@@ -1,5 +1,6 @@
 use crate::{Id, Query, World};
-use std::{cell::UnsafeCell, marker::PhantomData, mem};
+use alloc::vec::Vec;
+use core::{cell::UnsafeCell, marker::PhantomData, mem};
 
 pub trait System<'a>: 'static {
     type Input<'w>;
