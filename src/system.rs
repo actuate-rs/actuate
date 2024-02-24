@@ -1,6 +1,5 @@
-use core::{cell::UnsafeCell, marker::PhantomData, mem};
-
 use crate::{Id, Query, World};
+use std::{cell::UnsafeCell, marker::PhantomData, mem};
 
 pub trait System<'a>: 'static {
     type Query: Query<'a>;
@@ -25,32 +24,42 @@ where
     }
 }
 
-impl<'a, F, Q1, Q2> System<'a> for FnSystem<F, (Q1, Q2)>
-where
-    F: Fn(Q1, Q2) + 'static,
-    Q1: Query<'a> + 'static,
-    Q2: Query<'a> + 'static,
-{
-    type Query = (Q1, Q2);
+macro_rules! impl_system_for_fn_system {
+    ($($t:tt: $idx:tt),*) => {
+        impl<'a, F, $($t: Query<'a> + 'static),*> System<'a> for FnSystem<F, ($($t),*)>
+        where
+            F: Fn($($t),*) + 'static,
+        {
+            type Query = ($($t),*);
 
-    fn run(&self, query: Self::Query) {
-        (self.f)(query.0, query.1)
-    }
+            fn run(&self, query: Self::Query) {
+                (self.f)($(query.$idx),*)
+            }
+        }
+
+        impl<'a, F, $($t: Query<'a> + 'static),*> IntoSystem<'a, ($($t),*)> for F
+        where
+            F: Fn($($t),*) + 'static,
+        {
+            type System = FnSystem<F, ($($t),*)>;
+
+            fn into_system(self) -> Self::System {
+                FnSystem {
+                    f: self,
+                    _marker: PhantomData,
+                }
+            }
+        }
+    };
 }
 
-impl<'a, F, Q1, Q2, Q3> System<'a> for FnSystem<F, (Q1, Q2, Q3)>
-where
-    F: Fn(Q1, Q2, Q3) + 'static,
-    Q1: Query<'a> + 'static,
-    Q2: Query<'a> + 'static,
-    Q3: Query<'a> + 'static,
-{
-    type Query = (Q1, Q2, Q3);
-
-    fn run(&self, query: Self::Query) {
-        (self.f)(query.0, query.1, query.2)
-    }
-}
+impl_system_for_fn_system!(Q1: 0, Q2: 1);
+impl_system_for_fn_system!(Q1: 0, Q2: 1, Q3: 2);
+impl_system_for_fn_system!(Q1: 0, Q2: 1, Q3: 2, Q4: 3);
+impl_system_for_fn_system!(Q1: 0, Q2: 1, Q3: 2, Q4: 3, Q5: 4);
+impl_system_for_fn_system!(Q1: 0, Q2: 1, Q3: 2, Q4: 3, Q5: 4, Q6: 5);
+impl_system_for_fn_system!(Q1: 0, Q2: 1, Q3: 2, Q4: 3, Q5: 4, Q6: 5, Q7: 6);
+impl_system_for_fn_system!(Q1: 0, Q2: 1, Q3: 2, Q4: 3, Q5: 4, Q6: 5, Q7: 6, Q9: 7);
 
 pub trait IntoSystem<'a, Marker> {
     type System: System<'a>;
@@ -64,39 +73,6 @@ where
     Q: Query<'a> + 'static,
 {
     type System = FnSystem<F, (Q,)>;
-
-    fn into_system(self) -> Self::System {
-        FnSystem {
-            f: self,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<'a, F, Q1, Q2> IntoSystem<'a, (Q1, Q2)> for F
-where
-    F: Fn(Q1, Q2) + 'static,
-    Q1: Query<'a> + 'static,
-    Q2: Query<'a> + 'static,
-{
-    type System = FnSystem<F, (Q1, Q2)>;
-
-    fn into_system(self) -> Self::System {
-        FnSystem {
-            f: self,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<'a, F, Q1, Q2, Q3> IntoSystem<'a, (Q1, Q2, Q3)> for F
-where
-    F: Fn(Q1, Q2, Q3) + 'static,
-    Q1: Query<'a> + 'static,
-    Q2: Query<'a> + 'static,
-    Q3: Query<'a> + 'static,
-{
-    type System = FnSystem<F, (Q1, Q2, Q3)>;
 
     fn into_system(self) -> Self::System {
         FnSystem {

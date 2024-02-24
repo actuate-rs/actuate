@@ -1,4 +1,4 @@
-use actuate::{Diagram, PidController};
+use actuate::{Diagram, PidController, Time, TimePlugin};
 
 struct State(f64);
 
@@ -9,9 +9,10 @@ struct StatePidController(PidController);
 fn state_pid_controller(
     StatePidController(pid): &mut StatePidController,
     State(state): &mut State,
+    Time(time): &Time,
     TargetState(target): &TargetState,
 ) {
-    pid.control(state, target)
+    pid.control(*time, state, target)
 }
 
 fn debugger(State(state): &State) {
@@ -20,6 +21,7 @@ fn debugger(State(state): &State) {
 
 fn main() {
     let mut diagram = Diagram::builder()
+        .add_plugin(TimePlugin)
         .add_input(State(1.))
         .add_input(TargetState(5.))
         .add_state(StatePidController(PidController::default()))

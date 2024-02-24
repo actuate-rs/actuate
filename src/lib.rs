@@ -3,6 +3,7 @@ use std::{
     cell::UnsafeCell,
     collections::HashMap,
     fmt,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub mod diagram;
@@ -43,6 +44,24 @@ impl fmt::Debug for Id {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Time(pub u64);
+
 pub trait Plugin {
     fn build(self, diagram: &mut diagram::Builder);
+}
+
+fn time_system(Time(time): &mut Time) {
+    *time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as _;
+}
+
+pub struct TimePlugin;
+
+impl Plugin for TimePlugin {
+    fn build(self, diagram: &mut diagram::Builder) {
+        diagram.add_state(Time(0)).add_system(time_system);
+    }
 }
