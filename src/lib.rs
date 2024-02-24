@@ -6,17 +6,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+pub mod control;
+
 pub mod diagram;
 pub use self::diagram::Diagram;
 
 mod query;
 pub use self::query::Query;
-
-mod gain;
-pub use self::gain::Gain;
-
-mod pid;
-pub use self::pid::PidController;
 
 pub mod system;
 pub use self::system::System;

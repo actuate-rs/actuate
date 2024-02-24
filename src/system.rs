@@ -5,7 +5,7 @@ pub trait System<'a>: 'static {
     type Input<'w>;
     type Query<'w>: Query<'a, Output<'w> = Self::Input<'w>>;
 
-    fn run<'w>(&self, input: Self::Input<'w>);
+    fn run(&self, input: Self::Input<'_>);
 }
 
 pub struct FnSystem<F, Marker> {
@@ -118,8 +118,9 @@ impl<'a, S: System<'a>> AnySystem for S {
     }
 
     unsafe fn run_any(&self, world: &UnsafeCell<&mut World>) {
-        let world = unsafe { mem::transmute(world) };
-        let query = S::Query::query(world);
+        let world_ref = &mut **world.get();
+        let lifted_world_ref = mem::transmute(world_ref);
+        let query = S::Query::query(lifted_world_ref);
         self.run(query)
     }
 }

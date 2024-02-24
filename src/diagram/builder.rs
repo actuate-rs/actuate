@@ -133,7 +133,7 @@ impl Builder {
     }
 }
 
-fn has_duplicates(vec: &mut Vec<Id>) -> bool {
+fn has_duplicates(vec: &mut [Id]) -> bool {
     vec.sort();
 
     for i in 1..vec.len() {

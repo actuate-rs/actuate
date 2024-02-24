@@ -1,9 +1,10 @@
-use actuate::{Diagram, PidController, Time, TimePlugin};
+use actuate::{control::PidController, Diagram, Time, TimePlugin};
 
 struct State(f64);
 
 struct TargetState(f64);
 
+#[derive(Default)]
 struct StatePidController(PidController);
 
 fn state_pid_controller(
@@ -24,7 +25,7 @@ fn main() {
         .add_plugin(TimePlugin)
         .add_input(State(1.))
         .add_input(TargetState(5.))
-        .add_state(StatePidController(PidController::default()))
+        .add_state(StatePidController::default())
         .add_system(state_pid_controller)
         .add_system(debugger)
         .build();
