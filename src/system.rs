@@ -119,9 +119,8 @@ impl<'a, S: System<'a>> AnySystem for S {
     }
 
     unsafe fn run_any(&self, world: &UnsafeCell<&mut World>) {
-        let world_ref = &mut **world.get();
-        let lifted_world_ref = mem::transmute(world_ref);
-        let query = S::Query::query(lifted_world_ref);
+        let world_cell = mem::transmute(world);
+        let query = S::Query::query(world_cell);
         self.run(query)
     }
 }
