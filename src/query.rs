@@ -28,7 +28,7 @@ impl<'a, T: 'static> Query<'a> for &'a T {
     fn writes(_ids: &mut Vec<Id>) {}
 
     fn query<'w>(world: &UnsafeCell<&'w mut World>) -> Self::Output<'w> {
-        let world = unsafe { &mut *world.get() };
+        let world = unsafe { &mut **world.get() };
         let id = Id {
             type_id: TypeId::of::<T>(),
             name: any::type_name::<T>(),
@@ -55,7 +55,7 @@ impl<'a, T: 'static> Query<'a> for &'a mut T {
     }
 
     fn query<'w>(world: &UnsafeCell<&'w mut World>) -> Self::Output<'w> {
-        let world = unsafe { &mut *world.get() };
+        let world = unsafe { &mut **world.get() };
         let id = Id {
             type_id: TypeId::of::<T>(),
             name: any::type_name::<T>(),
