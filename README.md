@@ -32,16 +32,23 @@ can run on embedded systems with `#![no_std]`.
 ```mermaid
 graph TD
   Input[Input] --> |"app::TargetState"| A
-  Input[Input] --> |"app::State"| B
-  B["app::debugger"]
+  Input[Input] --> |"app::State"| A
+
+  Input[Input] --> |"Time"| A
+  Input[Input] --> |"Time"| C
+  
   A["app::state_pid_controller"]
   A --> |"app::State"| B
+  A --> |"app::State"| C
   B["app::debugger"]
+  C["app::pendulum_output"]
+  C --> |"app::State"| A
 ```
 
 ```rust
 use actuate::{
     control::PidController,
+    plant::PendulumPlant,
     time::{Time, TimePlugin},
     Diagram,
 };
@@ -53,6 +60,9 @@ struct TargetState(f64);
 #[derive(Default)]
 struct StatePidController(PidController);
 
+#[derive(Default)]
+struct ExamplePendulumPlant(PendulumPlant);
+
 fn state_pid_controller(
     State(state): &mut State,
     TargetState(target): &TargetState,
@@ -62,23 +72,31 @@ fn state_pid_controller(
     pid.control(*time, state, target)
 }
 
+fn pendulum_plant(
+    Time(time): &Time,
+    State(state): &State,
+    ExamplePendulumPlant(pendulum): &mut ExamplePendulumPlant,
+) {
+    pendulum.update(*time, *state)
+}
+
 fn debugger(State(state): &State) {
     dbg!(state);
 }
 
 fn main() {
-    let mut diagram = Diagram::builder()
+    let diagram = Diagram::builder()
         .add_plugin(TimePlugin)
         .add_input(State(1.))
         .add_input(TargetState(5.))
         .add_state(StatePidController::default())
+        .add_state(ExamplePendulumPlant::default())
         .add_system(state_pid_controller)
+        .add_system(pendulum_plant)
         .add_system(debugger)
         .build();
 
-    for _ in 0..100 {
-        diagram.run();
-    }
+    println!("{}", diagram.visualize());
 }
 ```
 

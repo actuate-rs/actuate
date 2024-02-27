@@ -12,6 +12,9 @@ struct TargetState(f64);
 #[derive(Default)]
 struct StatePidController(PidController);
 
+#[derive(Default)]
+struct ExamplePendulumPlant(PendulumPlant);
+
 fn state_pid_controller(
     State(state): &mut State,
     TargetState(target): &TargetState,
@@ -21,7 +24,11 @@ fn state_pid_controller(
     pid.control(*time, state, target)
 }
 
-fn pendulum_output(Time(time): &Time, State(state): &State, pendulum: &mut PendulumPlant) {
+fn pendulum_plant(
+    Time(time): &Time,
+    State(state): &State,
+    ExamplePendulumPlant(pendulum): &mut ExamplePendulumPlant,
+) {
     pendulum.update(*time, *state)
 }
 
@@ -35,15 +42,11 @@ fn main() {
         .add_input(State(1.))
         .add_input(TargetState(5.))
         .add_state(StatePidController::default())
-        .add_state(PendulumPlant::default())
+        .add_state(ExamplePendulumPlant::default())
         .add_system(state_pid_controller)
-        .add_system(pendulum_output)
+        .add_system(pendulum_plant)
         .add_system(debugger)
         .build();
-
-    //for _ in 0..100 {
-    //    diagram.run();
-    //}
 
     println!("{}", diagram.visualize());
 }
