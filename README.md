@@ -29,7 +29,7 @@ can run on embedded systems with `#![no_std]`.
 
 ```mermaid
 graph TD
-  Input[Input] --> |"app::State"| A
+  Input[Input] --> |"app::TargetState"| A
   Input[Input] --> |"app::State"| B
   B["app::debugger"]
   A["app::state_pid_controller"]
