@@ -11,7 +11,7 @@ pub(super) struct NodeData {
 
 pub(super) struct Node {
     pub(super) data: NodeData,
-    pub(super) children: Vec<Id>,
+    pub(super) children: Vec<(Id, Id)>,
 }
 
 pub(super) struct NodeDebugger<'a> {
@@ -44,7 +44,7 @@ struct NodeChildrenDebugger<'a> {
 impl fmt::Debug for NodeChildrenDebugger<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut children = f.debug_list();
-        for child_id in &self.node.children {
+        for (_, child_id) in &self.node.children {
             let child = self.diagram.nodes.get(child_id).unwrap();
             children.entry(&NodeDebugger {
                 id: *child_id,

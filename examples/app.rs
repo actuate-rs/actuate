@@ -34,7 +34,9 @@ fn main() {
         .add_system(debugger)
         .build();
 
-    for _ in 0..100 {
-        diagram.run();
-    }
+    //for _ in 0..100 {
+    //    diagram.run();
+    //}
+
+    println!("{}", diagram.visualize());
 }

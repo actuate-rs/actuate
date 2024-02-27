@@ -22,8 +22,20 @@
 <br />
 
 A reactive diagram for robotics and control systems.
-Actuate leverages Rust's type system to create an efficient diagram that connects your application's systems. This crate provides a library that
+Actuate leverages Rust's type system to create an efficient diagram that connects your application's systems. It can then render that diagram to a mermaid graph.
+
+This crate provides a library that
 can run on embedded systems with `#![no_std]`.
+
+```mermaid
+graph TD
+  Input[Input] --> |"app::State"| A
+  Input[Input] --> |"app::State"| B
+  B["app::debugger"]
+  A["app::state_pid_controller"]
+  A --> |"app::State"| B
+  B["app::debugger"]
+```
 
 ```rust
 use actuate::{

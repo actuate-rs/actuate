@@ -1,12 +1,14 @@
 use crate::{Id, Query, World};
 use alloc::vec::Vec;
-use core::{cell::UnsafeCell, marker::PhantomData, mem};
+use core::{any, cell::UnsafeCell, marker::PhantomData, mem};
 
 pub trait System<'a>: 'static {
     type Input<'w>;
     type Query<'w>: Query<'a, Output<'w> = Self::Input<'w>>;
 
     fn run(&self, input: Self::Input<'_>);
+
+    fn name(&self) -> &'static str;
 }
 
 pub struct FnSystem<F, Marker> {
@@ -30,6 +32,10 @@ where
         let f: &'a F = unsafe { mem::transmute(&self.f) };
         call_inner(f, input)
     }
+
+    fn name(&self) -> &'static str {
+        any::type_name::<F>()
+    }
 }
 
 macro_rules! impl_system_for_fn_system {
@@ -51,6 +57,10 @@ macro_rules! impl_system_for_fn_system {
                }
                let f: &'a F = unsafe { mem::transmute(&self.f)};
                call_inner(f, input)
+            }
+
+            fn name(&self) -> &'static str {
+                any::type_name::<F>()
             }
         }
 

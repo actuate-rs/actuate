@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     system::{AnySystem, IntoSystem},
-    Id, Plugin, World,
+    Id, Plugin, System, World,
 };
 use alloc::{boxed::Box, vec::Vec};
 use core::{
@@ -34,7 +34,7 @@ impl Builder {
         let s = system.into_system();
         let id = Id {
             type_id: s.type_id(),
-            name: any::type_name_of_val(&s),
+            name: s.name(),
         };
         self.systems.insert(id, Box::new(s));
         self
@@ -112,7 +112,7 @@ impl Builder {
                 for (other_id, other_node) in &node_datas {
                     for write_id in &node.writes {
                         if other_node.reads.contains(write_id) {
-                            children.push(*other_id);
+                            children.push((*write_id, *other_id));
                         }
                     }
                 }
