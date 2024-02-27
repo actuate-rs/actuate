@@ -25,7 +25,7 @@ fn debugger(State(state): &State) {
 }
 
 fn main() {
-    let mut diagram = Diagram::builder()
+    let diagram = Diagram::builder()
         .add_plugin(TimePlugin)
         .add_input(State(1.))
         .add_input(TargetState(5.))

@@ -2,12 +2,14 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
 use core::{
     any::{Any, TypeId},
     cell::UnsafeCell,
     fmt,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
 
 pub mod control;
 

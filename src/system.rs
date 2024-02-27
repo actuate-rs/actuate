@@ -1,6 +1,8 @@
 use crate::{Id, Query, World};
-use alloc::vec::Vec;
 use core::{any, cell::UnsafeCell, marker::PhantomData, mem};
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 pub trait System<'a>: 'static {
     type Input<'w>;

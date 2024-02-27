@@ -1,16 +1,21 @@
+#[cfg(feature = "std")]
 use actuate::{
     control::PidController,
     time::{Time, TimePlugin},
     Diagram,
 };
 
+#[cfg(feature = "std")]
 struct State(f64);
 
+#[cfg(feature = "std")]
 struct TargetState(f64);
 
+#[cfg(feature = "std")]
 #[derive(Default)]
 struct StatePidController(PidController);
 
+#[cfg(feature = "std")]
 fn state_pid_controller(
     State(state): &mut State,
     TargetState(target): &TargetState,
@@ -20,6 +25,7 @@ fn state_pid_controller(
     pid.control(*time, state, target)
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn main() {
     let mut diagram = Diagram::builder()

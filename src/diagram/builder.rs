@@ -6,11 +6,13 @@ use crate::{
     system::{AnySystem, IntoSystem},
     Id, Plugin, System, World,
 };
-use alloc::{boxed::Box, vec::Vec};
 use core::{
     any::{self, Any},
     mem,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, vec::Vec};
 
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet};

@@ -1,6 +1,8 @@
 use crate::{Id, World};
-use alloc::vec::Vec;
 use core::{cell::UnsafeCell, fmt, mem};
+
+#[cfg(not(feature = "std"))]
+use alloc::{format, string::String, vec::Vec};
 
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet};

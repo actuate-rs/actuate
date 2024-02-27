@@ -1,9 +1,11 @@
 use crate::{Id, World};
-use alloc::vec::Vec;
 use core::{
     any::{self, TypeId},
     cell::UnsafeCell,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 pub trait Query<'a> {
     type Output<'w>;
