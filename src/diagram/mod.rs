@@ -59,10 +59,8 @@ impl Diagram {
             ));
         }
 
-        let mut queue: Vec<_> = self.inputs.iter().map(|(_, id)| *id).collect();
-
-        while let Some(id) = queue.pop() {
-            let node = self.nodes.get(&id).unwrap();
+        for (_, id) in &self.inputs {
+            let node = self.nodes.get(id).unwrap();
 
             let graph_id = graph_ids.get(&id.type_id).copied().unwrap_or_else(|| {
                 let graph_id = next_id as char;
@@ -88,8 +86,6 @@ impl Diagram {
                     graph_id, write_id.name, child_graph_id
                 ));
             }
-
-            queue.extend(node.children.iter().map(|(_, id)| *id));
         }
 
         s
@@ -97,7 +93,7 @@ impl Diagram {
 }
 
 impl fmt::Debug for Diagram {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut list = f.debug_list();
 
         for (_input_id, id) in &self.inputs {

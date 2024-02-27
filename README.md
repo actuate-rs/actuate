@@ -27,6 +27,8 @@ Actuate leverages Rust's type system to create an efficient diagram that connect
 This crate provides a library that
 can run on embedded systems with `#![no_std]`.
 
+## Example
+
 ```mermaid
 graph TD
   Input[Input] --> |"app::TargetState"| A
