@@ -1,5 +1,6 @@
 use actuate::{
     control::PidController,
+    plant::PendulumPlant,
     time::{Time, TimePlugin},
     Diagram,
 };
@@ -20,6 +21,10 @@ fn state_pid_controller(
     pid.control(*time, state, target)
 }
 
+fn pendulum_output(Time(time): &Time, State(state): &State, pendulum: &mut PendulumPlant) {
+    pendulum.update(*time, *state)
+}
+
 fn debugger(State(state): &State) {
     dbg!(state);
 }
@@ -30,7 +35,9 @@ fn main() {
         .add_input(State(1.))
         .add_input(TargetState(5.))
         .add_state(StatePidController::default())
+        .add_state(PendulumPlant::default())
         .add_system(state_pid_controller)
+        .add_system(pendulum_output)
         .add_system(debugger)
         .build();
 

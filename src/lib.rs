@@ -19,6 +19,8 @@ pub use self::diagram::Diagram;
 mod query;
 pub use self::query::Query;
 
+pub mod plant;
+
 pub mod system;
 pub use self::system::System;
 
