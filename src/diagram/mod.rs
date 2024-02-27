@@ -1,5 +1,5 @@
-use crate::{Id, World};
-use core::{cell::UnsafeCell, fmt, mem};
+use crate::{system::IntoSystem, Id, System, World};
+use core::{any::Any, cell::UnsafeCell, fmt, mem};
 
 #[cfg(not(feature = "std"))]
 use alloc::{format, string::String, vec::Vec};
@@ -26,6 +26,20 @@ pub struct Diagram {
 impl Diagram {
     pub fn builder() -> Builder {
         Builder::default()
+    }
+
+    pub fn reads<'a, Marker>(&self, system: impl IntoSystem<'a, Marker>) -> &[Id]
+    where
+        'static: 'a,
+    {
+        let s = system.into_system();
+        let id = Id {
+            type_id: s.type_id(),
+            name: s.name(),
+        };
+
+        let node = self.nodes.get(&id).unwrap();
+        &node.data.reads
     }
 
     pub fn run(&mut self) {

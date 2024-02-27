@@ -27,7 +27,7 @@ fn state_pid_controller(
 
 #[cfg(feature = "std")]
 #[test]
-fn main() {
+fn it_runs_with_miri() {
     let mut diagram = Diagram::builder()
         .add_plugin(TimePlugin)
         .add_input(State(1.))
@@ -39,4 +39,18 @@ fn main() {
     for _ in 0..100 {
         diagram.run();
     }
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn it_runs() {
+    let diagram = Diagram::builder()
+        .add_plugin(TimePlugin)
+        .add_input(State(1.))
+        .add_input(TargetState(5.))
+        .add_state(StatePidController::default())
+        .add_system(state_pid_controller)
+        .build();
+
+    assert_eq!(diagram.reads(state_pid_controller).len(), 4);
 }
