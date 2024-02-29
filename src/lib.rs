@@ -1,63 +1,118 @@
-#![cfg_attr(not(feature = "std"), no_std)]
-
-extern crate alloc;
-
-use core::{
-    any::{Any, TypeId},
-    cell::UnsafeCell,
-    fmt,
+use slotmap::{DefaultKey, SlotMap};
+use std::{
+    any::{self, TypeId},
+    marker::PhantomData,
 };
 
-#[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
+#[derive(Clone, Copy)]
+pub struct Id {
+    name: &'static str,
+    type_id: TypeId,
+}
 
-pub mod control;
+impl Id {
+    pub fn new<T: 'static>() -> Self {
+        Self {
+            name: any::type_name::<T>(),
+            type_id: TypeId::of::<T>(),
+        }
+    }
+}
 
-pub mod diagram;
-pub use self::diagram::Diagram;
+pub trait System: 'static {
+    fn inputs(&self) -> Vec<Id>;
 
-mod query;
-pub use self::query::Query;
+    fn outputs(&self) -> Vec<Id>;
+}
 
-pub mod plant;
+pub trait IntoSystem<Marker> {
+    type System: System;
 
-pub mod system;
-pub use self::system::System;
+    fn into_system(self) -> Self::System;
+}
 
-pub mod time;
+pub struct FnSystem<F, Marker> {
+    f: F,
+    _marker: PhantomData<Marker>,
+}
 
-#[cfg(feature = "std")]
-use std::collections::HashMap;
+impl<F, I1, O1> System for FnSystem<F, (I1, O1)>
+where
+    F: Fn(I1) -> O1 + 'static,
+    I1: 'static,
+    O1: 'static,
+{
+    fn inputs(&self) -> Vec<Id> {
+        vec![Id::new::<I1>()]
+    }
 
-#[cfg(not(feature = "std"))]
-use hashbrown::HashMap;
+    fn outputs(&self) -> Vec<Id> {
+        vec![Id::new::<O1>()]
+    }
+}
+
+impl<F, I1, O1> IntoSystem<(I1, O1)> for F
+where
+    F: Fn(I1) -> O1 + 'static,
+    I1: 'static,
+    O1: 'static,
+{
+    type System = FnSystem<F, (I1, O1)>;
+
+    fn into_system(self) -> Self::System {
+        FnSystem {
+            f: self,
+            _marker: PhantomData,
+        }
+    }
+}
+
+struct Binding {
+    id: Id,
+    system_key: Option<DefaultKey>,
+}
+
+struct Node {
+    system: Box<dyn System>,
+    inputs: Vec<Binding>,
+    outputs: Vec<Binding>,
+}
 
 #[derive(Default)]
-pub struct World {
-    states: HashMap<Id, Box<dyn Any>>,
+pub struct Builder {
+    systems: SlotMap<DefaultKey, Node>,
 }
 
-impl World {
-    pub fn query<'a, 'w, Q>(&'w mut self) -> Q::Output<'w>
-    where
-        Q: Query<'a>,
-    {
-        Q::query(&UnsafeCell::new(self))
+impl Builder {
+    pub fn add_system<Marker>(&mut self, system: impl IntoSystem<Marker>) -> DefaultKey {
+        let system = system.into_system();
+        let node = Node {
+            inputs: system
+                .inputs()
+                .iter()
+                .map(|id| Binding {
+                    id: *id,
+                    system_key: None,
+                })
+                .collect(),
+            outputs: system
+                .outputs()
+                .iter()
+                .map(|id| Binding {
+                    id: *id,
+                    system_key: None,
+                })
+                .collect(),
+            system: Box::new(system),
+        };
+        self.systems.insert(node)
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Id {
-    type_id: TypeId,
-    name: &'static str,
-}
+pub struct Diagram {}
 
-impl fmt::Debug for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Id").field(&self.name).finish()
+impl Diagram {
+    pub fn builder() -> Builder {
+        Builder::default()
     }
-}
-
-pub trait Plugin {
-    fn build(self, diagram: &mut diagram::Builder);
 }
