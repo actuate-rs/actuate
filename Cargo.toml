@@ -12,6 +12,7 @@ default = ["std"]
 
 [dependencies]
 hashbrown = "0.14.3"
+slotmap = "1.0.7"
 
 [[example]]
 name = "app"
