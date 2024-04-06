@@ -1,12 +1,8 @@
-use actuate::{Component, World};
-
-struct X(i32);
-
-impl Component for X {}
+use actuate::Element;
 
 fn main() {
-    let mut world = World::default();
-    let x = world.spawn(X(0));
-    let n = x.query::<&X>(&mut world);
-    dbg!(n.0);
+    let mut elem = Element::default();
+    elem.insert(0);
+
+    dbg!(elem.query::<&i32>());
 }

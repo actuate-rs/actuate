@@ -1,66 +1,52 @@
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     any::{Any, TypeId},
+    cell::UnsafeCell,
     collections::HashMap,
 };
 
-pub trait Component {}
-
-pub trait ComponentBuilder {
-    fn build(self, entity: &mut Entity);
-}
-
-impl<C: Component + 'static> ComponentBuilder for C {
-    fn build(self, entity: &mut Entity) {
-        entity.components.insert(self.type_id(), Box::new(self));
-    }
-}
-
 #[derive(Default)]
-pub struct Entity {
-    components: HashMap<TypeId, Box<dyn Any>>,
+pub struct Element {
+    attributes: HashMap<TypeId, Box<dyn Any>>,
 }
 
-#[derive(Default)]
-pub struct World {
-    entities: SlotMap<DefaultKey, Entity>,
-}
-
-impl World {
-    pub fn spawn(&mut self, component: impl ComponentBuilder) -> EntityHandle {
-        let mut entity = Entity::default();
-        component.build(&mut entity);
-        let key = self.entities.insert(entity);
-        EntityHandle { key }
+impl Element {
+    pub fn insert(&mut self, attr: impl Any) -> &mut Self {
+        self.attributes.insert(attr.type_id(), Box::new(attr));
+        self
     }
-}
 
-#[derive(Clone, Copy)]
-pub struct EntityHandle {
-    key: DefaultKey,
-}
-
-impl EntityHandle {
-    pub fn query<Q: Query>(self, world: &mut World) -> Q::Output<'_> {
-        let entity = &mut world.entities[self.key];
-        Q::query(entity)
+    pub fn query<Q: Query>(&mut self) -> Option<Q::Output<'_>> {
+        Q::query(&UnsafeCell::new(self))
     }
 }
 
 pub trait Query {
     type Output<'e>;
 
-    fn query(entity: &mut Entity) -> Self::Output<'_>;
+    fn query<'e>(element: &UnsafeCell<&'e mut Element>) -> Option<Self::Output<'e>>;
 }
 
 impl<T: 'static> Query for &T {
     type Output<'e> = &'e T;
 
-    fn query(entity: &mut Entity) -> Self::Output<'_> {
-        entity
-            .components
+    // TODO super unsafe
+    fn query<'e>(element: &UnsafeCell<&'e mut Element>) -> Option<Self::Output<'e>> {
+        let elem = unsafe { &*element.get() };
+        elem.attributes
             .get(&TypeId::of::<T>())
-            .and_then(|any| any.downcast_ref())
-            .unwrap()
+            .and_then(|attr| attr.downcast_ref())
+    }
+}
+
+impl<T: 'static> Query for &mut T {
+    type Output<'e> = &'e mut T;
+
+    // TODO super unsafe
+    fn query<'e>(element: &UnsafeCell<&'e mut Element>) -> Option<Self::Output<'e>> {
+        let elem = unsafe { &mut *element.get() };
+        elem.attributes
+            .get_mut(&TypeId::of::<T>())
+            .and_then(|attr| attr.downcast_mut())
     }
 }
