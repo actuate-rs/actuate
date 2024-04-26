@@ -1,22 +1,19 @@
-use actuate::{ActuatePlugin, Scope};
-use bevy::{
-    app::{App, Update},
-    ecs::schedule::{common_conditions::run_once, IntoSystemConfigs},
-    DefaultPlugins,
-};
+use actuate::{lazy, ActuatePlugin, Scope, View};
+use bevy::prelude::*;
 
-fn app(mut scope: Scope) {
+fn app(mut scope: Scope) -> impl View {
     scope.use_effect(
         (|| {
             dbg!("A");
         })
         .run_if(run_once()),
     );
+
+    lazy(|| {
+        dbg!("B");
+    })
 }
 
 fn main() {
-    App::new()
-        .add_plugins((DefaultPlugins, ActuatePlugin))
-        .add_systems(Update, app)
-        .run();
+   actuate::run(app);
 }

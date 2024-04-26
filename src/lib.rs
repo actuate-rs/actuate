@@ -1,14 +1,15 @@
-use std::mem;
+use std::{marker::PhantomData, mem};
 
 use bevy::{
-    app::{Plugin, Update},
+    app::{App, Plugin, Update},
     ecs::{
         component::Component,
         entity::Entity,
         schedule::{IntoSystemConfigs, NodeConfigs, Schedule},
-        system::{Commands, Local, System, SystemId, SystemParam},
+        system::{Commands, Local, ParamSet, System, SystemId, SystemParam, SystemParamFunction},
         world::World,
     },
+    DefaultPlugins,
 };
 
 #[derive(Component)]
@@ -53,11 +54,26 @@ fn run_effects(world: &mut World) {
     }
 }
 
+fn run_lazy(world: &mut World) {
+    for (entity, mut system) in world
+        .query::<(Entity, &mut LazySystem)>()
+        .iter_mut(world)
+        .map(|(entity, mut system)| (entity, system.add_system.take().unwrap()))
+        .collect::<Vec<_>>()
+    {
+        let mut schedule = Schedule::new(Update);
+        system(&mut schedule);
+        schedule.run(world);
+
+        world.despawn(entity);
+    }
+}
+
 pub struct ActuatePlugin;
 
 impl Plugin for ActuatePlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(Update, run_effects);
+        app.add_systems(Update, ((run_effects, run_lazy).chain()));
     }
 }
 
@@ -117,4 +133,90 @@ impl Drop for Scope<'_, '_> {
 
         self.commands.spawn(PendingScope { effects, entity });
     }
+}
+
+pub trait View {
+    type State: Send + 'static;
+
+    fn build(&mut self, commands: &mut Commands) -> Self::State;
+
+    fn rebuild(&mut self, state: &mut Self::State, commands: &mut Commands);
+}
+
+impl View for () {
+    type State = ();
+
+    fn build(&mut self, commands: &mut Commands) -> Self::State {}
+
+    fn rebuild(&mut self, state: &mut Self::State, commands: &mut Commands) {}
+}
+
+pub fn lazy<F, V, Marker>(f: F) -> Lazy<F, V, Marker>
+where
+    F: SystemParamFunction<Marker, In = (), Out = V>,
+    V: View,
+{
+    Lazy {
+        f: Some(f),
+        _marker: PhantomData,
+    }
+}
+
+#[derive(Component)]
+pub struct LazySystem {
+    add_system: Option<Box<dyn FnMut(&mut Schedule) + Send + Sync>>,
+}
+
+pub struct Lazy<F, V, Marker> {
+    f: Option<F>,
+    _marker: PhantomData<(V, Marker)>,
+}
+
+impl<F, V, Marker> View for Lazy<F, V, Marker>
+where
+    F: SystemParamFunction<Marker, In = (), Out = V>,
+    F::Param: 'static,
+    V: View,
+{
+    type State = ();
+
+    fn build(&mut self, commands: &mut Commands) -> Self::State {
+        let mut f = self.f.take();
+        commands.spawn(LazySystem {
+            add_system: Some(Box::new(move |schedule: &mut Schedule| {
+                let mut f = f.take().unwrap();
+                schedule.add_systems(move |mut params: ParamSet<(F::Param,)>| {
+                    f.run((), params.p0());
+                });
+            })),
+        });
+    }
+
+    fn rebuild(&mut self, state: &mut Self::State, commands: &mut Commands) {}
+}
+
+pub fn run<F, V, Marker>(mut view_fn: F)
+where
+    F: SystemParamFunction<Marker, In = (), Out = V>,
+    F::Param: 'static,
+    V: View,
+{
+    App::new()
+        .add_plugins((DefaultPlugins, ActuatePlugin))
+        .add_systems(
+            Update,
+            move |mut commands: Commands,
+                  mut state_cell: Local<Option<V::State>>,
+                  mut params: ParamSet<(F::Param,)>| {
+                let mut content = view_fn.run((), params.p0());
+
+                if let Some(state) = &mut *state_cell {
+                    content.rebuild(state, &mut commands);
+                } else {
+                    let state = content.build(&mut commands);
+                    *state_cell = Some(state);
+                }
+            },
+        )
+        .run();
 }
