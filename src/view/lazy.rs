@@ -1,11 +1,8 @@
 use super::View;
-use bevy::{
-    app::Plugin,
-    ecs::{
-        component::Component,
-        schedule::Schedule,
-        system::{Commands, Local, ParamSet, System, SystemParamFunction},
-    },
+use bevy::ecs::{
+    component::Component,
+    schedule::Schedule,
+    system::{Commands, Local, ParamSet, SystemParamFunction},
 };
 use std::marker::PhantomData;
 

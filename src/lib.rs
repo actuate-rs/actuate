@@ -1,6 +1,7 @@
 use bevy::{
     app::{App, Plugin, Update},
     ecs::{
+        bundle::Bundle,
         component::Component,
         entity::Entity,
         schedule::{IntoSystemConfigs, NodeConfigs, Schedule},
@@ -9,7 +10,7 @@ use bevy::{
     },
     DefaultPlugins,
 };
-use std::mem;
+use std::{any::Any, mem};
 use view::LazySystem;
 
 pub mod view;
@@ -93,6 +94,8 @@ struct ScopeId {
 struct State {
     effects: Vec<Effect>,
     index: usize,
+    states: Vec<Entity>,
+    states_index: usize,
     entity: Option<Entity>,
 }
 
@@ -115,6 +118,21 @@ impl Scope<'_, '_> {
         }
 
         self.state.index += 1;
+    }
+
+    pub fn use_bundle<B: Bundle>(&mut self, make_bundle: impl FnOnce() -> B) -> Entity {
+        let idx = self.state.states_index;
+
+        let entity = if let Some(entity) = self.state.states.get_mut(idx) {
+            *entity
+        } else {
+            let entity = self.commands.spawn(make_bundle()).id();
+            self.state.states.push(entity);
+            entity
+        };
+        self.state.index += 1;
+
+        entity
     }
 }
 
