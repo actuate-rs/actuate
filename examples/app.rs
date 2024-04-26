@@ -1,4 +1,4 @@
-use actuate::{lazy, ActuatePlugin, Scope, View};
+use actuate::{lazy, Scope, View};
 use bevy::prelude::*;
 
 fn app(mut scope: Scope) -> impl View {
@@ -10,7 +10,9 @@ fn app(mut scope: Scope) -> impl View {
     );
 
     lazy(|| {
-        dbg!("B");
+        lazy(|| {
+            dbg!("B");
+        })
     })
 }
 

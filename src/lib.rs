@@ -6,7 +6,7 @@ use bevy::{
         component::Component,
         entity::Entity,
         schedule::{IntoSystemConfigs, NodeConfigs, Schedule},
-        system::{Commands, Local, ParamSet, System, SystemId, SystemParam, SystemParamFunction},
+        system::{Commands, Local, ParamSet, System, SystemParam, SystemParamFunction},
         world::World,
     },
     DefaultPlugins,
@@ -73,7 +73,7 @@ pub struct ActuatePlugin;
 
 impl Plugin for ActuatePlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(Update, ((run_effects, run_lazy).chain()));
+        app.add_systems(Update, (run_effects, run_lazy).chain());
     }
 }
 
@@ -146,9 +146,9 @@ pub trait View {
 impl View for () {
     type State = ();
 
-    fn build(&mut self, commands: &mut Commands) -> Self::State {}
+    fn build(&mut self, _commands: &mut Commands) -> Self::State {}
 
-    fn rebuild(&mut self, state: &mut Self::State, commands: &mut Commands) {}
+    fn rebuild(&mut self, _state: &mut Self::State, _commands: &mut Commands) {}
 }
 
 pub fn lazy<F, V, Marker>(f: F) -> Lazy<F, V, Marker>
@@ -185,14 +185,26 @@ where
         commands.spawn(LazySystem {
             add_system: Some(Box::new(move |schedule: &mut Schedule| {
                 let mut f = f.take().unwrap();
-                schedule.add_systems(move |mut params: ParamSet<(F::Param,)>| {
-                    f.run((), params.p0());
-                });
+                schedule.add_systems(
+                    move |mut commands: Commands,
+                          mut params: ParamSet<(F::Param,)>,
+                          mut state_cell: Local<Option<V::State>>| {
+                        let mut content = f.run((), params.p0());
+                        
+                        if let Some(state) = &mut *state_cell {
+                            content.rebuild(state, &mut commands);
+                        } else {
+                            let state = content.build(&mut commands);
+                            *state_cell = Some(state);
+                        }
+                      
+                    },
+                );
             })),
         });
     }
 
-    fn rebuild(&mut self, state: &mut Self::State, commands: &mut Commands) {}
+    fn rebuild(&mut self, _state: &mut Self::State, _commands: &mut Commands) {}
 }
 
 pub fn run<F, V, Marker>(mut view_fn: F)
