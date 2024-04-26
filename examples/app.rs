@@ -17,5 +17,5 @@ fn app(mut scope: Scope) -> impl View {
 }
 
 fn main() {
-   actuate::run(app);
+    actuate::run(app);
 }
