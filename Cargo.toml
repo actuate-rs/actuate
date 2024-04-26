@@ -3,17 +3,8 @@ name = "actuate"
 version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "A reactive runtime for embedded systems"
+description = "A reactive UI framework"
 repository = "https://github.com/matthunz/actuate"
 
-[features]
-std = []
-default = ["std"]
-
 [dependencies]
-hashbrown = "0.14.3"
-tokio = { version = "1.37.0", features = ["full"] }
-
-[[example]]
-name = "app"
-required-features = ["std"]
+bevy = "0.13.2"
