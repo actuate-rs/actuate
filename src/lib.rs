@@ -1,63 +1,58 @@
-#![cfg_attr(not(feature = "std"), no_std)]
-
-extern crate alloc;
-
-use core::{
-    any::{Any, TypeId},
-    cell::UnsafeCell,
-    fmt,
-};
-
-#[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
-
-pub mod control;
-
-pub mod diagram;
-pub use self::diagram::Diagram;
-
-mod query;
-pub use self::query::Query;
-
-pub mod plant;
-
-pub mod system;
-pub use self::system::System;
-
-pub mod time;
-
-#[cfg(feature = "std")]
-use std::collections::HashMap;
-
-#[cfg(not(feature = "std"))]
-use hashbrown::HashMap;
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 #[derive(Default)]
-pub struct World {
-    states: HashMap<Id, Box<dyn Any>>,
+struct Inner {
+    states: Vec<Box<dyn Any>>,
+    idx: usize,
 }
 
-impl World {
-    pub fn query<'a, 'w, Q>(&'w mut self) -> Q::Output<'w>
-    where
-        Q: Query<'a>,
-    {
-        Q::query(&UnsafeCell::new(self))
+#[derive(Clone, Default)]
+pub struct Context {
+    inner: Rc<RefCell<Inner>>,
+}
+
+impl Context {
+    pub fn enter(self) {
+        CONTEXT.set(Some(self));
+    }
+
+    pub fn get() -> Self {
+        CONTEXT.with(|cell| cell.borrow().as_ref().unwrap().clone())
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Id {
-    type_id: TypeId,
-    name: &'static str,
+thread_local! {
+    static CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
 }
 
-impl fmt::Debug for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Id").field(&self.name).finish()
+pub fn use_state<T: Clone + 'static>(f: impl FnOnce() -> T) -> T {
+    let cx = Context::get();
+    let mut cx = cx.inner.borrow_mut();
+
+    let idx = cx.idx;
+    cx.idx += 1;
+
+    let state = if let Some(state) = cx.states.get(idx) {
+        state
+    } else {
+        cx.states.push(Box::new(f()));
+        cx.states.last().unwrap()
+    };
+    state.downcast_ref::<T>().unwrap().clone()
+}
+
+pub trait View {
+    fn view(&self) -> impl View;
+}
+
+impl View for () {
+    fn view(&self) -> impl View {
+        todo!()
     }
 }
 
-pub trait Plugin {
-    fn build(self, diagram: &mut diagram::Builder);
+pub fn run(view: impl View) {
+    Context::default().enter();
+
+    view.view();
 }
