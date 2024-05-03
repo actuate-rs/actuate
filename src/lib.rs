@@ -1,11 +1,11 @@
-use std::{any::Any, cell::RefCell, collections::HashMap, rc::Rc};
+use std::{any::Any, borrow::Cow, cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 #[derive(Default)]
 struct Inner {
     states: Vec<Box<dyn Any>>,
     idx: usize,
     is_empty: bool,
-    children: Vec<Box<dyn AnyView>>,
+    child_ids: Vec<u64>,
 }
 
 #[derive(Clone, Default)]
@@ -54,12 +54,18 @@ impl View for () {
 }
 
 pub trait AnyView {
+    fn name(&self) -> Cow<'static, str>;
+
     fn as_any(&self) -> &dyn Any;
 
     fn view_any(&self) -> Box<dyn AnyView>;
 }
 
 impl<V: View> AnyView for V {
+    fn name(&self) -> Cow<'static, str> {
+        Cow::Borrowed(std::any::type_name::<V>())
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -78,7 +84,7 @@ struct Node {
 pub struct VirtualDom {
     next_id: u64,
     nodes: HashMap<u64, Node>,
-    pending_id: u64,
+    pending: (u64, Option<Context>),
 }
 
 impl VirtualDom {
@@ -96,13 +102,17 @@ impl VirtualDom {
         Self {
             next_id: 1,
             nodes,
-            pending_id: 0,
+            pending: (0, None),
         }
+    }
+
+    pub fn slice(&self, id: u64) -> Slice {
+        Slice { vdom: self, id }
     }
 
     pub fn run(&mut self) {
         loop {
-            let node = self.nodes.get_mut(&self.pending_id).unwrap();
+            let node = self.nodes.get_mut(&self.pending.0).unwrap();
 
             if !node.is_init {
                 node.scope.clone().enter();
@@ -112,12 +122,20 @@ impl VirtualDom {
                     break;
                 }
 
-                let id = self.next_id;
+                let content_id = self.next_id;
                 self.next_id += 1;
-                self.pending_id = id;
+
+                if let Some(ref mut parent_scope) = self.pending.1 {
+                    parent_scope
+                        .inner
+                        .borrow_mut()
+                        .child_ids
+                        .push(self.pending.0)
+                }
+                self.pending = (content_id, Some(node.scope.clone()));
 
                 self.nodes.insert(
-                    id,
+                    content_id,
                     Node {
                         scope: Context::default(),
                         view: content,
@@ -126,6 +144,27 @@ impl VirtualDom {
                 );
             }
         }
+    }
+}
+
+pub struct Slice<'a> {
+    vdom: &'a VirtualDom,
+    id: u64,
+}
+
+impl fmt::Debug for Slice<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let node = &self.vdom.nodes[&self.id];
+        let scope = node.scope.inner.borrow();
+
+        let mut tuple = f.debug_tuple(&node.view.name());
+
+        for child_id in &scope.child_ids {
+            let child_slice = self.vdom.slice(*child_id);
+            tuple.field(&child_slice);
+        }
+
+        tuple.finish()
     }
 }
 
