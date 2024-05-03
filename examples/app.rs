@@ -1,10 +1,20 @@
 use actuate::{use_state, View, VirtualDom};
 
+#[derive(Clone)]
 struct A;
 
 impl View for A {
     fn view(&self) -> impl View {
         dbg!("A");
+    }
+}
+
+#[derive(Clone)]
+struct B;
+
+impl View for B {
+    fn view(&self) -> impl View {
+        dbg!("B");
     }
 }
 
@@ -15,7 +25,7 @@ impl View for App {
         let count = use_state(|| 0);
         dbg!(count);
 
-        A
+        (A, B)
     }
 }
 
