@@ -11,6 +11,7 @@ enum UpdateKind {
 
 struct Update {
     id: u64,
+    idx: usize,
     kind: UpdateKind,
 }
 
@@ -45,6 +46,7 @@ thread_local! {
 
 pub struct SetState<T> {
     id: u64,
+    idx: usize,
     tx: mpsc::UnboundedSender<Update>,
     _marker: PhantomData<T>,
 }
@@ -56,6 +58,7 @@ impl<T> SetState<T> {
     {
         self.tx.send(Update {
             id: self.id,
+            idx: self.idx,
             kind: UpdateKind::Value(Box::new(value)),
         });
     }
@@ -67,6 +70,7 @@ impl<T> SetState<T> {
         let mut cell = Some(f);
         self.tx.send(Update {
             id: self.id,
+            idx: self.idx,
             kind: UpdateKind::Setter(Box::new(move |any| {
                 let f = cell.take().unwrap();
                 f(any.downcast_mut().unwrap())
@@ -93,6 +97,7 @@ pub fn use_state<T: Clone + 'static>(f: impl FnOnce() -> T) -> (T, SetState<T>) 
     let set_state = SetState {
         id: cx.id,
         tx: cx.tx.clone(),
+        idx,
         _marker: PhantomData,
     };
 
@@ -145,6 +150,7 @@ struct Node {
     scope: Context,
     view: Box<dyn AnyView>,
     is_init: bool,
+    updates: Vec<(usize, UpdateKind)>,
 }
 
 pub struct VirtualDom {
@@ -175,6 +181,7 @@ impl VirtualDom {
             },
             view,
             is_init: false,
+            updates: Vec::new(),
         };
 
         let mut nodes = HashMap::new();
@@ -197,12 +204,16 @@ impl VirtualDom {
     pub async fn run(&mut self) {
         if self.is_init {
             let update = self.rx.recv().await.unwrap();
-            dbg!(update.id);
+            if let Some(node) = self.nodes.get_mut(&update.id) {
+                node.updates.push((update.idx, update.kind))
+            }
         } else {
             self.is_init = true;
         }
 
-        self.run_inner()
+        self.run_inner();
+
+        self.pending.push((0, None));
     }
 
     fn run_inner(&mut self) {
@@ -210,6 +221,8 @@ impl VirtualDom {
             let node = self.nodes.get_mut(&pending.0).unwrap();
 
             if !node.is_init {
+                node.is_init = true;
+
                 node.scope.clone().enter();
                 let content = node.view.view_any();
 
@@ -237,9 +250,9 @@ impl VirtualDom {
                                     tx: self.tx.clone(),
                                 })),
                             },
-
                             view: child,
                             is_init: false,
+                            updates: Vec::new(),
                         },
                     ));
                 }
@@ -272,11 +285,27 @@ impl VirtualDom {
                         },
                         view: content,
                         is_init: false,
+                        updates: Vec::new(),
                     },
                 );
 
                 for (id, node) in new_nodes {
                     self.nodes.insert(id, node);
+                }
+            } else if !node.updates.is_empty() {
+                for (idx, update) in node.updates.drain(..) {
+                    let mut scope = node.scope.inner.borrow_mut();
+                    let state = &mut scope.states[idx];
+                    match update {
+                        UpdateKind::Value(any) => *state = any,
+                        UpdateKind::Setter(mut f) => f(&mut *state),
+                    }
+
+                    scope.idx = 0;
+                    drop(scope);
+
+                    node.scope.clone().enter();
+                    node.view.view_any();
                 }
             }
         }
