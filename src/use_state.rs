@@ -65,3 +65,20 @@ impl<T> SetState<T> {
             .unwrap();
     }
 }
+
+impl<T> Clone for SetState<T> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            idx: self.idx.clone(),
+            tx: self.tx.clone(),
+            _marker: self._marker.clone(),
+        }
+    }
+}
+
+impl<T> PartialEq for SetState<T> {
+    fn eq(&self, other: &Self) -> bool {
+        true
+    }
+}

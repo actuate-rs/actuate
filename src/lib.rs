@@ -29,6 +29,7 @@ struct Inner {
     states: Vec<Box<dyn Any>>,
     idx: usize,
     is_empty: bool,
+    content_id: Option<u64>,
     child_ids: Vec<u64>,
     pending_children: Vec<Box<dyn AnyView>>,
     tx: mpsc::UnboundedSender<Update>,

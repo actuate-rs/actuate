@@ -1,6 +1,6 @@
 use crate::Context;
 
-pub trait View: 'static {
+pub trait View: PartialEq + 'static {
     fn view(&self) -> impl View;
 }
 
