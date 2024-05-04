@@ -22,16 +22,20 @@ struct App;
 
 impl View for App {
     fn view(&self) -> impl View {
-        let count = use_state(|| 0);
+        let (count, set_count) = use_state(|| 0);
         dbg!(count);
+
+        set_count.set(count + 1);
 
         (A, B)
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut vdom = VirtualDom::new(App);
-    vdom.run();
+    vdom.run().await;
+    vdom.run().await;
 
     dbg!(vdom.slice(0));
 }

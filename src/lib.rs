@@ -1,15 +1,30 @@
-use std::{any::Any, borrow::Cow, cell::RefCell, collections::HashMap, fmt, mem, rc::Rc};
+use std::{
+    any::Any, borrow::Cow, cell::RefCell, collections::HashMap, fmt, marker::PhantomData, mem,
+    rc::Rc,
+};
+use tokio::sync::mpsc;
 
-#[derive(Default)]
+enum UpdateKind {
+    Value(Box<dyn Any>),
+    Setter(Box<dyn FnMut(&mut dyn Any)>),
+}
+
+struct Update {
+    id: u64,
+    kind: UpdateKind,
+}
+
 struct Inner {
+    id: u64,
     states: Vec<Box<dyn Any>>,
     idx: usize,
     is_empty: bool,
     child_ids: Vec<u64>,
     pending_children: Vec<Box<dyn AnyView>>,
+    tx: mpsc::UnboundedSender<Update>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Context {
     inner: Rc<RefCell<Inner>>,
 }
@@ -28,20 +43,60 @@ thread_local! {
     static CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
 }
 
-pub fn use_state<T: Clone + 'static>(f: impl FnOnce() -> T) -> T {
+pub struct SetState<T> {
+    id: u64,
+    tx: mpsc::UnboundedSender<Update>,
+    _marker: PhantomData<T>,
+}
+
+impl<T> SetState<T> {
+    pub fn set(&self, value: T)
+    where
+        T: 'static,
+    {
+        self.tx.send(Update {
+            id: self.id,
+            kind: UpdateKind::Value(Box::new(value)),
+        });
+    }
+
+    pub fn update(&self, f: impl FnOnce(&mut T) + 'static)
+    where
+        T: 'static,
+    {
+        let mut cell = Some(f);
+        self.tx.send(Update {
+            id: self.id,
+            kind: UpdateKind::Setter(Box::new(move |any| {
+                let f = cell.take().unwrap();
+                f(any.downcast_mut().unwrap())
+            })),
+        });
+    }
+}
+
+pub fn use_state<T: Clone + 'static>(f: impl FnOnce() -> T) -> (T, SetState<T>) {
     let cx = Context::get();
     let mut cx = cx.inner.borrow_mut();
 
     let idx = cx.idx;
     cx.idx += 1;
 
-    let state = if let Some(state) = cx.states.get(idx) {
+    let any = if let Some(state) = cx.states.get(idx) {
         state
     } else {
         cx.states.push(Box::new(f()));
         cx.states.last().unwrap()
     };
-    state.downcast_ref::<T>().unwrap().clone()
+    let value = any.downcast_ref::<T>().unwrap().clone();
+
+    let set_state = SetState {
+        id: cx.id,
+        tx: cx.tx.clone(),
+        _marker: PhantomData,
+    };
+
+    (value, set_state)
 }
 
 pub trait View: 'static {
@@ -96,13 +151,28 @@ pub struct VirtualDom {
     next_id: u64,
     nodes: HashMap<u64, Node>,
     pending: Vec<(u64, Option<Context>)>,
+    tx: mpsc::UnboundedSender<Update>,
+    rx: mpsc::UnboundedReceiver<Update>,
+    is_init: bool,
 }
 
 impl VirtualDom {
     pub fn new(content: impl View) -> Self {
+        let (tx, rx) = mpsc::unbounded_channel();
+
         let view = Box::new(content);
         let node = Node {
-            scope: Context::default(),
+            scope: Context {
+                inner: Rc::new(RefCell::new(Inner {
+                    id: 0,
+                    states: Default::default(),
+                    idx: Default::default(),
+                    is_empty: Default::default(),
+                    child_ids: Default::default(),
+                    pending_children: Default::default(),
+                    tx: tx.clone(),
+                })),
+            },
             view,
             is_init: false,
         };
@@ -114,6 +184,9 @@ impl VirtualDom {
             next_id: 1,
             nodes,
             pending: vec![(0, None)],
+            tx,
+            rx,
+            is_init: false,
         }
     }
 
@@ -121,7 +194,18 @@ impl VirtualDom {
         Slice { vdom: self, id }
     }
 
-    pub fn run(&mut self) {
+    pub async fn run(&mut self) {
+        if self.is_init {
+            let update = self.rx.recv().await.unwrap();
+            dbg!(update.id);
+        } else {
+            self.is_init = true;
+        }
+
+        self.run_inner()
+    }
+
+    fn run_inner(&mut self) {
         while let Some(pending) = self.pending.pop() {
             let node = self.nodes.get_mut(&pending.0).unwrap();
 
@@ -142,7 +226,18 @@ impl VirtualDom {
                     new_nodes.push((
                         child_id,
                         Node {
-                            scope: Context::default(),
+                            scope: Context {
+                                inner: Rc::new(RefCell::new(Inner {
+                                    id: 0,
+                                    states: Default::default(),
+                                    idx: Default::default(),
+                                    is_empty: Default::default(),
+                                    child_ids: Default::default(),
+                                    pending_children: Default::default(),
+                                    tx: self.tx.clone(),
+                                })),
+                            },
+
                             view: child,
                             is_init: false,
                         },
@@ -164,7 +259,17 @@ impl VirtualDom {
                 self.nodes.insert(
                     content_id,
                     Node {
-                        scope: Context::default(),
+                        scope: Context {
+                            inner: Rc::new(RefCell::new(Inner {
+                                id: 0,
+                                states: Default::default(),
+                                idx: Default::default(),
+                                is_empty: Default::default(),
+                                child_ids: Default::default(),
+                                pending_children: Default::default(),
+                                tx: self.tx.clone(),
+                            })),
+                        },
                         view: content,
                         is_init: false,
                     },
@@ -197,10 +302,4 @@ impl fmt::Debug for Slice<'_> {
 
         tuple.finish()
     }
-}
-
-pub fn run(view: impl View) {
-    Context::default().enter();
-
-    view.view();
 }
