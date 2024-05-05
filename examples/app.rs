@@ -3,7 +3,7 @@ use actuate::{use_state, virtual_dom, Scope, View, ViewBuilder};
 struct A;
 
 impl View for A {
-    fn body(&self, cx: &Scope) -> impl ViewBuilder {
+    fn body(&self, _cx: &Scope) -> impl ViewBuilder {
         dbg!("A!");
     }
 }

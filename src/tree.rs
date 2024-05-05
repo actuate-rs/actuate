@@ -1,4 +1,4 @@
-use crate::{Context, Inner, Scope, View, ViewBuilder};
+use crate::{Context, Inner, Scope, View};
 use slotmap::DefaultKey;
 use std::{cell::UnsafeCell, mem};
 
@@ -13,6 +13,8 @@ pub trait Tree {
         state: &mut Self::State,
         children: &mut Vec<DefaultKey>,
     );
+
+    fn remove(state: &mut Self::State, children: &mut Vec<DefaultKey>);
 }
 
 impl Tree for () {
@@ -32,6 +34,11 @@ impl Tree for () {
         let _ = children;
         let _ = state;
         let _ = cx;
+    }
+
+    fn remove(state: &mut Self::State, children: &mut Vec<DefaultKey>) {
+        let _ = children;
+        let _ = state;
     }
 }
 
@@ -59,7 +66,13 @@ impl<T: Tree> Tree for Option<T> {
                 *state = Some(tree.build(cx, children));
             }
         } else if let Some(state) = state {
-            todo!()
+            T::remove(state, children)
+        }
+    }
+
+    fn remove(state: &mut Self::State, children: &mut Vec<DefaultKey>) {
+        if let Some(state) = state {
+            T::remove(state, children)
         }
     }
 }
@@ -79,6 +92,11 @@ impl<T1: Tree, T2: Tree> Tree for (T1, T2) {
     ) {
         self.0.rebuild(cx, &mut state.0, children);
         self.1.rebuild(cx, &mut state.1, children);
+    }
+
+    fn remove(state: &mut Self::State, children: &mut Vec<DefaultKey>) {
+        T1::remove(&mut state.0, children);
+        T2::remove(&mut state.1, children);
     }
 }
 
@@ -128,7 +146,7 @@ where
         &mut self,
         cx: &mut Context,
         state: &mut Self::State,
-        children: &mut Vec<DefaultKey>,
+        _children: &mut Vec<DefaultKey>,
     ) {
         {
             let scope = unsafe { &mut *state.1.inner.get() };
@@ -155,5 +173,11 @@ where
 
         let node = cx.nodes.get_mut(state.0).unwrap();
         node.view = &self.view as _;
+    }
+
+    fn remove(state: &mut Self::State, children: &mut Vec<DefaultKey>) {
+        if let Some(idx) = children.iter().position(|key| *key == state.0) {
+            children.remove(idx);
+        }
     }
 }
