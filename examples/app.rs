@@ -12,8 +12,9 @@ impl View for App {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut vdom = virtual_dom(App);
-    vdom.run();
-    vdom.run();
+    vdom.run().await;
+    vdom.run().await;
 }
