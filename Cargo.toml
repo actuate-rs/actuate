@@ -5,3 +5,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A reactive runtime for embedded systems"
 repository = "https://github.com/matthunz/actuate"
+
+[dependencies]
+slotmap = "1.0.7"

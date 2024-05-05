@@ -1,14 +1,14 @@
-use actuate::{use_state, View};
+use actuate::{virtual_dom, View, ViewBuilder};
 
 struct App;
 
 impl View for App {
-    fn view(&self) -> impl View {
-        let count = use_state(|| 0);
-        dbg!(count);
+    fn body(&self) -> impl ViewBuilder {
+        dbg!("view!");
     }
 }
 
 fn main() {
-    actuate::run(App);
+    let mut vdom = virtual_dom(App);
+    vdom.build();
 }
