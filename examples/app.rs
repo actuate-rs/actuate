@@ -10,5 +10,6 @@ impl View for App {
 
 fn main() {
     let mut vdom = virtual_dom(App);
-    vdom.build();
+    vdom.run();
+    vdom.run();
 }
