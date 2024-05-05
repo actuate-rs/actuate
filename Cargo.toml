@@ -1,9 +1,9 @@
 [package]
 name = "actuate"
-version = "0.2.0"
+version = "0.3.0-alpha.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "A reactive runtime for embedded systems"
+description = "A reactive user-interface framework"
 repository = "https://github.com/matthunz/actuate"
 
 [dependencies]

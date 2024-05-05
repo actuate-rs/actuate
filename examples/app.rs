@@ -28,7 +28,7 @@ struct App;
 
 impl View for App {
     fn body(&self, _cx: &Scope) -> impl ViewBuilder {
-        Counter { initial: 2 }
+        (Counter { initial: 1 }, Counter { initial: 2 })
     }
 }
 
