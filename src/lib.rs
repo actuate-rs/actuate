@@ -1,4 +1,5 @@
 use slotmap::{DefaultKey, SlotMap, SparseSecondaryMap};
+use std::fmt;
 use std::{any::Any, cell::UnsafeCell};
 use tokio::sync::mpsc;
 
@@ -35,8 +36,13 @@ impl<VB: ViewBuilder> AnyView for VB {
     }
 }
 
+struct Node {
+    view: *const dyn AnyView,
+    children: Vec<DefaultKey>,
+}
+
 pub struct Context {
-    nodes: SlotMap<DefaultKey, *const dyn AnyView>,
+    nodes: SlotMap<DefaultKey, Node>,
     tx: mpsc::UnboundedSender<Update>,
     pending_updates: SparseSecondaryMap<DefaultKey, Vec<Update>>,
 }
@@ -52,6 +58,7 @@ pub fn virtual_dom(view: impl ViewBuilder) -> VirtualDom<impl Tree> {
             tx,
             pending_updates: SparseSecondaryMap::new(),
         },
+        roots: Vec::new(),
         rx,
     }
 }
@@ -67,6 +74,7 @@ pub struct VirtualDom<T> {
     state: Option<Box<dyn Any>>,
     cx: Context,
     rx: mpsc::UnboundedReceiver<Update>,
+    roots: Vec<DefaultKey>,
 }
 
 impl<T> VirtualDom<T> {
@@ -96,8 +104,45 @@ impl<T> VirtualDom<T> {
             self.tree
                 .rebuild(&mut self.cx, state.downcast_mut().unwrap())
         } else {
-            let state = self.tree.build(&mut self.cx);
+            let state = self.tree.build(&mut self.cx, &mut self.roots);
             self.state = Some(Box::new(state));
         }
+    }
+
+    pub fn slice(&self, key: DefaultKey) -> Slice<T> {
+        Slice {
+            vdom: self,
+            node: self.cx.nodes.get(key).unwrap(),
+        }
+    }
+}
+
+impl<T> fmt::Debug for VirtualDom<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut t = f.debug_tuple("VirtualDom");
+
+        for key in &self.roots {
+            t.field(&self.slice(*key));
+        }
+
+        t.finish()
+    }
+}
+
+pub struct Slice<'a, T> {
+    vdom: &'a VirtualDom<T>,
+    node: &'a Node,
+}
+
+impl<T> fmt::Debug for Slice<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let view = unsafe { &*self.node.view };
+        let mut t = f.debug_tuple(view.name());
+
+        for child_key in &self.node.children {
+            t.field(&self.vdom.slice(*child_key));
+        }
+
+        t.finish()
     }
 }

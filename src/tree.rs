@@ -6,7 +6,7 @@ use crate::{Context, Inner, Scope, View};
 pub trait Tree {
     type State: 'static;
 
-    fn build(&mut self, cx: &mut Context) -> Self::State;
+    fn build(&mut self, cx: &mut Context, children: &mut Vec<DefaultKey>) -> Self::State;
 
     fn rebuild(&mut self, cx: &mut Context, state: &mut Self::State);
 }
@@ -14,7 +14,7 @@ pub trait Tree {
 impl Tree for () {
     type State = ();
 
-    fn build(&mut self, cx: &mut Context) -> Self::State {
+    fn build(&mut self, cx: &mut Context, children: &mut Vec<DefaultKey>) -> Self::State {
         let _ = cx;
     }
 
@@ -38,8 +38,12 @@ where
 {
     type State = (DefaultKey, Box<Scope>, B::State);
 
-    fn build(&mut self, cx: &mut Context) -> Self::State {
-        let key = cx.nodes.insert(&self.view as *const V);
+    fn build(&mut self, cx: &mut Context, children: &mut Vec<DefaultKey>) -> Self::State {
+        let key = cx.nodes.insert(crate::Node {
+            view: &self.view as *const V,
+            children: Vec::new(),
+        });
+        children.push(key);
 
         let scope = Box::new(Scope {
             key,
@@ -55,7 +59,9 @@ where
         let body = (self.f)(view_ref, scope_ref);
         self.body = Some(body);
 
-        let body_state = self.body.as_mut().unwrap().build(cx);
+        let mut inner_children = Vec::new();
+        let body_state = self.body.as_mut().unwrap().build(cx, &mut inner_children);
+        cx.nodes.get_mut(key).unwrap().children = inner_children;
 
         (key, scope, body_state)
     }
@@ -80,6 +86,6 @@ where
         self.body.as_mut().unwrap().rebuild(cx, &mut state.2);
 
         let node = cx.nodes.get_mut(state.0).unwrap();
-        *node = &self.view as _;
+        node.view = &self.view as _;
     }
 }
