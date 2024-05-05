@@ -102,7 +102,7 @@ impl<T> VirtualDom<T> {
             }
 
             self.tree
-                .rebuild(&mut self.cx, state.downcast_mut().unwrap())
+                .rebuild(&mut self.cx, state.downcast_mut().unwrap(), &mut self.roots)
         } else {
             let state = self.tree.build(&mut self.cx, &mut self.roots);
             self.state = Some(Box::new(state));
@@ -118,7 +118,7 @@ impl<T> VirtualDom<T> {
 }
 
 impl<T> fmt::Debug for VirtualDom<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut t = f.debug_tuple("VirtualDom");
 
         for key in &self.roots {

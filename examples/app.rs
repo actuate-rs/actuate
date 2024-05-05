@@ -1,5 +1,13 @@
 use actuate::{use_state, virtual_dom, Scope, View, ViewBuilder};
 
+struct A;
+
+impl View for A {
+    fn body(&self, cx: &Scope) -> impl ViewBuilder {
+        dbg!("A!");
+    }
+}
+
 struct Counter {
     initial: i32,
 }
@@ -11,6 +19,8 @@ impl View for Counter {
         set_count.set(count + 1);
 
         dbg!(count);
+
+        (*count == 2).then_some(A)
     }
 }
 

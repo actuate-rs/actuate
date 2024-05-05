@@ -1,26 +1,84 @@
+use crate::{Context, Inner, Scope, View, ViewBuilder};
 use slotmap::DefaultKey;
 use std::{cell::UnsafeCell, mem};
-
-use crate::{Context, Inner, Scope, View};
 
 pub trait Tree {
     type State: 'static;
 
     fn build(&mut self, cx: &mut Context, children: &mut Vec<DefaultKey>) -> Self::State;
 
-    fn rebuild(&mut self, cx: &mut Context, state: &mut Self::State);
+    fn rebuild(
+        &mut self,
+        cx: &mut Context,
+        state: &mut Self::State,
+        children: &mut Vec<DefaultKey>,
+    );
 }
 
 impl Tree for () {
     type State = ();
 
     fn build(&mut self, cx: &mut Context, children: &mut Vec<DefaultKey>) -> Self::State {
+        let _ = children;
         let _ = cx;
     }
 
-    fn rebuild(&mut self, cx: &mut Context, state: &mut Self::State) {
+    fn rebuild(
+        &mut self,
+        cx: &mut Context,
+        state: &mut Self::State,
+        children: &mut Vec<DefaultKey>,
+    ) {
+        let _ = children;
         let _ = state;
         let _ = cx;
+    }
+}
+
+impl<T: Tree> Tree for Option<T> {
+    type State = Option<T::State>;
+
+    fn build(&mut self, cx: &mut Context, children: &mut Vec<DefaultKey>) -> Self::State {
+        if let Some(tree) = self {
+            Some(tree.build(cx, children))
+        } else {
+            None
+        }
+    }
+
+    fn rebuild(
+        &mut self,
+        cx: &mut Context,
+        state: &mut Self::State,
+        children: &mut Vec<DefaultKey>,
+    ) {
+        if let Some(tree) = self {
+            if let Some(state) = state {
+                tree.rebuild(cx, state, children);
+            } else {
+                *state = Some(tree.build(cx, children));
+            }
+        } else if let Some(state) = state {
+            todo!()
+        }
+    }
+}
+
+impl<T1: Tree, T2: Tree> Tree for (T1, T2) {
+    type State = (T1::State, T2::State);
+
+    fn build(&mut self, cx: &mut Context, children: &mut Vec<DefaultKey>) -> Self::State {
+        (self.0.build(cx, children), self.1.build(cx, children))
+    }
+
+    fn rebuild(
+        &mut self,
+        cx: &mut Context,
+        state: &mut Self::State,
+        children: &mut Vec<DefaultKey>,
+    ) {
+        self.0.rebuild(cx, &mut state.0, children);
+        self.1.rebuild(cx, &mut state.1, children);
     }
 }
 
@@ -66,7 +124,12 @@ where
         (key, scope, body_state)
     }
 
-    fn rebuild(&mut self, cx: &mut Context, state: &mut Self::State) {
+    fn rebuild(
+        &mut self,
+        cx: &mut Context,
+        state: &mut Self::State,
+        children: &mut Vec<DefaultKey>,
+    ) {
         {
             let scope = unsafe { &mut *state.1.inner.get() };
             scope.idx = 0;
@@ -83,7 +146,12 @@ where
         let body = (self.f)(view_ref, scope_ref);
         self.body = Some(body);
 
-        self.body.as_mut().unwrap().rebuild(cx, &mut state.2);
+        let mut inner_children = Vec::new();
+        self.body
+            .as_mut()
+            .unwrap()
+            .rebuild(cx, &mut state.2, &mut inner_children);
+        cx.nodes.get_mut(state.0).unwrap().children = inner_children;
 
         let node = cx.nodes.get_mut(state.0).unwrap();
         node.view = &self.view as _;
