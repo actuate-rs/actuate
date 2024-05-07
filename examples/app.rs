@@ -1,4 +1,4 @@
-use actuate::{use_state, view, View};
+use actuate::{use_state, view, View, VirtualDom};
 
 fn counter() -> impl View {
     view::from_fn(|cx| {
@@ -16,8 +16,11 @@ fn app() -> impl View {
 
 #[tokio::main]
 async fn main() {
+    let mut vdom = VirtualDom::new(app());
+
     tokio::spawn(async move {
-        actuate::run(app()).await;
+        vdom.run().await;
+        vdom.run().await;
     })
     .await
     .unwrap();

@@ -51,11 +51,25 @@ impl<T> Setter<T> {
     }
 }
 
-pub async fn run(view: impl View) {
-    let mut state = view.build();
+pub struct VirtualDom<V, S> {
+    view: V,
+    state: S,
+}
 
-    loop {
-        future::poll_fn(|cx| view.poll_ready(cx, &mut state)).await;
-        view.view(&mut state);
+impl<V, S> VirtualDom<V, S> {
+    pub fn new(view: V) -> Self
+    where
+        V: View<State = S>,
+    {
+        let state = view.build();
+        Self { view, state }
+    }
+
+    pub async fn run(&mut self)
+    where
+        V: View<State = S>,
+    {
+        future::poll_fn(|cx| self.view.poll_ready(cx, &mut self.state)).await;
+        self.view.view(&mut self.state);
     }
 }
