@@ -7,7 +7,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-use super::State;
+use super::Element;
 
 pub fn from_fn<F, V>(f: F) -> FromFn<F, V>
 where
@@ -32,7 +32,7 @@ impl Wake for FnWaker {
     }
 }
 
-pub struct FnState<V, S> {
+struct FnStateInner<V, S> {
     view: V,
     view_state: S,
     view_waker: Option<Arc<FnWaker>>,
@@ -43,12 +43,12 @@ pub struct FnState<V, S> {
     is_rx_ready: bool,
 }
 
-pub struct FnStateCell<V, S>(Option<FnState<V, S>>);
+pub struct FnState<V, S>(Option<FnStateInner<V, S>>);
 
-impl<V, S> State for FnStateCell<V, S>
+impl<V, S> Element for FnState<V, S>
 where
     V: View,
-    S: State,
+    S: Element,
 {
     fn remove(&self, stack: &mut dyn Stack) {
         if let Some(ref state) = self.0 {
@@ -67,14 +67,14 @@ where
     F: Fn(&Scope) -> V + Send,
     V: View,
 {
-    type State = FnStateCell<V, V::State>;
+    type Element = FnState<V, V::Element>;
 
-    fn build(&self) -> Self::State {
-        FnStateCell(None)
+    fn build(&self) -> Self::Element {
+        FnState(None)
     }
 
-    fn poll_ready(&self, cx: &mut Context, state: &mut Self::State) -> Poll<()> {
-        if let Some(ref mut state) = state.0 {
+    fn poll_ready(&self, cx: &mut Context, element: &mut Self::Element) -> Poll<()> {
+        if let Some(ref mut state) = element.0 {
             let body_ret = {
                 let mut is_init = true;
                 let wake = state.view_waker.get_or_insert_with(|| {
@@ -181,8 +181,8 @@ where
         }
     }
 
-    fn view(&self, stack: &mut dyn Stack, state: &mut Self::State) {
-        if let Some(ref mut state) = state.0 {
+    fn view(&self, stack: &mut dyn Stack, element: &mut Self::Element) {
+        if let Some(ref mut state) = element.0 {
             if state.is_rx_ready {
                 let scope = unsafe { &mut *state.scope.inner.get() };
                 scope.idx = 0;
@@ -208,7 +208,7 @@ where
             let mut view_state = body.build();
             body.view(stack, &mut view_state);
 
-            state.0 = Some(FnState {
+            element.0 = Some(FnStateInner {
                 view: body,
                 view_state,
                 view_waker: None,

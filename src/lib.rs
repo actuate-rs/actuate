@@ -59,7 +59,7 @@ pub struct VirtualDom<V, S, E> {
 impl<V, S, E> VirtualDom<V, S, E> {
     pub fn new(view: V) -> Self
     where
-        V: View<State = S>,
+        V: View<Element = S>,
     {
         let state = view.build();
         Self {
@@ -74,7 +74,7 @@ impl<V, S, E> VirtualDom<V, S, E> {
 
     pub async fn run(&mut self)
     where
-        V: View<State = S>,
+        V: View<Element = S>,
         E: 'static,
     {
         future::poll_fn(|cx| self.view.poll_ready(cx, &mut self.state)).await;
