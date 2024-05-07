@@ -3,8 +3,8 @@ use std::task::{Context, Poll};
 mod from_fn;
 pub use self::from_fn::{from_fn, FnState, FromFn};
 
-pub trait View {
-    type State;
+pub trait View: Send {
+    type State: Send;
 
     fn build(&self) -> Self::State;
 
@@ -18,11 +18,11 @@ impl View for () {
 
     fn build(&self) -> Self::State {}
 
-    fn poll_ready(&self, cx: &mut Context, state: &mut Self::State) -> Poll<()> {
+    fn poll_ready(&self, _cx: &mut Context, _state: &mut Self::State) -> Poll<()> {
         Poll::Pending
     }
 
-    fn view(&self, state: &mut Self::State) {}
+    fn view(&self, _state: &mut Self::State) {}
 }
 
 impl<V1: View, V2: View> View for (V1, V2) {

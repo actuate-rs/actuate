@@ -16,5 +16,9 @@ fn app() -> impl View {
 
 #[tokio::main]
 async fn main() {
-    actuate::run(app()).await;
+    tokio::spawn(async move {
+        actuate::run(app()).await;
+    })
+    .await
+    .unwrap();
 }

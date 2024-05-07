@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 
 pub fn from_fn<F, V>(f: F) -> FromFn<F, V>
 where
-    F: Fn(&Scope) -> V,
+    F: Fn(&Scope) -> V + Send,
     V: View,
 {
     FromFn {
@@ -46,7 +46,7 @@ pub struct FromFn<F, V> {
 
 impl<F, V> View for FromFn<F, V>
 where
-    F: Fn(&Scope) -> V,
+    F: Fn(&Scope) -> V + Send,
     V: View,
 {
     type State = Option<FnState<V, V::State>>;
@@ -108,6 +108,12 @@ where
                 if !is_init {
                     let mut is_ready = false;
                     while let Poll::Ready(Some(update)) = state.rx.poll_recv(&mut rx_cx) {
+                        let scope = state.scope.inner.get_mut();
+                        if let Some(hook) = scope.hooks.get_mut(update.idx) {
+                            match update.kind {
+                                UpdateKind::Value(value) => *hook = value,
+                            }
+                        }
                         is_ready = true;
                     }
                     if is_ready {
