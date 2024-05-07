@@ -1,7 +1,7 @@
-use actuate::{use_state, View};
+use actuate::{use_state, view, View};
 
 fn counter() -> impl View {
-    actuate::from_fn(|cx| {
+    view::from_fn(|cx| {
         let (count, set_count) = use_state(cx, || 0);
 
         set_count.set(count + 1);
