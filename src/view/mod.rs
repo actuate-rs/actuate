@@ -1,3 +1,4 @@
+use crate::Stack;
 use std::task::{Context, Poll};
 
 mod from_fn;
@@ -10,7 +11,7 @@ pub trait View: Send {
 
     fn poll_ready(&self, cx: &mut Context, state: &mut Self::State) -> Poll<()>;
 
-    fn view(&self, state: &mut Self::State);
+    fn view(&self, stack: &mut dyn Stack, state: &mut Self::State);
 }
 
 impl View for () {
@@ -22,7 +23,7 @@ impl View for () {
         Poll::Pending
     }
 
-    fn view(&self, _state: &mut Self::State) {}
+    fn view(&self, _stack: &mut dyn Stack, _state: &mut Self::State) {}
 }
 
 impl<V1: View, V2: View> View for (V1, V2) {
@@ -45,8 +46,8 @@ impl<V1: View, V2: View> View for (V1, V2) {
         }
     }
 
-    fn view(&self, state: &mut Self::State) {
-        self.0.view(&mut state.0);
-        self.1.view(&mut state.1);
+    fn view(&self, stack: &mut dyn Stack, state: &mut Self::State) {
+        self.0.view(stack, &mut state.0);
+        self.1.view(stack, &mut state.1);
     }
 }

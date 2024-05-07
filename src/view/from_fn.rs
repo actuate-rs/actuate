@@ -1,4 +1,4 @@
-use crate::{scope::ScopeInner, Scope, Update, UpdateKind, View};
+use crate::{scope::ScopeInner, Scope, Stack, Update, UpdateKind, View};
 use std::{
     cell::UnsafeCell,
     marker::PhantomData,
@@ -159,7 +159,7 @@ where
         }
     }
 
-    fn view(&self, state: &mut Self::State) {
+    fn view(&self, stack: &mut dyn Stack, state: &mut Self::State) {
         if let Some(ref mut state) = state {
             {
                 let scope = unsafe { &mut *state.scope.inner.get() };
@@ -167,7 +167,7 @@ where
             }
 
             let body = (self.f)(&state.scope);
-            body.view(&mut state.view_state);
+            body.view(stack, &mut state.view_state);
             state.view = body;
         } else {
             let (tx, rx) = mpsc::unbounded_channel();
@@ -181,7 +181,7 @@ where
 
             let body = (self.f)(&scope);
             let mut view_state = body.build();
-            body.view(&mut view_state);
+            body.view(stack, &mut view_state);
 
             *state = Some(FnState {
                 view: body,

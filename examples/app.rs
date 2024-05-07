@@ -16,7 +16,7 @@ fn app() -> impl View {
 
 #[tokio::main]
 async fn main() {
-    let mut vdom = VirtualDom::new(app());
+    let mut vdom: VirtualDom<_, _, ()> = VirtualDom::new(app());
 
     tokio::spawn(async move {
         vdom.run().await;
