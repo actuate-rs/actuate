@@ -73,15 +73,15 @@ where
                 if !is_init {
                     state.view.poll_ready(&mut body_cx, &mut state.view_state)
                 } else if let Some(ref waker) = state.view_waker {
-                    let mut is_ready = waker.is_ready.lock().unwrap();
-                    if *is_ready {
-                        *is_ready = false;
-
+                    let is_ready = *waker.is_ready.lock().unwrap();
+                    if is_ready {
                         while state
                             .view
                             .poll_ready(&mut body_cx, &mut state.view_state)
                             .is_ready()
                         {}
+
+                        *waker.is_ready.lock().unwrap() = false;
 
                         Poll::Ready(())
                     } else {
@@ -122,10 +122,8 @@ where
                         Poll::Pending
                     }
                 } else if let Some(ref waker) = state.rx_waker {
-                    let mut is_ready = waker.is_ready.lock().unwrap();
-                    if *is_ready {
-                        *is_ready = false;
-
+                    let is_ready = *waker.is_ready.lock().unwrap();
+                    if is_ready {
                         let mut is_poll_ready = false;
                         while let Poll::Ready(Some(update)) = state.rx.poll_recv(&mut rx_cx) {
                             let scope = state.scope.inner.get_mut();
@@ -136,6 +134,9 @@ where
                             }
                             is_poll_ready = true;
                         }
+
+                        *waker.is_ready.lock().unwrap() = false;
+
                         if is_poll_ready {
                             Poll::Ready(())
                         } else {

@@ -19,8 +19,8 @@ async fn main() {
     let mut vdom: VirtualDom<_, _, ()> = VirtualDom::new(app());
 
     tokio::spawn(async move {
-        vdom.run().await;
-        vdom.run().await;
+        loop{vdom.run().await;}
+      
     })
     .await
     .unwrap();
