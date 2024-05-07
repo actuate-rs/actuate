@@ -46,7 +46,12 @@ pub trait View: Send {
 
     fn build(&self) -> Self::Element;
 
-    fn poll_ready(&self, cx: &mut Context, element: &mut Self::Element) -> Poll<()>;
+    fn poll_ready(
+        &self,
+        cx: &mut Context,
+        element: &mut Self::Element,
+        is_changed: bool,
+    ) -> Poll<()>;
 
     fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element);
 }
@@ -56,7 +61,12 @@ impl View for () {
 
     fn build(&self) -> Self::Element {}
 
-    fn poll_ready(&self, _cx: &mut Context, _element: &mut Self::Element) -> Poll<()> {
+    fn poll_ready(
+        &self,
+        _cx: &mut Context,
+        _element: &mut Self::Element,
+        _is_changed: bool,
+    ) -> Poll<()> {
         Poll::Pending
     }
 
@@ -70,10 +80,15 @@ impl<V: View> View for Option<V> {
         self.as_ref().map(View::build)
     }
 
-    fn poll_ready(&self, cx: &mut Context, element: &mut Self::Element) -> Poll<()> {
+    fn poll_ready(
+        &self,
+        cx: &mut Context,
+        element: &mut Self::Element,
+        is_changed: bool,
+    ) -> Poll<()> {
         if let Some(view) = self {
             if let Some(state) = element {
-                return view.poll_ready(cx, state);
+                return view.poll_ready(cx, state, is_changed);
             }
         }
 
@@ -111,12 +126,17 @@ impl<V1: View, V2: View> View for (V1, V2) {
         TupleState(self.0.build(), self.1.build(), false)
     }
 
-    fn poll_ready(&self, cx: &mut Context, element: &mut Self::Element) -> Poll<()> {
+    fn poll_ready(
+        &self,
+        cx: &mut Context,
+        element: &mut Self::Element,
+        is_changed: bool,
+    ) -> Poll<()> {
         loop {
-            if element.2 && self.1.poll_ready(cx, &mut element.1).is_ready() {
+            if element.2 && self.1.poll_ready(cx, &mut element.1, is_changed).is_ready() {
                 element.2 = false;
                 break Poll::Ready(());
-            } else if self.0.poll_ready(cx, &mut element.0).is_ready() {
+            } else if self.0.poll_ready(cx, &mut element.0, is_changed).is_ready() {
                 element.2 = true;
             } else {
                 break Poll::Pending;

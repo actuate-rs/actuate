@@ -30,7 +30,7 @@ impl<V, S, E> VirtualDom<V, S, E> {
         V: View<Element = S>,
         E: 'static,
     {
-        future::poll_fn(|cx| self.view.poll_ready(cx, &mut self.state)).await;
+        future::poll_fn(|cx| self.view.poll_ready(cx, &mut self.state, false)).await;
         self.view
             .view(&mut self.cx, &mut self.elements, &mut self.state);
     }

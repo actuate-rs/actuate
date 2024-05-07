@@ -1,9 +1,15 @@
-use actuate::{use_context, use_provider, view, View, VirtualDom};
+use actuate::{use_provider, use_state, view, View, VirtualDom};
 
 fn counter(initial: i32) -> impl View {
     view::from_fn(move |cx| {
-        let count = use_context::<i32>(cx).unwrap();
-        dbg!(count);
+        let (count, set_count) = use_state(cx, || initial);
+
+        set_count.set(count + 1);
+
+        let count = *count;
+        view::from_fn(move |_| {
+            dbg!(count);
+        })
     })
 }
 
@@ -20,6 +26,7 @@ async fn main() {
     let mut vdom: VirtualDom<_, _, ()> = VirtualDom::new(app());
 
     tokio::spawn(async move {
+        vdom.run().await;
         vdom.run().await;
     })
     .await

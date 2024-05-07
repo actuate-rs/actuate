@@ -74,43 +74,13 @@ where
         FnState(None)
     }
 
-    fn poll_ready(&self, cx: &mut Context, element: &mut Self::Element) -> Poll<()> {
+    fn poll_ready(
+        &self,
+        cx: &mut Context,
+        element: &mut Self::Element,
+        is_changed: bool,
+    ) -> Poll<()> {
         if let Some(ref mut state) = element.0 {
-            let body_ret = {
-                let mut is_init = true;
-                let wake = state.view_waker.get_or_insert_with(|| {
-                    is_init = false;
-                    Arc::new(FnWaker {
-                        is_ready: Mutex::new(false),
-                        waker: cx.waker().clone(),
-                    })
-                });
-
-                let waker = Waker::from(wake.clone());
-                let mut body_cx = Context::from_waker(&waker);
-
-                if !is_init {
-                    state.view.poll_ready(&mut body_cx, &mut state.view_state)
-                } else if let Some(ref waker) = state.view_waker {
-                    let is_ready = *waker.is_ready.lock().unwrap();
-                    if is_ready {
-                        while state
-                            .view
-                            .poll_ready(&mut body_cx, &mut state.view_state)
-                            .is_ready()
-                        {}
-
-                        *waker.is_ready.lock().unwrap() = false;
-
-                        Poll::Ready(())
-                    } else {
-                        Poll::Pending
-                    }
-                } else {
-                    todo!()
-                }
-            };
-
             let rx_ret = {
                 let mut is_init = true;
                 let wake = state.rx_waker.get_or_insert_with(|| {
@@ -169,9 +139,52 @@ where
                 }
             };
 
-            if body_ret.is_ready() || rx_ret.is_ready() {
+            let body_ret = {
+                let mut is_init = true;
+                let wake = state.view_waker.get_or_insert_with(|| {
+                    is_init = false;
+                    Arc::new(FnWaker {
+                        is_ready: Mutex::new(false),
+                        waker: cx.waker().clone(),
+                    })
+                });
+
+                let waker = Waker::from(wake.clone());
+                let mut body_cx = Context::from_waker(&waker);
+
+                if !is_init {
+                    state.view.poll_ready(
+                        &mut body_cx,
+                        &mut state.view_state,
+                        is_changed || rx_ret.is_ready(),
+                    )
+                } else if let Some(ref waker) = state.view_waker {
+                    let is_ready = *waker.is_ready.lock().unwrap();
+                    if is_ready {
+                        while state
+                            .view
+                            .poll_ready(
+                                &mut body_cx,
+                                &mut state.view_state,
+                                is_changed || rx_ret.is_ready(),
+                            )
+                            .is_ready()
+                        {}
+
+                        *waker.is_ready.lock().unwrap() = false;
+
+                        Poll::Ready(())
+                    } else {
+                        Poll::Pending
+                    }
+                } else {
+                    todo!()
+                }
+            };
+
+            if is_changed || body_ret.is_ready() || rx_ret.is_ready() {
                 state.is_body_ready = body_ret.is_ready();
-                state.is_rx_ready = rx_ret.is_ready();
+                state.is_rx_ready = rx_ret.is_ready() || is_changed;
 
                 Poll::Ready(())
             } else {
