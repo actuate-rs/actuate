@@ -1,8 +1,8 @@
 use actuate::{use_state, view, View, VirtualDom};
 
-fn counter() -> impl View {
-    view::from_fn(|cx| {
-        let (count, set_count) = use_state(cx, || 0);
+fn counter(initial: i32) -> impl View {
+    view::from_fn(move |cx| {
+        let (count, set_count) = use_state(cx, || initial);
 
         set_count.set(count + 1);
 
@@ -11,10 +11,7 @@ fn counter() -> impl View {
 }
 
 fn app() -> impl View {
-    view::from_fn(|_| {
-        dbg!("app");
-        (counter(), counter())
-    })
+    (counter(0), counter(100))
 }
 
 #[tokio::main]
