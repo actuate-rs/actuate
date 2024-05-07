@@ -1,11 +1,17 @@
-use actuate::View;
+use actuate::{use_state, View};
+
+fn counter() -> impl View {
+    actuate::from_fn(|cx| {
+        let (count, set_count) = use_state(cx, || 0);
+
+        set_count.set(count + 1);
+
+        dbg!(count);
+    })
+}
 
 fn app() -> impl View {
-    actuate::from_fn(|| {
-        actuate::from_fn(|| {
-            dbg!("Hello World!");
-        })
-    })
+    (counter(), counter())
 }
 
 #[tokio::main]
