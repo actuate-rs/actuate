@@ -11,7 +11,10 @@ fn counter() -> impl View {
 }
 
 fn app() -> impl View {
-    (counter(), counter())
+    view::from_fn(|_| {
+        dbg!("app");
+        (counter(), counter())
+    })
 }
 
 #[tokio::main]
@@ -19,8 +22,8 @@ async fn main() {
     let mut vdom: VirtualDom<_, _, ()> = VirtualDom::new(app());
 
     tokio::spawn(async move {
-        loop{vdom.run().await;}
-      
+        vdom.run().await;
+        vdom.run().await;
     })
     .await
     .unwrap();

@@ -37,6 +37,8 @@ pub struct FnState<V, S> {
     scope: Scope,
     rx: mpsc::UnboundedReceiver<Update>,
     rx_waker: Option<Arc<FnWaker>>,
+    is_body_ready: bool,
+    is_rx_ready: bool,
 }
 
 pub struct FromFn<F, V> {
@@ -151,6 +153,9 @@ where
             };
 
             if body_ret.is_ready() || rx_ret.is_ready() {
+                state.is_body_ready = body_ret.is_ready();
+                state.is_rx_ready = rx_ret.is_ready();
+
                 Poll::Ready(())
             } else {
                 Poll::Pending
@@ -162,14 +167,17 @@ where
 
     fn view(&self, stack: &mut dyn Stack, state: &mut Self::State) {
         if let Some(ref mut state) = state {
-            {
+            if state.is_rx_ready {
                 let scope = unsafe { &mut *state.scope.inner.get() };
-                scope.idx = 0
+                scope.idx = 0;
+
+                let body = (self.f)(&state.scope);
+                state.view = body;
             }
 
-            let body = (self.f)(&state.scope);
-            body.view(stack, &mut state.view_state);
-            state.view = body;
+            if state.is_rx_ready || state.is_body_ready {
+                state.view.view(stack, &mut state.view_state);
+            }
         } else {
             let (tx, rx) = mpsc::unbounded_channel();
             let scope = Scope {
@@ -191,6 +199,8 @@ where
                 scope,
                 rx,
                 rx_waker: None,
+                is_body_ready: false,
+                is_rx_ready: false,
             })
         }
     }
