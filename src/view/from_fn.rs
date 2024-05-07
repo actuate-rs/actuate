@@ -2,7 +2,6 @@ use super::{Element, ViewContext};
 use crate::{scope::ScopeInner, Scope, Stack, Update, UpdateKind, View};
 use std::{
     cell::UnsafeCell,
-    collections::HashMap,
     marker::PhantomData,
     sync::{Arc, Mutex},
     task::{Context, Poll, Wake, Waker},
