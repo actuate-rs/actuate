@@ -1,11 +1,9 @@
-use std::marker::PhantomData;
-
-use tokio::sync::mpsc;
-
 use crate::{
     scope::{Update, UpdateKind},
     Scope,
 };
+use std::marker::PhantomData;
+use tokio::sync::mpsc;
 
 pub fn use_state<T: Send + 'static>(cx: &Scope, f: impl FnOnce() -> T) -> (&T, Setter<T>) {
     let scope = unsafe { &mut *cx.inner.get() };

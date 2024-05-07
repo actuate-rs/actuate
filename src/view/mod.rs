@@ -1,8 +1,29 @@
-use crate::Stack;
-use std::task::{Context, Poll};
+use crate::{scope::AnyClone, Stack};
+use std::{
+    any::TypeId,
+    collections::HashMap,
+    task::{Context, Poll},
+};
 
 mod from_fn;
 pub use self::from_fn::{from_fn, FnState, FromFn};
+
+#[derive(Default)]
+pub struct ViewContext {
+    pub(crate) contexts: HashMap<TypeId, Box<dyn AnyClone>>,
+}
+
+impl Clone for ViewContext {
+    fn clone(&self) -> Self {
+        Self {
+            contexts: self
+                .contexts
+                .iter()
+                .map(|(key, any)| (*key, any.clone_any_clone()))
+                .collect(),
+        }
+    }
+}
 
 pub trait Element: Send {
     fn remove(&self, stack: &mut dyn Stack);
@@ -27,7 +48,7 @@ pub trait View: Send {
 
     fn poll_ready(&self, cx: &mut Context, element: &mut Self::Element) -> Poll<()>;
 
-    fn view(&self, stack: &mut dyn Stack, element: &mut Self::Element);
+    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element);
 }
 
 impl View for () {
@@ -39,7 +60,7 @@ impl View for () {
         Poll::Pending
     }
 
-    fn view(&self, _stack: &mut dyn Stack, _element: &mut Self::Element) {}
+    fn view(&self, _cx: &mut ViewContext, _stack: &mut dyn Stack, _element: &mut Self::Element) {}
 }
 
 impl<V: View> View for Option<V> {
@@ -59,13 +80,13 @@ impl<V: View> View for Option<V> {
         Poll::Ready(())
     }
 
-    fn view(&self, stack: &mut dyn Stack, element: &mut Self::Element) {
+    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
         if let Some(view) = self {
             if let Some(state) = element {
-                view.view(stack, state);
+                view.view(cx, stack, state);
             } else {
                 let mut new_state = view.build();
-                view.view(stack, &mut new_state);
+                view.view(cx, stack, &mut new_state);
                 *element = Some(new_state);
             }
         } else if let Some(state) = element {
@@ -103,8 +124,8 @@ impl<V1: View, V2: View> View for (V1, V2) {
         }
     }
 
-    fn view(&self, stack: &mut dyn Stack, element: &mut Self::Element) {
-        self.0.view(stack, &mut element.0);
-        self.1.view(stack, &mut element.1);
+    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
+        self.0.view(cx, stack, &mut element.0);
+        self.1.view(cx, stack, &mut element.1);
     }
 }

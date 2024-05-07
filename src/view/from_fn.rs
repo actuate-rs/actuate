@@ -1,7 +1,8 @@
-use super::Element;
+use super::{Element, ViewContext};
 use crate::{scope::ScopeInner, Scope, Stack, Update, UpdateKind, View};
 use std::{
     cell::UnsafeCell,
+    collections::HashMap,
     marker::PhantomData,
     sync::{Arc, Mutex},
     task::{Context, Poll, Wake, Waker},
@@ -34,6 +35,7 @@ impl Wake for FnWaker {
 
 struct FnStateInner<V, S> {
     view: V,
+    view_cx: ViewContext,
     view_state: S,
     view_waker: Option<Arc<FnWaker>>,
     scope: Scope,
@@ -181,7 +183,7 @@ where
         }
     }
 
-    fn view(&self, stack: &mut dyn Stack, element: &mut Self::Element) {
+    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
         if let Some(ref mut state) = element.0 {
             if state.is_rx_ready {
                 let scope = unsafe { &mut *state.scope.inner.get() };
@@ -192,24 +194,31 @@ where
             }
 
             if state.is_rx_ready || state.is_body_ready {
-                state.view.view(stack, &mut state.view_state);
+                state
+                    .view
+                    .view(&mut state.view_cx, stack, &mut state.view_state);
             }
         } else {
+            let mut view_cx = cx.clone();
             let (tx, rx) = mpsc::unbounded_channel();
-            let scope = Scope {
+            let mut scope = Scope {
                 tx,
                 inner: UnsafeCell::new(ScopeInner {
                     hooks: Vec::new(),
                     idx: 0,
+                    contexts: Some(view_cx.clone().contexts),
                 }),
             };
 
             let body = (self.f)(&scope);
+            view_cx.contexts = scope.inner.get_mut().contexts.take().unwrap();
+
             let mut view_state = body.build();
-            body.view(stack, &mut view_state);
+            body.view(&mut view_cx, stack, &mut view_state);
 
             element.0 = Some(FnStateInner {
                 view: body,
+                view_cx,
                 view_state,
                 view_waker: None,
                 scope,
