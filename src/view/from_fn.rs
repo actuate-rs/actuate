@@ -1,3 +1,4 @@
+use super::Element;
 use crate::{scope::ScopeInner, Scope, Stack, Update, UpdateKind, View};
 use std::{
     cell::UnsafeCell,
@@ -7,8 +8,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-use super::Element;
-
+/// Create a component from a function that returns a view.
 pub fn from_fn<F, V>(f: F) -> FromFn<F, V>
 where
     F: Fn(&Scope) -> V + Send,
