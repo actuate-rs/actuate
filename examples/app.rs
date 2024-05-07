@@ -7,6 +7,12 @@ fn counter(initial: i32) -> impl View {
         set_count.set(count + 1);
 
         dbg!(count);
+
+        (*count == 0).then(|| {
+            view::from_fn(|_| {
+                dbg!("test!");
+            })
+        })
     })
 }
 

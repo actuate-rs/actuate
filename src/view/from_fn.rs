@@ -7,6 +7,8 @@ use std::{
 };
 use tokio::sync::mpsc;
 
+use super::State;
+
 pub fn from_fn<F, V>(f: F) -> FromFn<F, V>
 where
     F: Fn(&Scope) -> V + Send,
@@ -41,6 +43,20 @@ pub struct FnState<V, S> {
     is_rx_ready: bool,
 }
 
+pub struct FnStateCell<V, S>(Option<FnState<V, S>>);
+
+impl<V, S> State for FnStateCell<V, S>
+where
+    V: View,
+    S: State,
+{
+    fn remove(&self, stack: &mut dyn Stack) {
+        if let Some(ref state) = self.0 {
+            state.view_state.remove(stack);
+        }
+    }
+}
+
 pub struct FromFn<F, V> {
     f: F,
     _marker: PhantomData<V>,
@@ -51,14 +67,14 @@ where
     F: Fn(&Scope) -> V + Send,
     V: View,
 {
-    type State = Option<FnState<V, V::State>>;
+    type State = FnStateCell<V, V::State>;
 
     fn build(&self) -> Self::State {
-        None
+        FnStateCell(None)
     }
 
     fn poll_ready(&self, cx: &mut Context, state: &mut Self::State) -> Poll<()> {
-        if let Some(ref mut state) = state {
+        if let Some(ref mut state) = state.0 {
             let body_ret = {
                 let mut is_init = true;
                 let wake = state.view_waker.get_or_insert_with(|| {
@@ -166,7 +182,7 @@ where
     }
 
     fn view(&self, stack: &mut dyn Stack, state: &mut Self::State) {
-        if let Some(ref mut state) = state {
+        if let Some(ref mut state) = state.0 {
             if state.is_rx_ready {
                 let scope = unsafe { &mut *state.scope.inner.get() };
                 scope.idx = 0;
@@ -192,7 +208,7 @@ where
             let mut view_state = body.build();
             body.view(stack, &mut view_state);
 
-            *state = Some(FnState {
+            state.0 = Some(FnState {
                 view: body,
                 view_state,
                 view_waker: None,
