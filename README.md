@@ -23,7 +23,7 @@
 
 A high-performance reactive user-interface framework for Rust.
 This crate provides a generic library that lets you define UI using declarative, type-safe syntax.
-Views combine together to form a statically-typed view tree that is stored on the stack,
+Views combine together to form a statically-typed view tree that can be stored on the stack,
 giving this architecture its high performance.
 
 ```rust
@@ -55,3 +55,8 @@ async fn main() {
     .unwrap();
 }
 ```
+
+## Inspiration
+This crate is inspired by [Xilem](https://github.com/linebender/xilem) and uses a similar approach to type-safe reactivity. The main difference with this crate is the concept of scopes, components store their state in their own scope and updates to that scope re-render the component.
+
+State management is inspired by React and [Dioxus](https://github.com/DioxusLabs/dioxus), but this project aims to be higher performance by taking advantage of multi-threading.

@@ -1,4 +1,4 @@
-use actuate::{use_provider, use_state, view, View, VirtualDom};
+use actuate::{use_state, view, View, VirtualDom};
 
 fn counter(initial: i32) -> impl View {
     view::from_fn(move |cx| {
@@ -6,19 +6,12 @@ fn counter(initial: i32) -> impl View {
 
         set_count.set(count + 1);
 
-        let count = *count;
-        view::from_fn(move |_| {
-            dbg!(count);
-        })
+        dbg!(count);
     })
 }
 
 fn app() -> impl View {
-    view::from_fn(move |cx| {
-        use_provider(cx, || 0);
-
-        (counter(0), counter(100))
-    })
+    (counter(0), counter(100))
 }
 
 #[tokio::main]
