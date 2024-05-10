@@ -1,10 +1,15 @@
-use crate::{scope::AnyClone, view::FnWaker};
+use crate::scope::AnyClone;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
     sync::Arc,
     task::{Context, Poll},
 };
+
+mod view_node;
+use self::view_node::FlagWaker;
+pub(crate) use self::view_node::WrapNode;
+pub use view_node::{ViewNodeState, ViewNode};
 
 pub enum Change {
     Push(Box<dyn Any + Send>),
@@ -121,64 +126,11 @@ impl<V: Node> Node for Option<V> {
     }
 }
 
-pub struct TupleState<S1, S2>(S1, S2, bool);
-
-impl<S1: Element, S2: Element> Element for TupleState<S1, S2> {
-    fn remove(&self) -> Option<Vec<Change>> {
-        let a = self.0.remove();
-        let b = self.1.remove();
-        a.map(|mut a| {
-            if let Some(b) = b {
-                a.extend(b);
-            }
-            a
-        })
-    }
-}
-
-impl<V1: Node, V2: Node> Node for (V1, V2) {
-    type Element = TupleState<V1::Element, V2::Element>;
-
-    fn build(&self) -> Self::Element {
-        TupleState(self.0.build(), self.1.build(), false)
-    }
-
-    fn poll_ready(
-        &self,
-        cx: &mut Context,
-        element: &mut Self::Element,
-        is_changed: bool,
-    ) -> Poll<()> {
-        loop {
-            if element.2 && self.1.poll_ready(cx, &mut element.1, is_changed).is_ready() {
-                element.2 = false;
-                break Poll::Ready(());
-            } else if self.0.poll_ready(cx, &mut element.0, is_changed).is_ready() {
-                element.2 = true;
-            } else {
-                break Poll::Pending;
-            }
-        }
-    }
-
-    fn view(&self, cx: &mut ViewContext, element: &mut Self::Element) -> Option<Vec<Change>> {
-        let a = self.0.view(cx, &mut element.0);
-        let b = self.1.view(cx, &mut element.1);
-
-        a.map(|mut a| {
-            if let Some(b) = b {
-                a.extend(b);
-            }
-            a
-        })
-    }
-}
-
 pub struct TupleElement<T>(T);
 
 pub struct TupleNode<T> {
     node: T,
-    waker: Option<Arc<FnWaker>>,
+    waker: Option<Arc<FlagWaker>>,
 }
 
 macro_rules! impl_node_for_tuple {
@@ -222,7 +174,7 @@ macro_rules! impl_node_for_tuple {
                             Poll::Pending
                         }
                     } else {
-                        let waker = Arc::new(FnWaker {
+                        let waker = Arc::new(FlagWaker {
                             waker: cx.waker().clone(),
                             is_ready: std::sync::Mutex::new(false)
                         });
@@ -260,6 +212,7 @@ macro_rules! impl_node_for_tuple {
     };
 }
 
+impl_node_for_tuple!(N1: 0, N2: 1);
 impl_node_for_tuple!(N1: 0, N2: 1, N3: 2);
 impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3);
 impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4);
