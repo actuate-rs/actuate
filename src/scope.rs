@@ -1,9 +1,9 @@
+use crate::Tx;
 use std::{
     any::{Any, TypeId},
     cell::UnsafeCell,
     collections::HashMap,
 };
-use tokio::sync::mpsc;
 
 pub(crate) trait AnyClone: Send {
     fn clone_any(&self) -> Box<dyn Any>;
@@ -37,6 +37,6 @@ pub(crate) struct ScopeInner {
 }
 
 pub struct Scope {
-    pub(crate) tx: mpsc::UnboundedSender<Update>,
+    pub(crate) tx: Tx<Update>,
     pub(crate) inner: UnsafeCell<ScopeInner>,
 }

@@ -1,4 +1,5 @@
 use super::{Element, ViewContext};
+use crate::Rx;
 use crate::{
     scope::{ScopeInner, Update, UpdateKind},
     Node, Scope, View,
@@ -10,7 +11,6 @@ use std::{
     sync::{Arc, Mutex},
     task::{Context, Poll, Wake, Waker},
 };
-use tokio::sync::mpsc;
 
 // Workaround for unstable `impl trait` support.
 pub(crate) struct WrapNode<T>(pub(crate) T);
@@ -60,7 +60,7 @@ struct Inner<V, S> {
     view_state: S,
     view_waker: Option<Arc<FlagWaker>>,
     scope: Scope,
-    rx: mpsc::UnboundedReceiver<Update>,
+    rx: Rx<Update>,
     rx_waker: Option<Arc<FlagWaker>>,
     is_body_ready: bool,
     is_rx_ready: bool,
@@ -245,7 +245,7 @@ where
             }
         } else {
             let mut view_cx = cx.clone();
-            let (tx, rx) = mpsc::unbounded_channel();
+            let (tx, rx) = crate::channel();
             let mut scope = Scope {
                 tx,
                 inner: UnsafeCell::new(ScopeInner {

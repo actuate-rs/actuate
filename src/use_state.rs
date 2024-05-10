@@ -2,10 +2,10 @@ use crate::{
     scope::{Update, UpdateKind},
     Scope,
 };
+use crate::{Tx, WasmNotSend};
 use std::marker::PhantomData;
-use tokio::sync::mpsc;
 
-pub fn use_state<T: Send + 'static>(cx: &Scope, f: impl FnOnce() -> T) -> (&T, Setter<T>) {
+pub fn use_state<T: WasmNotSend + 'static>(cx: &Scope, f: impl FnOnce() -> T) -> (&T, Setter<T>) {
     let scope = unsafe { &mut *cx.inner.get() };
     let idx = scope.idx;
     scope.idx += 1;
@@ -29,7 +29,7 @@ pub fn use_state<T: Send + 'static>(cx: &Scope, f: impl FnOnce() -> T) -> (&T, S
 
 pub struct Setter<T> {
     idx: usize,
-    tx: mpsc::UnboundedSender<Update>,
+    tx: Tx<Update>,
     _marker: PhantomData<T>,
 }
 

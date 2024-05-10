@@ -1,4 +1,4 @@
-use crate::scope::AnyClone;
+use crate::{scope::AnyClone, WasmNotSend};
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -9,7 +9,7 @@ use std::{
 mod view_node;
 use self::view_node::FlagWaker;
 pub(crate) use self::view_node::WrapNode;
-pub use view_node::{ViewNodeState, ViewNode};
+pub use view_node::{ViewNode, ViewNodeState};
 
 pub enum Change {
     Push(Box<dyn Any + Send>),
@@ -32,7 +32,7 @@ impl Clone for ViewContext {
     }
 }
 
-pub trait Element: Send {
+pub trait Element: WasmNotSend {
     fn remove(&self) -> Option<Vec<Change>>;
 }
 
@@ -52,7 +52,7 @@ impl<S: Element> Element for Option<S> {
     }
 }
 
-pub trait Node: Send + 'static {
+pub trait Node: WasmNotSend + 'static {
     type Element: Element;
 
     fn build(&self) -> Self::Element;

@@ -1,7 +1,7 @@
-use crate::Scope;
+use crate::{Scope, WasmNotSend};
 use std::any::TypeId;
 
-pub fn use_context<T: Clone + Send + 'static>(cx: &Scope) -> Option<T> {
+pub fn use_context<T: Clone + WasmNotSend + 'static>(cx: &Scope) -> Option<T> {
     let scope = unsafe { &mut *cx.inner.get() };
 
     scope

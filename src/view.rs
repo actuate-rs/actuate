@@ -1,10 +1,10 @@
 use crate::{
     node::{ViewNode, WrapNode},
-    Node, Scope,
+    Node, Scope, WasmNotSend,
 };
 use std::marker::PhantomData;
 
-pub trait View: Send + Sized + 'static {
+pub trait View: WasmNotSend + Sized + 'static {
     fn body(&self, cx: &Scope) -> impl View;
 
     fn into_node(self) -> impl Node {
