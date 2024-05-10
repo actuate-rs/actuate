@@ -25,9 +25,17 @@ pub trait View: Send + Sized + 'static {
 }
 
 impl View for () {
-    fn body(&self, cx: &Scope) -> impl View {}
+    fn body(&self, _cx: &Scope) -> impl View {}
 
     fn into_node(self) -> impl Node {}
+}
+
+impl<V1: View, V2: View> View for (V1, V2) {
+    fn body(&self, _cx: &Scope) -> impl View {}
+
+    fn into_node(self) -> impl Node {
+        (self.0.into_node(), self.1.into_node())
+    }
 }
 
 struct FnWaker {
