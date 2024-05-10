@@ -30,13 +30,31 @@ impl View for () {
     fn into_node(self) -> impl Node {}
 }
 
-impl<V1: View, V2: View> View for (V1, V2) {
-    fn body(&self, _cx: &Scope) -> impl View {}
+macro_rules! impl_view_for_tuple {
+    ($($t: tt),*) => {
+        impl<$($t: View),*> View for ($($t),*) {
+            fn body(&self, _cx: &Scope) -> impl View {}
 
-    fn into_node(self) -> impl Node {
-        (self.0.into_node(), self.1.into_node())
-    }
+            fn into_node(self) -> impl Node {
+                #[allow(non_snake_case)]
+                let ($($t),*) =  self;
+                ($( $t.into_node() ),*)
+            }
+        }
+    };
 }
+
+impl_view_for_tuple!(V1, V2);
+impl_view_for_tuple!(V1, V2, V3);
+impl_view_for_tuple!(V1, V2, V3, V4);
+impl_view_for_tuple!(V1, V2, V3, V4, V5);
+impl_view_for_tuple!(V1, V2, V3, V4, V5, V6);
+impl_view_for_tuple!(V1, V2, V3, V4, V5, V6, V7);
+impl_view_for_tuple!(V1, V2, V3, V4, V5, V6, V7, V8);
+impl_view_for_tuple!(V1, V2, V3, V4, V5, V6, V7, V8, V9);
+impl_view_for_tuple!(V1, V2, V3, V4, V5, V6, V7, V8, V9, V10);
+impl_view_for_tuple!(V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11);
+impl_view_for_tuple!(V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12);
 
 // Workaround for unstable `impl trait` support.
 struct WrapNode<T>(T);
@@ -68,9 +86,9 @@ impl<T: Node> Node for WrapNode<T> {
     }
 }
 
-struct FnWaker {
-    is_ready: Mutex<bool>,
-    waker: Waker,
+pub(crate) struct FnWaker {
+    pub(crate) is_ready: Mutex<bool>,
+    pub(crate) waker: Waker,
 }
 
 impl Wake for FnWaker {

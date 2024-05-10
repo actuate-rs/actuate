@@ -1,4 +1,7 @@
-use crate::{node::{Change, ViewContext}, Node};
+use crate::{
+    node::{Change, ViewContext},
+    Node,
+};
 use std::future;
 
 pub struct VirtualDom<V, S> {

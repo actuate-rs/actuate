@@ -1,12 +1,13 @@
-use crate::scope::AnyClone;
+use crate::{scope::AnyClone, view::FnWaker};
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
+    sync::Arc,
     task::{Context, Poll},
 };
 
 pub enum Change {
-    Push(Box<dyn Any + Send>)
+    Push(Box<dyn Any + Send>),
 }
 
 #[derive(Default)]
@@ -172,3 +173,100 @@ impl<V1: Node, V2: Node> Node for (V1, V2) {
         })
     }
 }
+
+pub struct TupleElement<T>(T);
+
+pub struct TupleNode<T> {
+    node: T,
+    waker: Option<Arc<FnWaker>>,
+}
+
+macro_rules! impl_node_for_tuple {
+    ($($t:tt: $idx:tt),*) => {
+
+        impl<$($t: Element),*> Element for TupleElement<($(TupleNode<$t>),*)> {
+            fn remove(&self) -> Option<Vec<Change>> {
+                let mut changes = Vec::new();
+
+                $(
+                    if let Some(new) = self.0.$idx.node.remove() {
+                        changes.extend(new);
+                    }
+                )*
+
+                Some(changes)
+            }
+        }
+
+        impl<$($t: Node),*> Node for ($($t),*) {
+            type Element = TupleElement<($(TupleNode<$t::Element>),*)>;
+
+            fn build(&self) -> Self::Element {
+                TupleElement(($( TupleNode { node: self.$idx.build(), waker: None} ),*))
+            }
+
+            fn poll_ready(
+                &self,
+                cx: &mut Context,
+                element: &mut Self::Element,
+                is_changed: bool,
+            ) -> Poll<()> {
+                let polls = [ $(
+                    if let Some(ref fn_waker) = element.0.$idx.waker {
+                        if *fn_waker.is_ready.lock().unwrap() {
+                            let waker = std::task::Waker::from(fn_waker.clone());
+                            let mut child_cx = Context::from_waker(&waker);
+
+                            self.$idx.poll_ready(&mut child_cx, &mut element.0.$idx.node, is_changed)
+                        } else {
+                            Poll::Pending
+                        }
+                    } else {
+                        let waker = Arc::new(FnWaker {
+                            waker: cx.waker().clone(),
+                            is_ready: std::sync::Mutex::new(false)
+                        });
+                        element.0.$idx.waker = Some(waker.clone());
+
+                        let waker = std::task::Waker::from(waker);
+                        let mut child_cx = Context::from_waker(&waker);
+                        self.$idx.poll_ready(&mut child_cx, &mut element.0.$idx.node, is_changed)
+                    }
+                ),* ];
+
+                if polls.iter().any(Poll::is_ready) {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }
+
+            fn view(
+                &self,
+                cx: &mut ViewContext,
+                element: &mut Self::Element,
+            ) -> Option<Vec<Change>> {
+                let mut changes = Vec::new();
+
+                $(
+                    if let Some(new) = self.$idx.view(cx, &mut element.0.$idx.node) {
+                        changes.extend(new);
+                    }
+                )*
+
+                Some(changes)
+            }
+        }
+    };
+}
+
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4, N6: 5);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4, N6: 5, N7: 6);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4, N6: 5, N7: 6, N8: 7);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4, N6: 5, N7: 6, N8: 7, N9: 8);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4, N6: 5, N7: 6, N8: 7, N9: 8, N10: 9);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4, N6: 5, N7: 6, N8: 7, N9: 8, N10: 9, N11: 10);
+impl_node_for_tuple!(N1: 0, N2: 1, N3: 2, N4: 3, N5: 4, N6: 5, N7: 6, N8: 7, N9: 8, N10: 9, N11: 10, N12: 11);

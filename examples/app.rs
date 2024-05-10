@@ -18,7 +18,11 @@ struct App;
 
 impl View for App {
     fn body(&self, _cx: &Scope) -> impl View {
-        (Counter { start: 0 }, Counter { start: 100 })
+        (
+            Counter { start: 0 },
+            Counter { start: 100 },
+            Counter { start: 200 },
+        )
     }
 }
 
