@@ -19,3 +19,6 @@ pub use self::vdom::VirtualDom;
 
 pub mod view;
 pub use self::view::View;
+
+pub mod node;
+pub use self::node::Node;

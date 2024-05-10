@@ -5,9 +5,6 @@ use std::{
     task::{Context, Poll},
 };
 
-mod from_fn;
-pub use self::from_fn::{from_fn, FnState, FromFn};
-
 #[derive(Default)]
 pub struct ViewContext {
     pub(crate) contexts: HashMap<TypeId, Box<dyn AnyClone>>,
@@ -41,7 +38,7 @@ impl<S: Element> Element for Option<S> {
     }
 }
 
-pub trait View: Send {
+pub trait Node: Send + 'static {
     type Element: Element;
 
     fn build(&self) -> Self::Element;
@@ -56,7 +53,7 @@ pub trait View: Send {
     fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element);
 }
 
-impl View for () {
+impl Node for () {
     type Element = ();
 
     fn build(&self) -> Self::Element {}
@@ -73,11 +70,11 @@ impl View for () {
     fn view(&self, _cx: &mut ViewContext, _stack: &mut dyn Stack, _element: &mut Self::Element) {}
 }
 
-impl<V: View> View for Option<V> {
+impl<V: Node> Node for Option<V> {
     type Element = Option<V::Element>;
 
     fn build(&self) -> Self::Element {
-        self.as_ref().map(View::build)
+        self.as_ref().map(Node::build)
     }
 
     fn poll_ready(
@@ -119,7 +116,7 @@ impl<S1: Element, S2: Element> Element for TupleState<S1, S2> {
     }
 }
 
-impl<V1: View, V2: View> View for (V1, V2) {
+impl<V1: Node, V2: Node> Node for (V1, V2) {
     type Element = TupleState<V1::Element, V2::Element>;
 
     fn build(&self) -> Self::Element {

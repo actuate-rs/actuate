@@ -1,23 +1,33 @@
-use super::{Element, ViewContext};
-use crate::{scope::ScopeInner, Scope, Stack, Update, UpdateKind, View};
+use crate::{
+    node::{Element, ViewContext},
+    scope::ScopeInner,
+    Node, Scope, Stack, Update, UpdateKind,
+};
 use std::{
     cell::UnsafeCell,
     marker::PhantomData,
+    mem,
     sync::{Arc, Mutex},
     task::{Context, Poll, Wake, Waker},
 };
 use tokio::sync::mpsc;
 
-/// Create a component from a function that returns a view.
-pub fn from_fn<F, V>(f: F) -> FromFn<F, V>
-where
-    F: Fn(&Scope) -> V + Send,
-    V: View,
-{
-    FromFn {
-        f,
-        _marker: PhantomData,
+pub trait View: Send + Sized + 'static {
+    fn body(&self, cx: &Scope) -> impl View;
+
+    fn into_node(self) -> impl Node {
+        ViewNode {
+            view: self,
+            f: |me: &'static Self, cx: &'static Scope| me.body(cx).into_node(),
+            _marker: PhantomData,
+        }
     }
+}
+
+impl View for () {
+    fn body(&self, cx: &Scope) -> impl View {}
+
+    fn into_node(self) -> impl Node {}
 }
 
 struct FnWaker {
@@ -48,7 +58,7 @@ pub struct FnState<V, S>(Option<FnStateInner<V, S>>);
 
 impl<V, S> Element for FnState<V, S>
 where
-    V: View,
+    V: Node,
     S: Element,
 {
     fn remove(&self, stack: &mut dyn Stack) {
@@ -58,17 +68,19 @@ where
     }
 }
 
-pub struct FromFn<F, V> {
+pub struct ViewNode<V, F, B> {
+    view: V,
     f: F,
-    _marker: PhantomData<V>,
+    _marker: PhantomData<B>,
 }
 
-impl<F, V> View for FromFn<F, V>
+impl<V, F, B> Node for ViewNode<V, F, B>
 where
-    F: Fn(&Scope) -> V + Send,
     V: View,
+    F: Fn(&'static V, &'static Scope) -> B + Send + 'static,
+    B: Node,
 {
-    type Element = FnState<V, V::Element>;
+    type Element = FnState<B, B::Element>;
 
     fn build(&self) -> Self::Element {
         FnState(None)
@@ -201,7 +213,10 @@ where
                 let scope = unsafe { &mut *state.scope.inner.get() };
                 scope.idx = 0;
 
-                let body = (self.f)(&state.scope);
+                let view = unsafe { mem::transmute(&self.view) };
+                let scope = unsafe { mem::transmute(&state.scope) };
+
+                let body = (self.f)(view, scope);
                 state.view = body;
             }
 
@@ -222,7 +237,10 @@ where
                 }),
             };
 
-            let body = (self.f)(&scope);
+            let view = unsafe { mem::transmute(&self.view) };
+            let scope_ref = unsafe { mem::transmute(&scope) };
+
+            let body = (self.f)(view, scope_ref);
             view_cx.contexts = scope.inner.get_mut().contexts.take().unwrap();
 
             let mut view_state = body.build();
