@@ -19,6 +19,9 @@ pub use self::view::View;
 pub mod node;
 pub use self::node::Node;
 
+
+pub mod web;
+
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 pub trait WasmNotSend: Send {}
 
@@ -43,7 +46,7 @@ pub type Tx<T> = tokio::sync::mpsc::UnboundedSender<T>;
 pub type Rx<T> = tokio::sync::mpsc::UnboundedReceiver<T>;
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-mod web {
+mod web_internal {
     use std::{
         cell::RefCell,
         rc::Rc,
@@ -112,11 +115,25 @@ mod web {
     }
 
     pub fn run(view: impl crate::View) {
+        use crate::node::Change;
+
+        let document = web_sys::window().unwrap().document().unwrap();
+        let body = document.body().unwrap();
+
         let future = async move {
             let mut vdom = crate::VirtualDom::new(view.into_node());
 
             loop {
-                vdom.run().await;
+                if let Some(changes) = vdom.run().await {
+                    for change in changes {
+                        match change {
+                            Change::Push(any) => {
+                                let node: web_sys::Node = *any.downcast().unwrap();
+                                body.append_child(&node);
+                            }
+                        }
+                    }
+                }
             }
         };
 
@@ -125,6 +142,6 @@ mod web {
 }
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-pub use self::web::run;
+pub use self::web_internal::run;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use self::web::{channel, Rx, Tx};
+use self::web_internal::{channel, Rx, Tx};

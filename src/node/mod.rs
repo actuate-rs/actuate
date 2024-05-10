@@ -12,7 +12,11 @@ pub(crate) use self::view_node::WrapNode;
 pub use view_node::{ViewNode, ViewNodeState};
 
 pub enum Change {
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     Push(Box<dyn Any + Send>),
+
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    Push(Box<dyn Any>),
 }
 
 #[derive(Default)]

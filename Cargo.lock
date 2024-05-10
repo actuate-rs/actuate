@@ -9,6 +9,7 @@ dependencies = [
  "slotmap",
  "tokio",
  "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

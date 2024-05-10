@@ -1,4 +1,4 @@
-use actuate::{use_state, Scope, View, VirtualDom};
+use actuate::{use_state, web::Div, Scope, View, VirtualDom};
 
 struct Counter {
     start: i32,
@@ -11,6 +11,8 @@ impl View for Counter {
         //set_count.set(count + 1);
 
         tracing::info!("{}", count);
+
+        Div::new()
     }
 }
 
