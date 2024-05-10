@@ -1,0 +1,13 @@
+[package]
+name = "actuate-web-example"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A reactive user-interface framework"
+repository = "https://github.com/matthunz/actuate"
+
+[dependencies]
+actuate = { path = "../" }
+console_error_panic_hook = "0.1.7"
+tracing = "0.1.40"
+tracing-wasm = "0.2.1"

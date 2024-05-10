@@ -31,8 +31,9 @@ pub trait WasmNotSend {}
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 impl<T> WasmNotSend for T {}
 
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 fn channel<T>() -> (Tx<T>, Rx<T>) {
-    todo!()
+    tokio::sync::mpsc::unbounded_channel()
 }
 
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
@@ -42,7 +43,7 @@ pub type Tx<T> = tokio::sync::mpsc::UnboundedSender<T>;
 pub type Rx<T> = tokio::sync::mpsc::UnboundedReceiver<T>;
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-mod web_channel {
+mod web {
     use std::{
         cell::RefCell,
         rc::Rc,
@@ -100,10 +101,30 @@ mod web_channel {
 
     impl<T> Rx<T> {
         pub fn poll_recv(&mut self, cx: &mut Context) -> Poll<Option<T>> {
-            todo!()
+            let mut shared = self.shared.borrow_mut();
+            if let Some(item) = shared.queue.pop() {
+                Poll::Ready(Some(item))
+            } else {
+                shared.waker = Some(cx.waker().clone());
+                Poll::Pending
+            }
         }
+    }
+
+    pub fn run(view: impl crate::View) {
+        let future = async move {
+            let mut vdom = crate::VirtualDom::new(view.into_node());
+
+            loop {
+                vdom.run().await;
+            }
+        };
+
+        wasm_bindgen_futures::spawn_local(future);
     }
 }
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use self::web_channel::{Rx, Tx};
+pub use self::web::run;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use self::web::{channel, Rx, Tx};

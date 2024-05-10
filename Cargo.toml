@@ -6,8 +6,18 @@ license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
 repository = "https://github.com/matthunz/actuate"
 
+[workspace]
+members = [
+    ".",
+    "web_example"
+]
+
 [dependencies]
 slotmap = "1.0.7"
+wasm-bindgen-futures = "0.4.42"
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
 tokio = { version = "1.37.0", features = ["full"] }
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wasm-bindgen-futures = "0.4.42"

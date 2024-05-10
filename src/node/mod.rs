@@ -26,7 +26,7 @@ impl Clone for ViewContext {
             contexts: self
                 .contexts
                 .iter()
-                .map(|(key, any)| (*key, any.clone_any_clone()))
+                .map(|(key, any)| (*key, (*any).clone_any_clone()))
                 .collect(),
         }
     }
