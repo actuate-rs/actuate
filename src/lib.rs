@@ -1,7 +1,13 @@
 use core::fmt;
-use std::{fmt::Debug, mem};
+use std::{
+    fmt::Debug,
+    future::{self, Future},
+    mem,
+    sync::{Arc, Mutex},
+    task::{Context, Poll, Wake, Waker},
+};
 
-pub trait View: Sized + 'static {
+pub trait View: Send + Sized + 'static {
     fn body(&self) -> impl View;
 
     fn into_node(self) -> impl TreeNode {
@@ -9,6 +15,9 @@ pub trait View: Sized + 'static {
             view: self,
             body_fn: |me: &'static Self| me.body().into_node(),
             body: None,
+            is_view_ready: false,
+            is_body_ready: false,
+            body_waker: None,
         }
     }
 }
@@ -27,18 +36,27 @@ impl<V1: View, V2: View> View for (V1, V2) {
     }
 }
 
-pub trait TreeNode: Debug + 'static {
-    fn build(&mut self);
+pub trait TreeNode: Debug + Send + 'static {
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<()>;
+
+    fn view(&mut self) -> impl Future<Output = ()> + Send;
 }
 
 impl TreeNode for () {
-    fn build(&mut self) {}
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<()> {
+        todo!()
+    }
+
+    async fn view(&mut self) {}
 }
 
 impl<T1: TreeNode, T2: TreeNode> TreeNode for (T1, T2) {
-    fn build(&mut self) {
-        self.0.build();
-        self.1.build();
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<()> {
+        todo!()
+    }
+
+    async fn view(&mut self) {
+        todo!()
     }
 }
 
@@ -46,6 +64,9 @@ pub struct Node<V, F, B> {
     view: V,
     body_fn: F,
     body: Option<B>,
+    is_view_ready: bool,
+    is_body_ready: bool,
+    body_waker: Option<Arc<NodeWaker>>,
 }
 
 impl<V, F, B: fmt::Debug> fmt::Debug for Node<V, F, B> {
@@ -63,21 +84,70 @@ impl<V, F, B: fmt::Debug> fmt::Debug for Node<V, F, B> {
 impl<V, F, B> TreeNode for Node<V, F, B>
 where
     V: View,
-    F: Fn(&'static V) -> B + 'static,
+    F: Fn(&'static V) -> B + 'static + Send,
     B: TreeNode,
 {
-    fn build(&mut self) {
-        let view = unsafe { mem::transmute(&self.view) };
-        let mut body = (self.body_fn)(view);
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<()> {
+        if let Some(ref mut body) = self.body {
+            if let Some(ref waker) = self.body_waker {
+                if *waker.is_ready.lock().unwrap() {
+                    self.is_body_ready = true;
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            } else {
+                let node_waker = Arc::new(NodeWaker {
+                    is_ready: Mutex::new(false),
+                    waker: cx.waker().clone(),
+                });
+                self.body_waker = Some(node_waker.clone());
 
-        body.build();
+                let waker = Waker::from(node_waker);
+                let mut body_cx = Context::from_waker(&waker);
 
-        self.body = Some(body);
+                if body.poll_ready(&mut body_cx).is_ready() {
+                    self.is_body_ready = true;
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }
+        } else {
+            // Ready to build the initial view.
+            self.is_view_ready = true;
+            Poll::Ready(())
+        }
+    }
+
+    async fn view(&mut self) {
+        if mem::take(&mut self.is_view_ready) {
+            let view = unsafe { mem::transmute(&self.view) };
+            let body = (self.body_fn)(view);
+            self.body = Some(body);
+        }
+
+        if mem::take(&mut self.is_body_ready) {
+            self.body.as_mut().unwrap().view().await;
+        }
     }
 }
 
-pub fn run(view: impl View) {
+struct NodeWaker {
+    is_ready: Mutex<bool>,
+    waker: Waker,
+}
+
+impl Wake for NodeWaker {
+    fn wake(self: Arc<Self>) {
+        *self.is_ready.lock().unwrap() = true;
+        self.waker.wake_by_ref();
+    }
+}
+
+pub async fn run(view: impl View) {
     let mut node = view.into_node();
-    node.build();
+    future::poll_fn(|cx| node.poll_ready(cx)).await;
+    node.view().await;
     dbg!(node);
 }

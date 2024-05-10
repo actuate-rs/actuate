@@ -16,6 +16,7 @@ impl View for App {
     }
 }
 
-fn main() {
-    actuate::run(App);
+#[tokio::main]
+async fn main() {
+    actuate::run(App).await;
 }
