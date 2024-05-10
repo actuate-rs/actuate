@@ -2,9 +2,6 @@ mod scope;
 pub use self::scope::Scope;
 use self::scope::{Update, UpdateKind};
 
-mod stack;
-pub use self::stack::{Stack, VecStack};
-
 mod use_context;
 pub use self::use_context::use_context;
 

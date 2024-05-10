@@ -1,14 +1,13 @@
-use crate::{node::ViewContext, Node, VecStack};
+use crate::{node::ViewContext, Node};
 use std::future;
 
-pub struct VirtualDom<V, S, E> {
+pub struct VirtualDom<V, S> {
     view: V,
     state: S,
-    elements: VecStack<E>,
     cx: ViewContext,
 }
 
-impl<V, S, E> VirtualDom<V, S, E> {
+impl<V, S> VirtualDom<V, S> {
     pub fn new(view: V) -> Self
     where
         V: Node<Element = S>,
@@ -17,10 +16,7 @@ impl<V, S, E> VirtualDom<V, S, E> {
         Self {
             view,
             state,
-            elements: VecStack {
-                items: Vec::new(),
-                idx: 0,
-            },
+
             cx: ViewContext::default(),
         }
     }
@@ -28,10 +24,8 @@ impl<V, S, E> VirtualDom<V, S, E> {
     pub async fn run(&mut self)
     where
         V: Node<Element = S>,
-        E: 'static,
     {
         future::poll_fn(|cx| self.view.poll_ready(cx, &mut self.state, false)).await;
-        self.view
-            .view(&mut self.cx, &mut self.elements, &mut self.state);
+        self.view.view(&mut self.cx, &mut self.state);
     }
 }

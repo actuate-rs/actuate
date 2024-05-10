@@ -1,7 +1,7 @@
 use crate::{
     node::{Element, ViewContext},
     scope::ScopeInner,
-    Node, Scope, Stack, Update, UpdateKind,
+    Node, Scope, Update, UpdateKind,
 };
 use std::{
     cell::UnsafeCell,
@@ -59,8 +59,12 @@ impl<T: Node> Node for WrapNode<T> {
         self.0.poll_ready(cx, element, is_changed)
     }
 
-    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
-        self.0.view(cx, stack, element)
+    fn view(
+        &self,
+        cx: &mut ViewContext,
+        element: &mut Self::Element,
+    ) -> Option<Vec<crate::node::Change>> {
+        self.0.view(cx, element)
     }
 }
 
@@ -95,9 +99,11 @@ where
     V: Node,
     S: Element,
 {
-    fn remove(&self, stack: &mut dyn Stack) {
+    fn remove(&self) -> Option<Vec<crate::node::Change>> {
         if let Some(ref state) = self.0 {
-            state.view_state.remove(stack);
+            state.view_state.remove()
+        } else {
+            None
         }
     }
 }
@@ -241,7 +247,11 @@ where
         }
     }
 
-    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
+    fn view(
+        &self,
+        cx: &mut ViewContext,
+        element: &mut Self::Element,
+    ) -> Option<Vec<crate::node::Change>> {
         if let Some(ref mut state) = element.0 {
             if state.is_rx_ready {
                 let scope = unsafe { &mut *state.scope.inner.get() };
@@ -255,9 +265,9 @@ where
             }
 
             if state.is_rx_ready || state.is_body_ready {
-                state
-                    .view
-                    .view(&mut state.view_cx, stack, &mut state.view_state);
+                state.view.view(&mut state.view_cx, &mut state.view_state)
+            } else {
+                None
             }
         } else {
             let mut view_cx = cx.clone();
@@ -278,7 +288,7 @@ where
             view_cx.contexts = scope.inner.get_mut().contexts.take().unwrap();
 
             let mut view_state = body.build();
-            body.view(&mut view_cx, stack, &mut view_state);
+            let changes = body.view(&mut view_cx, &mut view_state);
 
             element.0 = Some(FnStateInner {
                 view: body,
@@ -290,7 +300,9 @@ where
                 rx_waker: None,
                 is_body_ready: false,
                 is_rx_ready: false,
-            })
+            });
+
+            changes
         }
     }
 }

@@ -1,9 +1,11 @@
-use crate::{scope::AnyClone, Stack};
+use crate::scope::AnyClone;
 use std::{
     any::TypeId,
     collections::HashMap,
     task::{Context, Poll},
 };
+
+pub enum Change {}
 
 #[derive(Default)]
 pub struct ViewContext {
@@ -23,17 +25,21 @@ impl Clone for ViewContext {
 }
 
 pub trait Element: Send {
-    fn remove(&self, stack: &mut dyn Stack);
+    fn remove(&self) -> Option<Vec<Change>>;
 }
 
 impl Element for () {
-    fn remove(&self, _stack: &mut dyn Stack) {}
+    fn remove(&self) -> Option<Vec<Change>> {
+        None
+    }
 }
 
 impl<S: Element> Element for Option<S> {
-    fn remove(&self, stack: &mut dyn Stack) {
+    fn remove(&self) -> Option<Vec<Change>> {
         if let Some(state) = self {
-            state.remove(stack)
+            state.remove()
+        } else {
+            None
         }
     }
 }
@@ -50,7 +56,7 @@ pub trait Node: Send + 'static {
         is_changed: bool,
     ) -> Poll<()>;
 
-    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element);
+    fn view(&self, cx: &mut ViewContext, element: &mut Self::Element) -> Option<Vec<Change>>;
 }
 
 impl Node for () {
@@ -67,7 +73,9 @@ impl Node for () {
         Poll::Pending
     }
 
-    fn view(&self, _cx: &mut ViewContext, _stack: &mut dyn Stack, _element: &mut Self::Element) {}
+    fn view(&self, cx: &mut ViewContext, element: &mut Self::Element) -> Option<Vec<Change>> {
+        None
+    }
 }
 
 impl<V: Node> Node for Option<V> {
@@ -92,27 +100,36 @@ impl<V: Node> Node for Option<V> {
         Poll::Ready(())
     }
 
-    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
+    fn view(&self, cx: &mut ViewContext, element: &mut Self::Element) -> Option<Vec<Change>> {
         if let Some(view) = self {
             if let Some(state) = element {
-                view.view(cx, stack, state);
+                return view.view(cx, state);
             } else {
                 let mut new_state = view.build();
-                view.view(cx, stack, &mut new_state);
+                let changes = view.view(cx, &mut new_state);
                 *element = Some(new_state);
+                return changes;
             }
         } else if let Some(state) = element {
-            state.remove(stack)
+            return state.remove();
         }
+
+        None
     }
 }
 
 pub struct TupleState<S1, S2>(S1, S2, bool);
 
 impl<S1: Element, S2: Element> Element for TupleState<S1, S2> {
-    fn remove(&self, stack: &mut dyn Stack) {
-        self.0.remove(stack);
-        self.1.remove(stack);
+    fn remove(&self) -> Option<Vec<Change>> {
+        let a = self.0.remove();
+        let b = self.1.remove();
+        a.map(|mut a| {
+            if let Some(b) = b {
+                a.extend(b);
+            }
+            a
+        })
     }
 }
 
@@ -141,8 +158,15 @@ impl<V1: Node, V2: Node> Node for (V1, V2) {
         }
     }
 
-    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
-        self.0.view(cx, stack, &mut element.0);
-        self.1.view(cx, stack, &mut element.1);
+    fn view(&self, cx: &mut ViewContext, element: &mut Self::Element) -> Option<Vec<Change>> {
+        let a = self.0.view(cx, &mut element.0);
+        let b = self.1.view(cx, &mut element.1);
+
+        a.map(|mut a| {
+            if let Some(b) = b {
+                a.extend(b);
+            }
+            a
+        })
     }
 }
