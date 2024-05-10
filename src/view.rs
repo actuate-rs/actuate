@@ -18,7 +18,7 @@ pub trait View: Send + Sized + 'static {
     fn into_node(self) -> impl Node {
         ViewNode {
             view: self,
-            f: |me: &'static Self, cx: &'static Scope| me.body(cx).into_node(),
+            f: |me: &'static Self, cx: &'static Scope| WrapNode(me.body(cx).into_node()),
             _marker: PhantomData,
         }
     }
@@ -35,6 +35,32 @@ impl<V1: View, V2: View> View for (V1, V2) {
 
     fn into_node(self) -> impl Node {
         (self.0.into_node(), self.1.into_node())
+    }
+}
+
+// Workaround for unstable `impl trait` support.
+struct WrapNode<T>(T);
+
+unsafe impl<T> Sync for WrapNode<T> {}
+
+impl<T: Node> Node for WrapNode<T> {
+    type Element = T::Element;
+
+    fn build(&self) -> Self::Element {
+        self.0.build()
+    }
+
+    fn poll_ready(
+        &self,
+        cx: &mut Context,
+        element: &mut Self::Element,
+        is_changed: bool,
+    ) -> Poll<()> {
+        self.0.poll_ready(cx, element, is_changed)
+    }
+
+    fn view(&self, cx: &mut ViewContext, stack: &mut dyn Stack, element: &mut Self::Element) {
+        self.0.view(cx, stack, element)
     }
 }
 
