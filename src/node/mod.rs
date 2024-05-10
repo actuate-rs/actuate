@@ -1,11 +1,13 @@
 use crate::scope::AnyClone;
 use std::{
-    any::TypeId,
+    any::{Any, TypeId},
     collections::HashMap,
     task::{Context, Poll},
 };
 
-pub enum Change {}
+pub enum Change {
+    Push(Box<dyn Any + Send>)
+}
 
 #[derive(Default)]
 pub struct ViewContext {
@@ -73,7 +75,7 @@ impl Node for () {
         Poll::Pending
     }
 
-    fn view(&self, cx: &mut ViewContext, element: &mut Self::Element) -> Option<Vec<Change>> {
+    fn view(&self, _cx: &mut ViewContext, _element: &mut Self::Element) -> Option<Vec<Change>> {
         None
     }
 }
