@@ -21,8 +21,10 @@ pub struct Scope {
 
 pub fn use_state<T: 'static>(cx: &Scope, make_value: impl FnOnce() -> T) -> (&T, SetState<T>) {
     let mut scope = cx.inner.borrow_mut();
+    let idx = scope.hook_idx;
     let hooks = unsafe { &mut *scope.hooks.get() };
-    let value = if let Some(hook) = hooks.get(scope.hook_idx) {
+
+    let value = if let Some(hook) = hooks.get(idx) {
         scope.hook_idx += 1;
         hook
     } else {
@@ -34,7 +36,7 @@ pub fn use_state<T: 'static>(cx: &Scope, make_value: impl FnOnce() -> T) -> (&T,
     let setter = SetState {
         key: scope.key,
         tx: scope.tx.clone(),
-        idx: scope.hook_idx,
+        idx,
         _marker: PhantomData,
     };
 
@@ -109,9 +111,15 @@ pub struct Tree {
     tx: mpsc::UnboundedSender<Update>,
 }
 
-pub trait AnyNode {}
+pub trait AnyNode {
+    fn rebuild_any(&self, tree: &mut Tree, state: &mut dyn Any);
+}
 
-impl<T: Node> AnyNode for T {}
+impl<T: Node> AnyNode for T {
+    fn rebuild_any(&self, tree: &mut Tree, state: &mut dyn Any) {
+        self.rebuild(tree, state.downcast_mut().unwrap())
+    }
+}
 
 pub trait Node: 'static {
     type State;
@@ -119,6 +127,8 @@ pub trait Node: 'static {
     fn build(&self, tree: &mut Tree) -> Self::State;
 
     fn init(&self, tree: &mut Tree, state: &mut Self::State);
+
+    fn rebuild(&self, tree: &mut Tree, state: &mut Self::State);
 }
 
 impl Node for () {
@@ -127,6 +137,8 @@ impl Node for () {
     fn build(&self, tree: &mut Tree) -> Self::State {}
 
     fn init(&self, tree: &mut Tree, state: &mut Self::State) {}
+
+    fn rebuild(&self, tree: &mut Tree, state: &mut Self::State) {}
 }
 
 pub struct ViewNode<V, F, B> {
@@ -173,6 +185,20 @@ where
 
         state.0.init(tree, &mut state.1);
     }
+
+    fn rebuild(&self, tree: &mut Tree, state: &mut Self::State) {
+        let tree_node = &mut tree.nodes[state.2];
+        tree_node.node = self as _;
+
+        let scope = tree_node.scope.as_ref().unwrap();
+        scope.inner.borrow_mut().hook_idx = 0;
+
+        let scope_ref = unsafe { mem::transmute(scope) };
+        let view = unsafe { mem::transmute(&self.view) };
+
+        let body = (self.body_fn)(view, scope_ref);
+        body.rebuild(tree, &mut state.1);
+    }
 }
 
 pub async fn run(view: impl View) {
@@ -186,6 +212,21 @@ pub async fn run(view: impl View) {
     let mut state = node.build(&mut tree);
     node.init(&mut tree, &mut state);
 
-    rx.recv().await;
-    dbg!("update!");
+    while let Some(mut update) = rx.recv().await {
+        if let Some(tree_node) = tree.nodes.get(update.key) {
+            (update.f)(
+                &mut *tree_node
+                    .scope
+                    .as_ref()
+                    .unwrap()
+                    .inner
+                    .borrow_mut()
+                    .hooks
+                    .get_mut()[update.idx],
+            );
+
+            let node = unsafe { &*tree_node.node };
+            node.rebuild_any(&mut tree, &mut state);
+        }
+    }
 }
