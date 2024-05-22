@@ -1,13 +1,18 @@
-use actuate::View;
+use actuate::{use_state, Scope, View};
 
 struct App;
 
 impl View for App {
-    fn body(&self) -> impl View {
-        dbg!("Hello world!");
+    fn body(&self, cx: &Scope) -> impl View {
+        let (count, set_count) = use_state(cx, || 0);
+        
+        dbg!(count);
+
+        set_count.set(count + 1)
     }
 }
 
-fn main() {
-    actuate::run(App)
+#[tokio::main]
+async fn main() {
+    actuate::run(App).await
 }
