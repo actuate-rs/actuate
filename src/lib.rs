@@ -83,10 +83,17 @@ pub trait View: 'static {
             _marker: PhantomData,
         }
     }
+
+    fn memo(self) -> Memo<Self>
+    where
+        Self: PartialEq + Clone,
+    {
+        Memo { view: self }
+    }
 }
 
 impl View for () {
-    fn body(&self, cx: &Scope) -> impl View {}
+    fn body(&self, _cx: &Scope) -> impl View {}
 
     fn into_node(self) -> impl Node
     where
@@ -134,11 +141,11 @@ pub trait Node: 'static {
 impl Node for () {
     type State = ();
 
-    fn build(&self, tree: &mut Tree) -> Self::State {}
+    fn build(&self, _tree: &mut Tree) -> Self::State {}
 
-    fn init(&self, tree: &mut Tree, state: &mut Self::State) {}
+    fn init(&self, _tree: &mut Tree, _statee: &mut Self::State) {}
 
-    fn rebuild(&self, tree: &mut Tree, state: &mut Self::State) {}
+    fn rebuild(&self, _tree: &mut Tree, _statee: &mut Self::State) {}
 }
 
 pub struct ViewNode<V, F, B> {
@@ -198,6 +205,49 @@ where
 
         let body = (self.body_fn)(view, scope_ref);
         body.rebuild(tree, &mut state.1);
+    }
+}
+
+pub struct Memo<V> {
+    view: V,
+}
+
+impl<V: View + PartialEq + Clone> View for Memo<V> {
+    fn body(&self, _cx: &Scope) -> impl View {}
+
+    fn into_node(self) -> impl Node
+    where
+        Self: Sized,
+    {
+        MemoNode {
+            view: self.view.clone(),
+            node: self.view.into_node(),
+        }
+    }
+}
+
+pub struct MemoNode<V, N> {
+    view: V,
+    node: N,
+}
+
+impl<V: View + PartialEq + Clone, N: Node> Node for MemoNode<V, N> {
+    type State = (V, N::State);
+
+    fn build(&self, tree: &mut Tree) -> Self::State {
+        (self.view.clone(), self.node.build(tree))
+    }
+
+    fn init(&self, tree: &mut Tree, state: &mut Self::State) {
+        self.node.init(tree, &mut state.1)
+    }
+
+    fn rebuild(&self, tree: &mut Tree, state: &mut Self::State) {
+        if self.view != state.0 {
+            state.0 = self.view.clone();
+
+            self.node.rebuild(tree, &mut state.1)
+        }
     }
 }
 
