@@ -77,6 +77,7 @@ struct Update {
 
 struct TreeNode {
     node: *const dyn AnyNode,
+    state: *mut dyn Any,
     scope: Option<Scope>,
 }
 
@@ -120,7 +121,8 @@ pub async fn run(view: impl View) {
             );
 
             let node = unsafe { &*tree_node.node };
-            node.rebuild_any(&mut tree, &mut state);
+            let state = unsafe { &mut *tree_node.state };
+            node.rebuild_any(&mut tree, state);
         }
     }
 }
@@ -199,4 +201,11 @@ impl<V: View + Clone> View for WebView<V> {
 #[cfg(feature = "web")]
 pub fn mount(view: impl View + Clone, node: web_sys::Node) {
     wasm_bindgen_futures::spawn_local(run(WebView { view, node }))
+}
+
+#[macro_export]
+macro_rules! clone {
+    ($($v:tt),*) => {
+        $( let $v = $v.clone(); )*
+    };
 }

@@ -5,10 +5,10 @@ use std::marker::PhantomData;
 pub fn use_state<T: 'static>(cx: &Scope, make_value: impl FnOnce() -> T) -> (&T, SetState<T>) {
     let mut scope = cx.inner.borrow_mut();
     let idx = scope.hook_idx;
+    scope.hook_idx += 1;
     let hooks = unsafe { &mut *scope.hooks.get() };
 
     let value = if let Some(hook) = hooks.get(idx) {
-        scope.hook_idx += 1;
         hook
     } else {
         let hooks = unsafe { &mut *scope.hooks.get() };

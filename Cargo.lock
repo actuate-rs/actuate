@@ -6,6 +6,7 @@ version = 3
 name = "actuate"
 version = "0.3.0-alpha.3"
 dependencies = [
+ "js-sys",
  "slotmap",
  "tokio",
  "wasm-bindgen-futures",

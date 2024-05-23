@@ -29,6 +29,7 @@ where
         let key = tree.nodes.insert(TreeNode {
             node: ptr::null::<Self>(),
             scope: None,
+            state: ptr::null_mut::<Self::State>(),
         });
         let scope = Scope {
             inner: Rc::new(RefCell::new(ScopeInner {
@@ -51,6 +52,7 @@ where
 
     fn init(&self, tree: &mut Tree, state: &mut Self::State) {
         tree.nodes[state.2].node = self as _;
+        tree.nodes[state.2].state = state as _;
 
         state.0.init(tree, &mut state.1);
     }

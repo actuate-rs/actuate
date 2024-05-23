@@ -17,6 +17,7 @@ web = ["dep:wasm-bindgen-futures", "dep:web-sys"]
 default = ["web"]
 
 [dependencies]
+js-sys = "0.3.69"
 slotmap = "1.0.7"
 wasm-bindgen-futures = { version = "0.4.42", optional = true }
 web-sys = { version = "0.3.69", optional = true, features = ["Node", "Text"] }
