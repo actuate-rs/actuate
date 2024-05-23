@@ -27,12 +27,13 @@ Views combine together to form a statically-typed view tree that can be stored o
 giving this architecture its high performance.
 
 ```rust
-#[derive(Clone)]
-struct App;
+struct Counter {
+    initial: i32,
+}
 
-impl View for App {
+impl View for Counter {
     fn body(&self, cx: &Scope) -> impl View {
-        let (count, set_count) = use_state(cx, || 0);
+        let (count, set_count) = use_state(cx, || self.initial);
 
         (
             text(format!("High five count: {}", count)),
@@ -45,6 +46,15 @@ impl View for App {
                 move || set_count.set(count - 1)
             }),
         )
+    }
+}
+
+#[derive(Clone)]
+struct App;
+
+impl View for App {
+    fn body(&self, _cx: &Scope) -> impl View {
+        (Counter { initial: 0 }, Counter { initial: 100 })
     }
 }
 ```
