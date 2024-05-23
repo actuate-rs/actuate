@@ -31,7 +31,7 @@ giving this architecture its high performance.
 struct App;
 
 impl View for App {
-    fn body(&self, cx: &actuate::Scope) -> impl View {
+    fn body(&self, cx: &Scope) -> impl View {
         let (count, set_count) = use_state(cx, || 0);
 
         (

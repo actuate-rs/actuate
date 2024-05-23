@@ -1,14 +1,12 @@
 use actuate::{
-    clone, use_state,
-    web::{div, text},
-    View,
+    clone, use_state, web::{div, text}, Scope, View
 };
 
 #[derive(Clone)]
 struct App;
 
 impl View for App {
-    fn body(&self, cx: &actuate::Scope) -> impl View {
+    fn body(&self, cx: &Scope) -> impl View {
         let (count, set_count) = use_state(cx, || 0);
 
         (
