@@ -27,44 +27,28 @@ Views combine together to form a statically-typed view tree that can be stored o
 giving this architecture its high performance.
 
 ```rust
-use actuate::{use_state, Scope, View, VirtualDom};
-
-struct Counter {
-    start: i32,
-}
-
-impl View for Counter {
-    fn body(&self, cx: &Scope) -> impl View {
-        let (count, set_count) = use_state(cx, || self.start);
-
-        set_count.set(count + 1);
-
-        dbg!(count);
-    }
-}
+use actuate::{use_state, Scope, View};
 
 struct App;
 
 impl View for App {
-    fn body(&self, _cx: &Scope) -> impl View {
-        (Counter { start: 0 }, Counter { start: 100 })
+    fn body(&self, cx: &Scope) -> impl View {
+        let (count, set_count) = use_state(cx, || 0);
+
+        dbg!(count);
+
+        set_count.set(count + 1)
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let mut vdom = VirtualDom::new(App.into_node());
-
-    tokio::spawn(async move {
-        vdom.run().await;
-        vdom.run().await;
-    })
-    .await
-    .unwrap();
+    actuate::run(App).await
 }
+
 ```
 
 ## Inspiration
 This crate is inspired by [Xilem](https://github.com/linebender/xilem) and uses a similar approach to type-safe reactivity. The main difference with this crate is the concept of scopes, components store their state in their own scope and updates to that scope re-render the component.
 
-State management is inspired by React and [Dioxus](https://github.com/DioxusLabs/dioxus), but this project aims to be higher performance by taking advantage of multi-threading.
+State management is inspired by React and [Dioxus](https://github.com/DioxusLabs/dioxus).
