@@ -1,13 +1,14 @@
-use actuate::{web::Div, View};
+use actuate::{
+    web::{div, text, Div},
+    View,
+};
 
 #[derive(Clone)]
 struct App;
 
 impl View for App {
     fn body(&self, cx: &actuate::Scope) -> impl View {
-        tracing::info!("Hello World!");
-
-        Div {}
+        div(text("Hello World!"))
     }
 }
 

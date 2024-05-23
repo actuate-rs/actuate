@@ -14,6 +14,9 @@ pub use self::node::Node;
 mod use_context;
 pub use self::use_context::use_context;
 
+mod use_effect;
+pub use self::use_effect::use_effect;
+
 mod use_provider;
 pub use self::use_provider::use_provider;
 

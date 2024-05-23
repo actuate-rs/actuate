@@ -19,7 +19,7 @@ default = ["web"]
 [dependencies]
 slotmap = "1.0.7"
 wasm-bindgen-futures = { version = "0.4.42", optional = true }
-web-sys = { version = "0.3.69", optional = true, features = ["Node"] }
+web-sys = { version = "0.3.69", optional = true, features = ["Node", "Text"] }
 
 [dev-dependencies]
 tokio = { version = "1.37.0", features = ["full"] }
