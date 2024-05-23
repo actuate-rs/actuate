@@ -1,4 +1,4 @@
-use actuate::{use_state, Scope, View};
+use actuate::{use_context, use_provider, use_state, Scope, View};
 
 #[derive(Clone, PartialEq)]
 struct Child {
@@ -6,7 +6,9 @@ struct Child {
 }
 
 impl View for Child {
-    fn body(&self, _cx: &Scope) -> impl View {
+    fn body(&self, cx: &Scope) -> impl View {
+        dbg!(use_context::<&'static str>(cx));
+
         dbg!(self.count);
     }
 }
@@ -15,6 +17,8 @@ struct App;
 
 impl View for App {
     fn body(&self, cx: &Scope) -> impl View {
+        use_provider(cx, || "Hi!");
+
         let (count, set_count) = use_state(cx, || 0);
 
         set_count.set(count + 1);

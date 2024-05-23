@@ -1,18 +1,32 @@
 use slotmap::{DefaultKey, SlotMap};
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     cell::{RefCell, UnsafeCell},
+    collections::HashMap,
     marker::PhantomData,
     mem, ptr,
     rc::Rc,
 };
 use tokio::sync::mpsc;
 
+pub struct ScopeContext {
+    value: Box<dyn AnyClone>,
+}
+
+impl Clone for ScopeContext {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone_any_clone(),
+        }
+    }
+}
+
 struct ScopeInner {
     key: DefaultKey,
     tx: mpsc::UnboundedSender<Update>,
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: usize,
+    contexts: Rc<HashMap<TypeId, ScopeContext>>,
 }
 
 pub struct Scope {
@@ -67,6 +81,42 @@ where
 
     pub fn set(&self, value: T) {
         self.modify(move |target| *target = value)
+    }
+}
+
+pub fn use_provider<T: Clone + 'static>(cx: &Scope, make_value: impl FnOnce() -> T) {
+    let mut scope = cx.inner.borrow_mut();
+    let contexts = Rc::make_mut(&mut scope.contexts);
+
+    if !contexts.contains_key(&TypeId::of::<T>()) {
+        contexts.insert(
+            TypeId::of::<T>(),
+            ScopeContext {
+                value: Box::new(make_value()),
+            },
+        );
+    }
+}
+
+pub fn use_context<T: 'static>(cx: &Scope) -> T {
+    let scope = cx.inner.borrow();
+    let value = scope.contexts.get(&TypeId::of::<T>()).unwrap();
+    *(*value.value).clone_any().downcast().unwrap()
+}
+
+trait AnyClone {
+    fn clone_any(&self) -> Box<dyn Any>;
+
+    fn clone_any_clone(&self) -> Box<dyn AnyClone>;
+}
+
+impl<T: Clone + 'static> AnyClone for T {
+    fn clone_any(&self) -> Box<dyn Any> {
+        Box::new(self.clone())
+    }
+
+    fn clone_any_clone(&self) -> Box<dyn AnyClone> {
+        Box::new(self.clone())
     }
 }
 
@@ -131,7 +181,7 @@ impl<T: Node> AnyNode for T {
 pub trait Node: 'static {
     type State;
 
-    fn build(&self, tree: &mut Tree) -> Self::State;
+    fn build(&self, tree: &mut Tree, contexts: &Rc<HashMap<TypeId, ScopeContext>>) -> Self::State;
 
     fn init(&self, tree: &mut Tree, state: &mut Self::State);
 
@@ -141,11 +191,11 @@ pub trait Node: 'static {
 impl Node for () {
     type State = ();
 
-    fn build(&self, _tree: &mut Tree) -> Self::State {}
+    fn build(&self, tree: &mut Tree, contexts: &Rc<HashMap<TypeId, ScopeContext>>) -> Self::State {}
 
     fn init(&self, _tree: &mut Tree, _statee: &mut Self::State) {}
 
-    fn rebuild(&self, _tree: &mut Tree, _statee: &mut Self::State) {}
+    fn rebuild(&self, tree: &mut Tree, state: &mut Self::State) {}
 }
 
 pub struct ViewNode<V, F, B> {
@@ -162,7 +212,7 @@ where
 {
     type State = (B, B::State, DefaultKey);
 
-    fn build(&self, tree: &mut Tree) -> Self::State {
+    fn build(&self, tree: &mut Tree, contexts: &Rc<HashMap<TypeId, ScopeContext>>) -> Self::State {
         let view = unsafe { mem::transmute(&self.view) };
 
         let key = tree.nodes.insert(TreeNode {
@@ -175,12 +225,13 @@ where
                 tx: tree.tx.clone(),
                 hooks: UnsafeCell::default(),
                 hook_idx: 0,
+                contexts: contexts.clone(),
             })),
         };
         let scope_ref = unsafe { mem::transmute(&scope) };
 
         let body = (self.body_fn)(view, scope_ref);
-        let body_state = body.build(tree);
+        let body_state = body.build(tree, &scope.inner.borrow().contexts);
 
         tree.nodes[key].scope = Some(scope);
 
@@ -234,8 +285,8 @@ pub struct MemoNode<V, N> {
 impl<V: View + PartialEq + Clone, N: Node> Node for MemoNode<V, N> {
     type State = (V, N::State);
 
-    fn build(&self, tree: &mut Tree) -> Self::State {
-        (self.view.clone(), self.node.build(tree))
+    fn build(&self, tree: &mut Tree, contexts: &Rc<HashMap<TypeId, ScopeContext>>) -> Self::State {
+        (self.view.clone(), self.node.build(tree, contexts))
     }
 
     fn init(&self, tree: &mut Tree, state: &mut Self::State) {
@@ -259,7 +310,7 @@ pub async fn run(view: impl View) {
     };
 
     let node = view.into_node();
-    let mut state = node.build(&mut tree);
+    let mut state = node.build(&mut tree, &Rc::default());
     node.init(&mut tree, &mut state);
 
     while let Some(mut update) = rx.recv().await {
