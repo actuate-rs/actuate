@@ -27,25 +27,26 @@ Views combine together to form a statically-typed view tree that can be stored o
 giving this architecture its high performance.
 
 ```rust
-use actuate::{use_state, Scope, View};
-
+#[derive(Clone)]
 struct App;
 
 impl View for App {
-    fn body(&self, cx: &Scope) -> impl View {
+    fn body(&self, cx: &actuate::Scope) -> impl View {
         let (count, set_count) = use_state(cx, || 0);
 
-        dbg!(count);
-
-        set_count.set(count + 1)
+        (
+            text(format!("High five count: {}", count)),
+            div(text("Up high!")).on_click({
+                clone!(count, set_count);
+                move || set_count.set(count + 1)
+            }),
+            div(text("Down low!")).on_click({
+                clone!(count);
+                move || set_count.set(count - 1)
+            }),
+        )
     }
 }
-
-#[tokio::main]
-async fn main() {
-    actuate::run(App).await
-}
-
 ```
 
 ## Inspiration

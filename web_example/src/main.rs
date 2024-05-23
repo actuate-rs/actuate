@@ -11,10 +11,17 @@ impl View for App {
     fn body(&self, cx: &actuate::Scope) -> impl View {
         let (count, set_count) = use_state(cx, || 0);
 
-        div(text(format!("High five count: {}", count))).on_click({
-            clone!(count);
-            move || set_count.set(count + 1)
-        })
+        (
+            text(format!("High five count: {}", count)),
+            div(text("Up high!")).on_click({
+                clone!(count, set_count);
+                move || set_count.set(count + 1)
+            }),
+            div(text("Down low!")).on_click({
+                clone!(count);
+                move || set_count.set(count - 1)
+            }),
+        )
     }
 }
 

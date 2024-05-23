@@ -52,3 +52,14 @@ where
         self.modify(move |target| *target = value)
     }
 }
+
+impl<T> Clone for SetState<T> {
+    fn clone(&self) -> Self {
+        Self {
+            key: self.key,
+            tx: self.tx.clone(),
+            idx: self.idx,
+            _marker: PhantomData,
+        }
+    }
+}
