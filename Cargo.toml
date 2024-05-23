@@ -6,8 +6,20 @@ license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
 repository = "https://github.com/matthunz/actuate"
 
+[workspace]
+members = [
+    ".",
+    "web_example"
+]
+
+[features]
+web = ["dep:wasm-bindgen-futures", "dep:web-sys"]
+default = ["web"]
+
 [dependencies]
 slotmap = "1.0.7"
+wasm-bindgen-futures = { version = "0.4.42", optional = true }
+web-sys = { version = "0.3.69", optional = true, features = ["Node"] }
 
 [dev-dependencies]
 tokio = { version = "1.37.0", features = ["full"] }

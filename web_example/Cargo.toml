@@ -1,0 +1,11 @@
+[package]
+name = "actuate-web-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actuate = { path = "../" }
+console_error_panic_hook = "0.1.7"
+tracing = "0.1.40"
+tracing-wasm = "0.2.1"
+web-sys = { version = "0.3.69", features = ["Document", "HtmlElement", "Node", "Window"] }

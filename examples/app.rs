@@ -9,8 +9,6 @@ impl View for App {
         dbg!(count);
 
         set_count.set(count + 1)
-
-        
     }
 }
 

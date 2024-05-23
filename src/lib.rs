@@ -23,6 +23,9 @@ pub use self::use_state::{use_state, SetState};
 pub mod view;
 pub use self::view::View;
 
+#[cfg(feature = "web")]
+pub mod web;
+
 pub struct ScopeContext {
     value: Box<dyn AnyClone>,
 }
@@ -79,7 +82,7 @@ pub struct Tree {
     tx: UpdateSender,
 }
 
-pub trait AnyNode {
+trait AnyNode {
     fn rebuild_any(&self, tree: &mut Tree, state: &mut dyn Any);
 }
 
@@ -173,4 +176,24 @@ impl UpdateReceiver {
         })
         .await
     }
+}
+
+#[cfg(feature = "web")]
+pub struct WebView<V> {
+    view: V,
+    node: web_sys::Node,
+}
+
+#[cfg(feature = "web")]
+impl<V: View + Clone> View for WebView<V> {
+    fn body(&self, cx: &Scope) -> impl View {
+        use_provider(cx, || self.node.clone());
+
+        self.view.clone()
+    }
+}
+
+#[cfg(feature = "web")]
+pub fn mount(view: impl View + Clone, node: web_sys::Node) {
+    wasm_bindgen_futures::spawn_local(run(WebView { view, node }))
 }
