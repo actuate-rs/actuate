@@ -1,6 +1,6 @@
 [package]
 name = "actuate"
-version = "0.3.0-alpha.3"
+version = "0.3.0-alpha.4"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
