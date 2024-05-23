@@ -3,9 +3,10 @@ use std::{
     any::{Any, TypeId},
     cell::{RefCell, UnsafeCell},
     collections::HashMap,
+    future,
     rc::Rc,
+    task::{Poll, Waker},
 };
-use tokio::sync::mpsc;
 
 pub mod node;
 pub use self::node::Node;
@@ -36,7 +37,7 @@ impl Clone for ScopeContext {
 
 struct ScopeInner {
     key: DefaultKey,
-    tx: mpsc::UnboundedSender<Update>,
+    tx: UpdateSender,
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: usize,
     contexts: Rc<HashMap<TypeId, ScopeContext>>,
@@ -75,7 +76,7 @@ struct TreeNode {
 
 pub struct Tree {
     nodes: SlotMap<DefaultKey, TreeNode>,
-    tx: mpsc::UnboundedSender<Update>,
+    tx: UpdateSender,
 }
 
 pub trait AnyNode {
@@ -89,7 +90,7 @@ impl<T: Node> AnyNode for T {
 }
 
 pub async fn run(view: impl View) {
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = update_channel();
     let mut tree = Tree {
         nodes: SlotMap::new(),
         tx,
@@ -115,5 +116,61 @@ pub async fn run(view: impl View) {
             let node = unsafe { &*tree_node.node };
             node.rebuild_any(&mut tree, &mut state);
         }
+    }
+}
+
+fn update_channel() -> (UpdateSender, UpdateReceiver) {
+    let shared = Rc::new(RefCell::new(Shared {
+        updates: Vec::new(),
+        waker: None,
+    }));
+    (
+        UpdateSender {
+            shared: shared.clone(),
+        },
+        UpdateReceiver { shared },
+    )
+}
+
+struct Shared {
+    updates: Vec<Update>,
+    waker: Option<Waker>,
+}
+
+#[derive(Clone)]
+struct UpdateSender {
+    shared: Rc<RefCell<Shared>>,
+}
+
+impl UpdateSender {
+    fn send(&self, update: Update) -> Result<(), ()> {
+        let mut shared = self.shared.borrow_mut();
+        shared.updates.push(update);
+
+        if let Some(waker) = shared.waker.take() {
+            waker.wake()
+        }
+
+        Ok(())
+    }
+}
+
+struct UpdateReceiver {
+    shared: Rc<RefCell<Shared>>,
+}
+
+impl UpdateReceiver {
+    async fn recv(&mut self) -> Option<Update> {
+        future::poll_fn(|cx| {
+            let mut shared = self.shared.borrow_mut();
+            shared.waker = Some(cx.waker().clone());
+
+            if let Some(update) = shared.updates.pop() {
+                Poll::Ready(Some(update))
+            } else {
+                Poll::Pending
+            }
+        })
+        .await
     }
 }

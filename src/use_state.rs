@@ -1,7 +1,6 @@
-use crate::{Scope, Update};
+use crate::{Scope, Update, UpdateSender};
 use slotmap::DefaultKey;
 use std::marker::PhantomData;
-use tokio::sync::mpsc;
 
 pub fn use_state<T: 'static>(cx: &Scope, make_value: impl FnOnce() -> T) -> (&T, SetState<T>) {
     let mut scope = cx.inner.borrow_mut();
@@ -29,7 +28,7 @@ pub fn use_state<T: 'static>(cx: &Scope, make_value: impl FnOnce() -> T) -> (&T,
 
 pub struct SetState<T> {
     key: DefaultKey,
-    tx: mpsc::UnboundedSender<Update>,
+    tx: UpdateSender,
     idx: usize,
     _marker: PhantomData<fn(T)>,
 }
