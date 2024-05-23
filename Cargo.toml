@@ -8,4 +8,6 @@ repository = "https://github.com/matthunz/actuate"
 
 [dependencies]
 slotmap = "1.0.7"
+
+[dev-dependencies]
 tokio = { version = "1.37.0", features = ["full"] }

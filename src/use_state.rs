@@ -1,48 +1,54 @@
-use crate::{
-    scope::{Update, UpdateKind},
-    Scope,
-};
+use crate::{Scope, Update, UpdateSender};
+use slotmap::DefaultKey;
 use std::marker::PhantomData;
-use tokio::sync::mpsc;
 
-pub fn use_state<T: Send + 'static>(cx: &Scope, f: impl FnOnce() -> T) -> (&T, Setter<T>) {
-    let scope = unsafe { &mut *cx.inner.get() };
-    let idx = scope.idx;
-    scope.idx += 1;
+pub fn use_state<T: 'static>(cx: &Scope, make_value: impl FnOnce() -> T) -> (&T, SetState<T>) {
+    let mut scope = cx.inner.borrow_mut();
+    let idx = scope.hook_idx;
+    let hooks = unsafe { &mut *scope.hooks.get() };
 
-    let any = if let Some(any) = scope.hooks.get(idx) {
-        any
+    let value = if let Some(hook) = hooks.get(idx) {
+        scope.hook_idx += 1;
+        hook
     } else {
-        let scope = unsafe { &mut *cx.inner.get() };
-        scope.hooks.push(Box::new(f()));
-        scope.hooks.last().unwrap()
+        let hooks = unsafe { &mut *scope.hooks.get() };
+        hooks.push(Box::new(make_value()));
+        hooks.last().unwrap()
     };
 
-    let setter = Setter {
+    let setter = SetState {
+        key: scope.key,
+        tx: scope.tx.clone(),
         idx,
-        tx: cx.tx.clone(),
         _marker: PhantomData,
     };
 
-    (any.downcast_ref().unwrap(), setter)
+    (value.downcast_ref().unwrap(), setter)
 }
 
-pub struct Setter<T> {
+pub struct SetState<T> {
+    key: DefaultKey,
+    tx: UpdateSender,
     idx: usize,
-    tx: mpsc::UnboundedSender<Update>,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<fn(T)>,
 }
 
-impl<T> Setter<T> {
-    pub fn set(&self, value: T)
-    where
-        T: Send + 'static,
-    {
+impl<T> SetState<T>
+where
+    T: 'static,
+{
+    pub fn modify(&self, f: impl FnOnce(&mut T) + 'static) {
+        let mut f_cell = Some(f);
         self.tx
             .send(Update {
+                key: self.key,
                 idx: self.idx,
-                kind: UpdateKind::Value(Box::new(value)),
+                f: Box::new(move |any| f_cell.take().unwrap()(any.downcast_mut().unwrap())),
             })
             .unwrap();
+    }
+
+    pub fn set(&self, value: T) {
+        self.modify(move |target| *target = value)
     }
 }
