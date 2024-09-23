@@ -1,11 +1,15 @@
-use actuate::{Query, Ref, World};
+use actuate::{Mut, Query, Ref, World};
 
 fn main() {
     let mut world = World::default();
     let entity = world.spawn().insert(42i32).id();
 
-    let id = world.add_system(move |query: Query<Ref<i32>>| {
+    world.add_system(move |query: Query<Ref<i32>>| {
         dbg!(*query.get(entity));
     });
-    world.run_system(id);
+    world.run();
+    world.run();
+
+    *world.query::<Mut<i32>>().get(entity) = 43;
+    world.run();
 }

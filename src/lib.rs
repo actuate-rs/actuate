@@ -3,7 +3,8 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     marker::PhantomData,
-    ops::Deref,
+    mem,
+    ops::{Deref, DerefMut},
 };
 
 #[derive(Clone, Copy)]
@@ -16,26 +17,48 @@ pub struct SystemId {
     id: usize,
 }
 
+struct ComponentData {
+    value: Box<dyn Any>,
+    readers: Vec<SystemId>,
+}
+
 #[derive(Default)]
 pub struct World {
-    entities: Slab<HashMap<TypeId, Box<dyn Any>>>,
+    entities: Slab<HashMap<TypeId, ComponentData>>,
     reads: Vec<(Entity, TypeId)>,
     systems: Slab<Box<dyn System>>,
+    queued_system_ids: Vec<SystemId>,
+    current_system_id: Option<SystemId>,
 }
 
 impl World {
     pub fn add_system<'w, Marker>(&mut self, system: impl IntoSystem<Marker>) -> SystemId {
         let id = self.systems.insert(Box::new(system.into_system()));
+        self.queued_system_ids.push(SystemId { id });
         SystemId { id }
     }
 
-    pub fn run_system(&mut self, system: SystemId) {
+    pub fn run_system(&mut self, id: SystemId) {
         let ptr = self as _;
-        let system = self.systems[system.id].as_mut();
+        let system = self.systems[id.id].as_mut();
         system.run(UnsafeWorldCell {
             ptr,
             _marker: PhantomData,
         });
+
+        for (entity, type_id) in mem::take(&mut self.reads) {
+            self.entities[entity.id]
+                .get_mut(&type_id)
+                .unwrap()
+                .readers
+                .push(id);
+        }
+    }
+
+    pub fn run(&mut self) {
+        for system_id in mem::take(&mut self.queued_system_ids) {
+            self.run_system(system_id);
+        }
     }
 
     pub fn spawn(&mut self) -> EntityMut {
@@ -68,19 +91,27 @@ impl EntityMut<'_> {
     }
 
     pub fn insert(&mut self, component: impl Any) -> &mut Self {
-        self.world.entities[self.id.id].insert(component.type_id(), Box::new(component));
+        self.world.entities[self.id.id].insert(
+            component.type_id(),
+            ComponentData {
+                value: Box::new(component),
+                readers: Vec::new(),
+            },
+        );
         self
     }
 
     pub fn get<T: 'static>(&self) -> Option<&T> {
         self.world.entities[self.id.id]
             .get(&TypeId::of::<T>())?
+            .value
             .downcast_ref()
     }
 
     pub fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
         self.world.entities[self.id.id]
             .get_mut(&TypeId::of::<T>())?
+            .value
             .downcast_mut()
     }
 }
@@ -135,7 +166,57 @@ impl<'a, T: 'static> QueryData for Ref<'a, T> {
             world,
             value: (&mut *world.ptr).entities[entity.id]
                 .get(&TypeId::of::<T>())
-                .and_then(|x| x.downcast_ref())
+                .and_then(|x| x.value.downcast_ref())
+                .unwrap(),
+            entity,
+        }
+    }
+}
+
+pub struct Mut<'w, T> {
+    world: UnsafeWorldCell<'w>,
+    value: &'w mut T,
+    entity: Entity,
+}
+
+impl<T: 'static> Deref for Mut<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        let world = unsafe { &mut *self.world.ptr };
+        world.reads.push((self.entity, TypeId::of::<T>()));
+        self.value
+    }
+}
+
+impl<T: 'static> DerefMut for Mut<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        let world = unsafe { &mut *self.world.ptr };
+        world.reads.push((self.entity, TypeId::of::<T>()));
+
+        let component_data = world.entities[self.entity.id]
+            .get_mut(&TypeId::of::<T>())
+            .unwrap();
+
+        if let Some(id) = world.current_system_id {
+            component_data.readers.push(id);
+        }
+
+        world.queued_system_ids.extend_from_slice(&component_data.readers);
+
+        self.value
+    }
+}
+
+impl<'a, T: 'static> QueryData for Mut<'a, T> {
+    type Data<'w> = Mut<'w, T>;
+
+    unsafe fn query_data<'w>(world: UnsafeWorldCell<'w>, entity: Entity) -> Self::Data<'w> {
+        Mut {
+            world,
+            value: (&mut *world.ptr).entities[entity.id]
+                .get_mut(&TypeId::of::<T>())
+                .and_then(|x| x.value.downcast_mut())
                 .unwrap(),
             entity,
         }
@@ -189,7 +270,7 @@ impl<Marker: 'static, F: SystemParamFunction<Marker> + 'static> System
     for FunctionSystem<F, Marker>
 {
     fn run<'w>(&mut self, world: UnsafeWorldCell<'w>) {
-       self.f.run(F::Param::system_param(world));
+        self.f.run(F::Param::system_param(world));
     }
 }
 
