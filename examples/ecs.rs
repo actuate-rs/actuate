@@ -1,6 +1,8 @@
-use actuate::World;
+use actuate::{Ref, World};
 
 fn main() {
     let mut world = World::default();
-    dbg!(world.spawn().insert(42i32).get_mut::<i32>());
+    let entity = world.spawn().insert(42i32).id();
+
+    dbg!(*world.query::<Ref<i32>>(entity));
 }
