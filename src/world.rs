@@ -10,6 +10,7 @@ use std::{
 pub(crate) struct ComponentData {
     pub(crate) value: Box<dyn Any>,
     pub(crate) readers: Vec<SystemId>,
+    pub(crate) system_ids: HashSet<SystemId>,
 }
 
 #[derive(Default)]
@@ -20,15 +21,10 @@ pub struct World {
     pub(crate) queued_system_ids: HashSet<SystemId>,
     pub(crate) current_system_id: Option<SystemId>,
     pub(crate) query_system_ids: HashMap<TypeId, Vec<SystemId>>,
+    pub(crate) initialized_systems: HashMap<TypeId, usize>,
 }
 
 impl World {
-    pub fn add_system<'w, Marker>(&mut self, system: impl IntoSystem<Marker>) -> SystemId {
-        let id = self.systems.insert(Box::new(system.into_system()));
-        self.queued_system_ids.insert(SystemId { id });
-        SystemId { id }
-    }
-
     pub fn run_system(&mut self, id: SystemId) {
         let ptr = self as _;
         let system = self.systems[id.id].as_mut();
@@ -90,7 +86,7 @@ impl EntityMut<'_> {
         self.id
     }
 
-    pub fn insert(&mut self, component: impl Any) -> &mut Self {
+    pub fn insert<T: 'static>(&mut self, component: T) -> ComponentMut<T> {
         if let Some(ids) = self.world.query_system_ids.get(&component.type_id()) {
             for id in ids {
                 self.world.queued_system_ids.insert(*id);
@@ -102,9 +98,23 @@ impl EntityMut<'_> {
             ComponentData {
                 value: Box::new(component),
                 readers: Vec::new(),
+                system_ids: HashSet::new(),
             },
         );
-        self
+
+        ComponentMut {
+            id: self.id,
+            world: self.world,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn component_mut<T>(&mut self) -> ComponentMut<T> {
+        ComponentMut {
+            id: self.id,
+            world: self.world,
+            _marker: PhantomData,
+        }
     }
 
     pub fn get<T: 'static>(&self) -> Option<&T> {
@@ -119,5 +129,71 @@ impl EntityMut<'_> {
             .get_mut(&TypeId::of::<T>())?
             .value
             .downcast_mut()
+    }
+}
+
+pub struct ComponentMut<'a, T> {
+    pub(crate) id: Entity,
+    pub(crate) world: &'a mut World,
+    _marker: PhantomData<T>,
+}
+
+impl<'a, T> ComponentMut<'a, T>
+where
+    T: 'static,
+{
+    pub fn get(&self) -> &T {
+        self.world.entities[self.id.id]
+            .get(&TypeId::of::<T>())
+            .unwrap()
+            .value
+            .downcast_ref()
+            .unwrap()
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        self.world.entities[self.id.id]
+            .get_mut(&TypeId::of::<T>())
+            .unwrap()
+            .value
+            .downcast_mut()
+            .unwrap()
+    }
+
+    pub fn add_system<'w, Marker>(&mut self, system: impl IntoSystem<Marker>) {
+        if let Some(count) = self.world.initialized_systems.get_mut(&TypeId::of::<T>()) {
+            *count += 1;
+            return;
+        }
+        self.world.initialized_systems.insert(TypeId::of::<T>(), 1);
+
+        let id = self.world.systems.insert(Box::new(system.into_system()));
+        self.world.queued_system_ids.insert(SystemId { id });
+
+        self.world.entities[self.id.id]
+            .get_mut(&TypeId::of::<T>())
+            .unwrap()
+            .system_ids
+            .insert(SystemId { id });
+    }
+
+    pub fn remove(&mut self) {
+        let data = self.world.entities[self.id.id]
+            .remove(&TypeId::of::<T>())
+            .unwrap();
+
+        let count = self
+            .world
+            .initialized_systems
+            .get_mut(&TypeId::of::<T>())
+            .unwrap();
+        *count -= 1;
+
+        if *count == 0 {
+            for id in data.system_ids {
+                self.world.systems.remove(id.id);
+                self.world.queued_system_ids.remove(&id);
+            }
+        }
     }
 }
