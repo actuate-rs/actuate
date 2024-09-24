@@ -1,11 +1,16 @@
-use slab::Slab;
 use std::{
-    any::{Any, TypeId},
-    collections::{HashMap, HashSet},
-    marker::PhantomData,
-    mem,
+    any::TypeId,
     ops::{Deref, DerefMut},
 };
+
+mod world;
+pub use self::world::{UnsafeWorldCell, World};
+
+mod system;
+pub use self::system::{FunctionSystem, IntoSystem, System, SystemParam, SystemParamFunction};
+
+mod query;
+pub use self::query::{Query, QueryData};
 
 #[derive(Clone, Copy)]
 pub struct Entity {
@@ -15,141 +20,6 @@ pub struct Entity {
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SystemId {
     id: usize,
-}
-
-struct ComponentData {
-    value: Box<dyn Any>,
-    readers: Vec<SystemId>,
-}
-
-#[derive(Default)]
-pub struct World {
-    entities: Slab<HashMap<TypeId, ComponentData>>,
-    reads: Vec<(Entity, TypeId)>,
-    systems: Slab<Box<dyn System>>,
-    queued_system_ids: HashSet<SystemId>,
-    current_system_id: Option<SystemId>,
-    query_system_ids: HashMap<TypeId, Vec<SystemId>>,
-}
-
-impl World {
-    pub fn add_system<'w, Marker>(&mut self, system: impl IntoSystem<Marker>) -> SystemId {
-        let id = self.systems.insert(Box::new(system.into_system()));
-        self.queued_system_ids.insert(SystemId { id });
-        SystemId { id }
-    }
-
-    pub fn run_system(&mut self, id: SystemId) {
-        let ptr = self as _;
-        let system = self.systems[id.id].as_mut();
-
-        self.current_system_id = Some(id);
-        system.run(UnsafeWorldCell {
-            ptr,
-            _marker: PhantomData,
-        });
-        self.current_system_id = None;
-
-        for (entity, type_id) in mem::take(&mut self.reads) {
-            self.entities[entity.id]
-                .get_mut(&type_id)
-                .unwrap()
-                .readers
-                .push(id);
-        }
-    }
-
-    pub fn run(&mut self) {
-        for system_id in mem::take(&mut self.queued_system_ids) {
-            self.run_system(system_id);
-        }
-    }
-
-    pub fn spawn(&mut self) -> EntityMut {
-        let id = self.entities.insert(HashMap::new());
-        EntityMut {
-            id: Entity { id },
-            world: self,
-        }
-    }
-
-    pub fn query<'w, D: QueryData>(&'w mut self) -> Query<D> {
-        Query {
-            world: UnsafeWorldCell {
-                ptr: self,
-                _marker: PhantomData,
-            },
-            _marker: PhantomData,
-        }
-    }
-}
-
-pub struct EntityMut<'a> {
-    id: Entity,
-    world: &'a mut World,
-}
-
-impl EntityMut<'_> {
-    pub fn id(&self) -> Entity {
-        self.id
-    }
-
-    pub fn insert(&mut self, component: impl Any) -> &mut Self {
-        if let Some(ids) = self.world.query_system_ids.get(&component.type_id()) {
-            for id in ids {
-                self.world.queued_system_ids.insert(*id);
-            }
-        }
-
-        self.world.entities[self.id.id].insert(
-            component.type_id(),
-            ComponentData {
-                value: Box::new(component),
-                readers: Vec::new(),
-            },
-        );
-        self
-    }
-
-    pub fn get<T: 'static>(&self) -> Option<&T> {
-        self.world.entities[self.id.id]
-            .get(&TypeId::of::<T>())?
-            .value
-            .downcast_ref()
-    }
-
-    pub fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
-        self.world.entities[self.id.id]
-            .get_mut(&TypeId::of::<T>())?
-            .value
-            .downcast_mut()
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct UnsafeWorldCell<'w> {
-    ptr: *mut World,
-    _marker: PhantomData<&'w World>,
-}
-
-pub trait QueryData {
-    type Data<'w>;
-
-    unsafe fn query_data<'w>(world: UnsafeWorldCell<'w>, entity: Entity) -> Self::Data<'w>;
-}
-
-pub struct Query<'w, D> {
-    world: UnsafeWorldCell<'w>,
-    _marker: PhantomData<D>,
-}
-
-impl<'w, D> Query<'w, D> {
-    pub fn get(&self, entity: Entity) -> D::Data<'w>
-    where
-        D: QueryData,
-    {
-        unsafe { D::query_data(self.world, entity) }
-    }
 }
 
 pub struct Ref<'w, T> {
@@ -251,74 +121,5 @@ impl<'a, T: 'static> QueryData for Mut<'a, T> {
                 .unwrap(),
             entity,
         }
-    }
-}
-
-pub trait SystemParam {
-    type Item<'w>;
-
-    fn system_param<'w>(world: UnsafeWorldCell<'w>) -> Self::Item<'w>;
-}
-
-impl<'a, D: QueryData> SystemParam for Query<'a, D> {
-    type Item<'w> = Query<'w, D>;
-
-    fn system_param<'w>(world: UnsafeWorldCell<'w>) -> Self::Item<'w> {
-        Query {
-            world,
-            _marker: PhantomData,
-        }
-    }
-}
-
-pub trait System: 'static {
-    fn run<'w>(&mut self, world: UnsafeWorldCell<'w>);
-}
-
-pub trait IntoSystem<Marker> {
-    type System: System;
-
-    fn into_system(self) -> Self::System;
-}
-
-impl<Marker: 'static, F: SystemParamFunction<Marker> + 'static> IntoSystem<Marker> for F {
-    type System = FunctionSystem<F, Marker>;
-
-    fn into_system(self) -> Self::System {
-        FunctionSystem {
-            f: self,
-            _marker: PhantomData,
-        }
-    }
-}
-
-pub struct FunctionSystem<F, Marker> {
-    f: F,
-    _marker: PhantomData<Marker>,
-}
-
-impl<Marker: 'static, F: SystemParamFunction<Marker> + 'static> System
-    for FunctionSystem<F, Marker>
-{
-    fn run<'w>(&mut self, world: UnsafeWorldCell<'w>) {
-        self.f.run(F::Param::system_param(world));
-    }
-}
-
-pub trait SystemParamFunction<Marker> {
-    type Param: SystemParam;
-
-    fn run(&mut self, param: <Self::Param as SystemParam>::Item<'_>);
-}
-
-impl<P, F> SystemParamFunction<fn(P)> for F
-where
-    P: SystemParam,
-    F: FnMut(P) + FnMut(P::Item<'_>),
-{
-    type Param = P;
-
-    fn run(&mut self, param: <Self::Param as SystemParam>::Item<'_>) {
-        self(param)
     }
 }
