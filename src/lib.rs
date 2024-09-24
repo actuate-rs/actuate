@@ -1,211 +1,131 @@
-use slotmap::{DefaultKey, SlotMap};
 use std::{
-    any::{Any, TypeId},
-    cell::{RefCell, UnsafeCell},
-    collections::HashMap,
-    future,
-    rc::Rc,
-    task::{Poll, Waker},
+    any::TypeId,
+    ops::{Deref, DerefMut},
 };
 
-pub mod node;
-pub use self::node::Node;
+mod world;
+pub use self::world::{ComponentMut, EntityMut, UnsafeWorldCell, World, ComponentsMut};
 
-mod use_context;
-pub use self::use_context::use_context;
+mod system;
+pub use self::system::{FunctionSystem, IntoSystem, System, SystemParam, SystemParamFunction};
 
-mod use_effect;
-pub use self::use_effect::use_effect;
+mod query;
+pub use self::query::{Query, QueryData};
 
-mod use_provider;
-pub use self::use_provider::use_provider;
-
-mod use_state;
-pub use self::use_state::{use_state, SetState};
-
-pub mod view;
-pub use self::view::View;
-
-#[cfg(feature = "web")]
-pub mod web;
-
-pub struct ScopeContext {
-    value: Box<dyn AnyClone>,
+#[derive(Clone, Copy)]
+pub struct Entity {
+    id: usize,
 }
 
-impl Clone for ScopeContext {
-    fn clone(&self) -> Self {
-        Self {
-            value: self.value.clone_any_clone(),
-        }
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub struct SystemId {
+    id: usize,
+}
+
+pub struct Ref<'w, T> {
+    world: UnsafeWorldCell<'w>,
+    value: &'w T,
+    entity: Entity,
+}
+
+impl<T: 'static> Deref for Ref<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        let world = unsafe { &mut *self.world.ptr };
+        world.reads.push((self.entity, TypeId::of::<T>()));
+        self.value
     }
 }
 
-struct ScopeInner {
-    key: DefaultKey,
-    tx: UpdateSender,
-    hooks: UnsafeCell<Vec<Box<dyn Any>>>,
-    hook_idx: usize,
-    contexts: Rc<HashMap<TypeId, ScopeContext>>,
-}
+impl<'a, T: 'static> QueryData for Ref<'a, T> {
+    type Data<'w> = Ref<'w, T>;
 
-pub struct Scope {
-    inner: Rc<RefCell<ScopeInner>>,
-}
-
-trait AnyClone {
-    fn clone_any(&self) -> Box<dyn Any>;
-
-    fn clone_any_clone(&self) -> Box<dyn AnyClone>;
-}
-
-impl<T: Clone + 'static> AnyClone for T {
-    fn clone_any(&self) -> Box<dyn Any> {
-        Box::new(self.clone())
-    }
-
-    fn clone_any_clone(&self) -> Box<dyn AnyClone> {
-        Box::new(self.clone())
-    }
-}
-
-struct Update {
-    key: DefaultKey,
-    idx: usize,
-    f: Box<dyn FnMut(&mut dyn Any)>,
-}
-
-struct TreeNode {
-    node: *const dyn AnyNode,
-    state: *mut dyn Any,
-    scope: Option<Scope>,
-}
-
-pub struct Tree {
-    nodes: SlotMap<DefaultKey, TreeNode>,
-    tx: UpdateSender,
-}
-
-trait AnyNode {
-    fn rebuild_any(&self, tree: &mut Tree, state: &mut dyn Any);
-}
-
-impl<T: Node> AnyNode for T {
-    fn rebuild_any(&self, tree: &mut Tree, state: &mut dyn Any) {
-        self.rebuild(tree, state.downcast_mut().unwrap())
-    }
-}
-
-pub async fn run(view: impl View) {
-    let (tx, mut rx) = update_channel();
-    let mut tree = Tree {
-        nodes: SlotMap::new(),
-        tx,
-    };
-
-    let node = view.into_node();
-    let mut state = node.build(&mut tree, &Rc::default());
-    node.init(&mut tree, &mut state);
-
-    while let Some(mut update) = rx.recv().await {
-        if let Some(tree_node) = tree.nodes.get(update.key) {
-            (update.f)(
-                &mut *tree_node
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .inner
-                    .borrow_mut()
-                    .hooks
-                    .get_mut()[update.idx],
-            );
-
-            let node = unsafe { &*tree_node.node };
-            let state = unsafe { &mut *tree_node.state };
-            node.rebuild_any(&mut tree, state);
-        }
-    }
-}
-
-fn update_channel() -> (UpdateSender, UpdateReceiver) {
-    let shared = Rc::new(RefCell::new(Shared {
-        updates: Vec::new(),
-        waker: None,
-    }));
-    (
-        UpdateSender {
-            shared: shared.clone(),
-        },
-        UpdateReceiver { shared },
-    )
-}
-
-struct Shared {
-    updates: Vec<Update>,
-    waker: Option<Waker>,
-}
-
-#[derive(Clone)]
-struct UpdateSender {
-    shared: Rc<RefCell<Shared>>,
-}
-
-impl UpdateSender {
-    fn send(&self, update: Update) -> Result<(), ()> {
-        let mut shared = self.shared.borrow_mut();
-        shared.updates.push(update);
-
-        if let Some(waker) = shared.waker.take() {
-            waker.wake()
-        }
-
-        Ok(())
-    }
-}
-
-struct UpdateReceiver {
-    shared: Rc<RefCell<Shared>>,
-}
-
-impl UpdateReceiver {
-    async fn recv(&mut self) -> Option<Update> {
-        future::poll_fn(|cx| {
-            let mut shared = self.shared.borrow_mut();
-            shared.waker = Some(cx.waker().clone());
-
-            if let Some(update) = shared.updates.pop() {
-                Poll::Ready(Some(update))
+    unsafe fn query_data<'w>(world: UnsafeWorldCell<'w>, entity: Entity) -> Self::Data<'w> {
+        if let Some(id) = (&mut *world.ptr).current_system_id {
+            if let Some(ids) = (&mut *world.ptr)
+                .query_system_ids
+                .get_mut(&TypeId::of::<T>())
+            {
+                ids.push(id);
             } else {
-                Poll::Pending
+                (&mut *world.ptr)
+                    .query_system_ids
+                    .insert(TypeId::of::<T>(), vec![id]);
             }
-        })
-        .await
+        }
+
+        Ref {
+            world,
+            value: (&mut *world.ptr).entities[entity.id]
+                .get(&TypeId::of::<T>())
+                .and_then(|x| x.value.downcast_ref())
+                .unwrap(),
+            entity,
+        }
     }
 }
 
-#[cfg(feature = "web")]
-pub struct WebView<V> {
-    view: V,
-    node: web_sys::Node,
+pub struct Mut<'w, T> {
+    world: UnsafeWorldCell<'w>,
+    value: &'w mut T,
+    entity: Entity,
 }
 
-#[cfg(feature = "web")]
-impl<V: View + Clone> View for WebView<V> {
-    fn body(&self, cx: &Scope) -> impl View {
-        use_provider(cx, || self.node.clone());
+impl<T: 'static> Deref for Mut<'_, T> {
+    type Target = T;
 
-        self.view.clone()
+    fn deref(&self) -> &Self::Target {
+        let world = unsafe { &mut *self.world.ptr };
+        world.reads.push((self.entity, TypeId::of::<T>()));
+        self.value
     }
 }
 
-#[cfg(feature = "web")]
-pub fn mount(view: impl View + Clone, node: web_sys::Node) {
-    wasm_bindgen_futures::spawn_local(run(WebView { view, node }))
+impl<T: 'static> DerefMut for Mut<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        let world = unsafe { &mut *self.world.ptr };
+        world.reads.push((self.entity, TypeId::of::<T>()));
+
+        let component_data = world.entities[self.entity.id]
+            .get_mut(&TypeId::of::<T>())
+            .unwrap();
+
+        if let Some(id) = world.current_system_id {
+            component_data.readers.push(id);
+        }
+
+        for id in &component_data.readers {
+            world.queued_system_ids.insert(*id);
+        }
+
+        if let Some(ids) = world.query_system_ids.get(&TypeId::of::<T>()) {
+            for id in ids {
+                world.queued_system_ids.insert(*id);
+            }
+        }
+
+        self.value
+    }
 }
 
-#[macro_export]
-macro_rules! clone {
-    ($($v:tt),*) => {
-        $( let $v = $v.clone(); )*
-    };
+impl<'a, T: 'static> QueryData for Mut<'a, T> {
+    type Data<'w> = Mut<'w, T>;
+
+    unsafe fn query_data<'w>(world: UnsafeWorldCell<'w>, entity: Entity) -> Self::Data<'w> {
+        Mut {
+            world,
+            value: (&mut *world.ptr).entities[entity.id]
+                .get_mut(&TypeId::of::<T>())
+                .and_then(|x| x.value.downcast_mut())
+                .unwrap(),
+            entity,
+        }
+    }
+}
+
+pub trait Component: Sized {
+    fn start(me: &mut ComponentsMut<Self>) {
+        let _ = me;
+    }
 }
