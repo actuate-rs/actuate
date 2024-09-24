@@ -1,7 +1,7 @@
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     marker::PhantomData,
     mem,
     ops::{Deref, DerefMut},
@@ -12,7 +12,7 @@ pub struct Entity {
     id: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SystemId {
     id: usize,
 }
@@ -27,24 +27,28 @@ pub struct World {
     entities: Slab<HashMap<TypeId, ComponentData>>,
     reads: Vec<(Entity, TypeId)>,
     systems: Slab<Box<dyn System>>,
-    queued_system_ids: Vec<SystemId>,
+    queued_system_ids: HashSet<SystemId>,
     current_system_id: Option<SystemId>,
+    query_system_ids: HashMap<TypeId, Vec<SystemId>>,
 }
 
 impl World {
     pub fn add_system<'w, Marker>(&mut self, system: impl IntoSystem<Marker>) -> SystemId {
         let id = self.systems.insert(Box::new(system.into_system()));
-        self.queued_system_ids.push(SystemId { id });
+        self.queued_system_ids.insert(SystemId { id });
         SystemId { id }
     }
 
     pub fn run_system(&mut self, id: SystemId) {
         let ptr = self as _;
         let system = self.systems[id.id].as_mut();
+
+        self.current_system_id = Some(id);
         system.run(UnsafeWorldCell {
             ptr,
             _marker: PhantomData,
         });
+        self.current_system_id = None;
 
         for (entity, type_id) in mem::take(&mut self.reads) {
             self.entities[entity.id]
@@ -91,6 +95,12 @@ impl EntityMut<'_> {
     }
 
     pub fn insert(&mut self, component: impl Any) -> &mut Self {
+        if let Some(ids) = self.world.query_system_ids.get(&component.type_id()) {
+            for id in ids {
+                self.world.queued_system_ids.insert(*id);
+            }
+        }
+
         self.world.entities[self.id.id].insert(
             component.type_id(),
             ComponentData {
@@ -162,6 +172,19 @@ impl<'a, T: 'static> QueryData for Ref<'a, T> {
     type Data<'w> = Ref<'w, T>;
 
     unsafe fn query_data<'w>(world: UnsafeWorldCell<'w>, entity: Entity) -> Self::Data<'w> {
+        if let Some(id) = (&mut *world.ptr).current_system_id {
+            if let Some(ids) = (&mut *world.ptr)
+                .query_system_ids
+                .get_mut(&TypeId::of::<T>())
+            {
+                ids.push(id);
+            } else {
+                (&mut *world.ptr)
+                    .query_system_ids
+                    .insert(TypeId::of::<T>(), vec![id]);
+            }
+        }
+
         Ref {
             world,
             value: (&mut *world.ptr).entities[entity.id]
@@ -202,7 +225,15 @@ impl<T: 'static> DerefMut for Mut<'_, T> {
             component_data.readers.push(id);
         }
 
-        world.queued_system_ids.extend_from_slice(&component_data.readers);
+        for id in &component_data.readers {
+            world.queued_system_ids.insert(*id);
+        }
+
+        if let Some(ids) = world.query_system_ids.get(&TypeId::of::<T>()) {
+            for id in ids {
+                world.queued_system_ids.insert(*id);
+            }
+        }
 
         self.value
     }

@@ -12,4 +12,7 @@ fn main() {
 
     *world.query::<Mut<i32>>().get(entity) = 43;
     world.run();
+
+    world.spawn().insert(42i32).id();
+    world.run();
 }
