@@ -1,12 +1,11 @@
-use actuate::{Component, ComponentMut, Mut, Query, Ref, World};
+use actuate::{Component, ComponentsMut, Mut, Query, Ref, World};
 
 struct A(i32);
 
 impl Component for A {
-    fn start(me: &mut ComponentMut<Self>) {
-        let entity = me.entity().id();
+    fn start(me: &mut ComponentsMut<Self>) {
         me.add_system(move |query: Query<Ref<A>>| {
-            dbg!(query.get(entity).0);
+            dbg!("HERE");
         });
     }
 }

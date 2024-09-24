@@ -102,7 +102,10 @@ impl EntityMut<'_> {
             },
         );
 
-        T::start(&mut self.component_mut());
+        T::start(&mut ComponentsMut {
+            world: self.world,
+            _marker: PhantomData,
+        });
 
         ComponentMut {
             id: self.id,
@@ -131,6 +134,25 @@ impl EntityMut<'_> {
             .get_mut(&TypeId::of::<T>())?
             .value
             .downcast_mut()
+    }
+}
+
+pub struct ComponentsMut<'a, T> {
+    pub(crate) world: &'a mut World,
+    _marker: PhantomData<T>,
+}
+
+impl<T: 'static> ComponentsMut<'_, T> {
+    pub fn add_system<'w, Marker>(&mut self, system: impl IntoSystem<Marker>) {
+        if let Some(count) = self.world.initialized_systems.get_mut(&TypeId::of::<T>()) {
+            *count += 1;
+            return;
+        }
+        self.world.initialized_systems.insert(TypeId::of::<T>(), 1);
+
+        let id = self.world.systems.insert(Box::new(system.into_system()));
+        self.world.queued_system_ids.insert(SystemId { id });
+
     }
 }
 
@@ -167,23 +189,6 @@ where
             .value
             .downcast_mut()
             .unwrap()
-    }
-
-    pub fn add_system<'w, Marker>(&mut self, system: impl IntoSystem<Marker>) {
-        if let Some(count) = self.world.initialized_systems.get_mut(&TypeId::of::<T>()) {
-            *count += 1;
-            return;
-        }
-        self.world.initialized_systems.insert(TypeId::of::<T>(), 1);
-
-        let id = self.world.systems.insert(Box::new(system.into_system()));
-        self.world.queued_system_ids.insert(SystemId { id });
-
-        self.world.entities[self.id.id]
-            .get_mut(&TypeId::of::<T>())
-            .unwrap()
-            .system_ids
-            .insert(SystemId { id });
     }
 
     pub fn remove(&mut self) {

@@ -4,7 +4,7 @@ use std::{
 };
 
 mod world;
-pub use self::world::{ComponentMut, EntityMut, UnsafeWorldCell, World};
+pub use self::world::{ComponentMut, EntityMut, UnsafeWorldCell, World, ComponentsMut};
 
 mod system;
 pub use self::system::{FunctionSystem, IntoSystem, System, SystemParam, SystemParamFunction};
@@ -125,7 +125,7 @@ impl<'a, T: 'static> QueryData for Mut<'a, T> {
 }
 
 pub trait Component: Sized {
-    fn start(me: &mut ComponentMut<Self>) {
+    fn start(me: &mut ComponentsMut<Self>) {
         let _ = me;
     }
 }
