@@ -1,4 +1,4 @@
-use crate::{Entity, IntoSystem, Query, QueryData, System, SystemId};
+use crate::{Component, Entity, IntoSystem, Query, QueryData, System, SystemId};
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
@@ -86,7 +86,7 @@ impl EntityMut<'_> {
         self.id
     }
 
-    pub fn insert<T: 'static>(&mut self, component: T) -> ComponentMut<T> {
+    pub fn insert<T: Component + 'static>(&mut self, component: T) -> ComponentMut<T> {
         if let Some(ids) = self.world.query_system_ids.get(&component.type_id()) {
             for id in ids {
                 self.world.queued_system_ids.insert(*id);
@@ -101,6 +101,8 @@ impl EntityMut<'_> {
                 system_ids: HashSet::new(),
             },
         );
+
+        T::start(&mut self.component_mut());
 
         ComponentMut {
             id: self.id,
@@ -142,6 +144,13 @@ impl<'a, T> ComponentMut<'a, T>
 where
     T: 'static,
 {
+    pub fn entity(&mut self) -> EntityMut {
+        EntityMut {
+            id: self.id,
+            world: self.world,
+        }
+    }
+
     pub fn get(&self) -> &T {
         self.world.entities[self.id.id]
             .get(&TypeId::of::<T>())
@@ -182,17 +191,14 @@ where
             .remove(&TypeId::of::<T>())
             .unwrap();
 
-        let count = self
-            .world
-            .initialized_systems
-            .get_mut(&TypeId::of::<T>())
-            .unwrap();
-        *count -= 1;
+        if let Some(count) = self.world.initialized_systems.get_mut(&TypeId::of::<T>()) {
+            *count -= 1;
 
-        if *count == 0 {
-            for id in data.system_ids {
-                self.world.systems.remove(id.id);
-                self.world.queued_system_ids.remove(&id);
+            if *count == 0 {
+                for id in data.system_ids {
+                    self.world.systems.remove(id.id);
+                    self.world.queued_system_ids.remove(&id);
+                }
             }
         }
     }
