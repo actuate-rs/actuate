@@ -1,71 +1,207 @@
 use slotmap::{DefaultKey, SlotMap};
 use std::{
-    any::{Any, TypeId},
-    cell::{RefCell, UnsafeCell},
-    collections::HashMap,
-    future,
+    any::Any,
+    cell::{Cell, RefCell, UnsafeCell},
+    mem,
+    ops::Deref,
     rc::Rc,
-    task::{Poll, Waker},
 };
 
-pub mod node;
-pub use self::node::Node;
+pub use actuate_macros::Data;
 
-mod use_context;
-pub use self::use_context::use_context;
-
-mod use_effect;
-pub use self::use_effect::use_effect;
-
-mod use_provider;
-pub use self::use_provider::use_provider;
-
-mod use_state;
-pub use self::use_state::{use_state, SetState};
-
-pub mod view;
-pub use self::view::View;
-
-#[cfg(feature = "web")]
-pub mod web;
-
-pub struct ScopeContext {
-    value: Box<dyn AnyClone>,
+pub struct Mut<'a, T> {
+    key: DefaultKey,
+    idx: usize,
+    value: &'a T,
 }
 
-impl Clone for ScopeContext {
+impl<T: 'static> Mut<'_, T> {
+    pub fn update(&self, f: impl FnOnce(&mut T) + 'static) {
+        let mut cell = Some(f);
+        Runtime::current().update(self.key, self.idx, move |any| {
+            let value = any.downcast_mut().unwrap();
+            cell.take().unwrap()(value);
+        });
+    }
+}
+
+impl<T> Clone for Mut<'_, T> {
     fn clone(&self) -> Self {
         Self {
-            value: self.value.clone_any_clone(),
+            key: self.key,
+            idx: self.idx,
+            value: self.value,
         }
     }
 }
 
-struct ScopeInner {
-    key: DefaultKey,
-    tx: UpdateSender,
-    hooks: UnsafeCell<Vec<Box<dyn Any>>>,
-    hook_idx: usize,
-    contexts: Rc<HashMap<TypeId, ScopeContext>>,
-}
+impl<T> Copy for Mut<'_, T> {}
 
-pub struct Scope {
-    inner: Rc<RefCell<ScopeInner>>,
-}
+impl<'a, T> Deref for Mut<'a, T> {
+    type Target = T;
 
-trait AnyClone {
-    fn clone_any(&self) -> Box<dyn Any>;
-
-    fn clone_any_clone(&self) -> Box<dyn AnyClone>;
-}
-
-impl<T: Clone + 'static> AnyClone for T {
-    fn clone_any(&self) -> Box<dyn Any> {
-        Box::new(self.clone())
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
+}
 
-    fn clone_any_clone(&self) -> Box<dyn AnyClone> {
-        Box::new(self.clone())
+#[derive(Default)]
+pub struct ScopeState {
+    hooks: UnsafeCell<Vec<Box<dyn Any>>>,
+    hook_idx: Cell<usize>,
+}
+
+pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
+    use_ref_with_idx(scope, make_value).0
+}
+
+pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
+    let (value, idx) = use_ref_with_idx(scope, || make_value());
+
+    Mut {
+        value,
+        idx,
+        key: Runtime::current().key(),
+    }
+}
+
+fn use_ref_with_idx<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> (&T, usize) {
+    let hooks = unsafe { &mut *scope.hooks.get() };
+
+    let idx = scope.hook_idx.get();
+    scope.hook_idx.set(idx + 1);
+
+    let any = if idx >= hooks.len() {
+        hooks.push(Box::new(make_value()));
+        hooks.last().unwrap()
+    } else {
+        hooks.get(idx).unwrap()
+    };
+    (any.downcast_ref().unwrap(), idx)
+}
+
+pub struct Scope<'a, C: ?Sized> {
+    pub me: &'a C,
+    pub state: &'a ScopeState,
+}
+
+impl<C> Clone for Scope<'_, C> {
+    fn clone(&self) -> Self {
+        Self {
+            me: self.me,
+            state: self.state,
+        }
+    }
+}
+
+impl<C> Copy for Scope<'_, C> {}
+
+impl<'a, C> Deref for Scope<'a, C> {
+    type Target = &'a ScopeState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.state
+    }
+}
+
+pub unsafe trait StateField {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+unsafe impl<T: 'static> StateField for &T {}
+
+unsafe impl<T: 'static> StateField for Mut<'_, T> {}
+
+pub unsafe trait DataField {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+unsafe impl<T: Data> DataField for &&T {}
+
+pub unsafe trait Data {}
+
+unsafe impl Data for () {}
+
+unsafe impl<T: Data> Data for &T {}
+
+unsafe impl Data for Box<dyn AnyCompose + '_> {}
+
+unsafe impl Data for Rc<dyn AnyCompose + '_> {}
+
+pub trait Compose: Data {
+    fn compose(cx: Scope<Self>) -> impl Compose;
+}
+
+impl Compose for () {
+    fn compose(_cx: Scope<Self>) -> impl Compose {
+        Runtime::current().set_is_empty(true)
+    }
+}
+
+impl<C: Compose> Compose for &C {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        C::compose(Scope {
+            me: *cx.me,
+            state: cx.state,
+        })
+    }
+}
+
+impl Compose for Box<dyn AnyCompose + '_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        (**cx.me).any_compose(cx.state)
+    }
+}
+
+impl Compose for Rc<dyn AnyCompose + '_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        (**cx.me).any_compose(cx.state)
+    }
+}
+
+macro_rules! impl_tuples {
+    ($($t:tt),*) => {
+        unsafe impl<$($t: Data),*> Data for ($($t,)*) {}
+
+        impl<$($t: Compose),*> Compose for ($($t,)*) {
+            #[allow(non_snake_case)]
+            fn compose(cx: Scope<Self>) -> impl Compose {
+                let ($($t,)*) = cx.me;
+
+                $(let $t: *const dyn AnyCompose = unsafe { mem::transmute($t as *const dyn AnyCompose) };)*
+
+                Runtime::current()
+                    .inner
+                    .borrow_mut()
+                    .children
+                    .extend([
+                        $($t),*
+                    ]);
+            }
+        }
+    };
+}
+
+impl_tuples!(T1);
+impl_tuples!(T1, T2);
+impl_tuples!(T1, T2, T3);
+impl_tuples!(T1, T2, T3, T4);
+impl_tuples!(T1, T2, T3, T4, T5);
+impl_tuples!(T1, T2, T3, T4, T5, T6);
+impl_tuples!(T1, T2, T3, T4, T5, T6, T7);
+impl_tuples!(T1, T2, T3, T4, T5, T6, T7, T8);
+
+pub trait AnyCompose {
+    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a>;
+}
+
+impl<C: Compose> AnyCompose for C {
+    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a> {
+        Box::new(C::compose(Scope { me: self, state }))
     }
 }
 
@@ -75,137 +211,197 @@ struct Update {
     f: Box<dyn FnMut(&mut dyn Any)>,
 }
 
-struct TreeNode {
-    node: *const dyn AnyNode,
-    state: *mut dyn Any,
-    scope: Option<Scope>,
-}
-
-pub struct Tree {
-    nodes: SlotMap<DefaultKey, TreeNode>,
-    tx: UpdateSender,
-}
-
-trait AnyNode {
-    fn rebuild_any(&self, tree: &mut Tree, state: &mut dyn Any);
-}
-
-impl<T: Node> AnyNode for T {
-    fn rebuild_any(&self, tree: &mut Tree, state: &mut dyn Any) {
-        self.rebuild(tree, state.downcast_mut().unwrap())
-    }
-}
-
-pub async fn run(view: impl View) {
-    let (tx, mut rx) = update_channel();
-    let mut tree = Tree {
-        nodes: SlotMap::new(),
-        tx,
-    };
-
-    let node = view.into_node();
-    let mut state = node.build(&mut tree, &Rc::default());
-    node.init(&mut tree, &mut state);
-
-    while let Some(mut update) = rx.recv().await {
-        if let Some(tree_node) = tree.nodes.get(update.key) {
-            (update.f)(
-                &mut *tree_node
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .inner
-                    .borrow_mut()
-                    .hooks
-                    .get_mut()[update.idx],
-            );
-
-            let node = unsafe { &*tree_node.node };
-            let state = unsafe { &mut *tree_node.state };
-            node.rebuild_any(&mut tree, state);
-        }
-    }
-}
-
-fn update_channel() -> (UpdateSender, UpdateReceiver) {
-    let shared = Rc::new(RefCell::new(Shared {
-        updates: Vec::new(),
-        waker: None,
-    }));
-    (
-        UpdateSender {
-            shared: shared.clone(),
-        },
-        UpdateReceiver { shared },
-    )
-}
-
-struct Shared {
+#[derive(Default)]
+struct Inner {
+    is_empty: bool,
+    key: DefaultKey,
     updates: Vec<Update>,
-    waker: Option<Waker>,
+    children: Vec<*const dyn AnyCompose>,
 }
 
-#[derive(Clone)]
-struct UpdateSender {
-    shared: Rc<RefCell<Shared>>,
+#[derive(Clone, Default)]
+pub struct Runtime {
+    inner: Rc<RefCell<Inner>>,
 }
 
-impl UpdateSender {
-    fn send(&self, update: Update) -> Result<(), ()> {
-        let mut shared = self.shared.borrow_mut();
-        shared.updates.push(update);
+impl Runtime {
+    pub fn current() -> Self {
+        RUNTIME.with(|runtime| {
+            runtime
+                .borrow()
+                .as_ref()
+                .expect("Runtime::current() called outside of a runtime")
+                .clone()
+        })
+    }
 
-        if let Some(waker) = shared.waker.take() {
-            waker.wake()
+    pub fn enter(&self) {
+        RUNTIME.with(|runtime| {
+            *runtime.borrow_mut() = Some(self.clone());
+        });
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.borrow().is_empty
+    }
+
+    pub fn set_is_empty(&self, is_empty: bool) {
+        self.inner.borrow_mut().is_empty = is_empty;
+    }
+
+    pub fn key(&self) -> DefaultKey {
+        self.inner.borrow().key
+    }
+
+    pub fn update(&self, key: DefaultKey, idx: usize, f: impl FnMut(&mut dyn Any) + 'static) {
+        self.inner.borrow_mut().updates.push(Update {
+            key,
+            idx,
+            f: Box::new(f),
+        });
+    }
+}
+
+thread_local! {
+    static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
+}
+
+enum NodeCompose {
+    Box(Box<dyn AnyCompose>),
+    Ptr(*const dyn AnyCompose),
+}
+
+impl NodeCompose {
+    unsafe fn compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a> {
+        match self {
+            Self::Box(b) => b.any_compose(state),
+            Self::Ptr(p) => (&**p).any_compose(state),
+        }
+    }
+}
+
+struct Node {
+    state: ScopeState,
+    compose: NodeCompose,
+    children: Vec<DefaultKey>,
+}
+
+pub struct Composer {
+    rt: Runtime,
+    nodes: SlotMap<DefaultKey, Node>,
+    root: DefaultKey,
+}
+
+impl Composer {
+    pub fn new(content: impl Compose + 'static) -> Self {
+        let node = Node {
+            state: ScopeState::default(),
+            compose: NodeCompose::Box(Box::new(content)),
+            children: Vec::new(),
+        };
+
+        let mut nodes = SlotMap::new();
+        let root = nodes.insert(node);
+
+        Self {
+            rt: Runtime::default(),
+            nodes,
+            root,
+        }
+    }
+
+    pub fn compose(&mut self) {
+        self.rt.enter();
+
+        let mut keys = vec![self.root];
+
+        while let Some(key) = keys.pop() {
+            let node = self.nodes.get(key).unwrap();
+
+            self.rt.inner.borrow_mut().key = key;
+            let child: Box<dyn AnyCompose> = unsafe { node.compose.compose(&node.state) };
+
+            if self.rt.is_empty() {
+                self.rt.set_is_empty(false);
+            } else {
+                let compose = unsafe { mem::transmute(child) };
+                let child_node = Node {
+                    state: ScopeState::default(),
+                    compose: NodeCompose::Box(compose),
+                    children: Vec::new(),
+                };
+
+                let child_key = self.nodes.insert(child_node);
+                self.nodes.get_mut(key).unwrap().children.push(child_key);
+                keys.push(child_key);
+
+                for child_ptr in mem::take(&mut self.rt.inner.borrow_mut().children) {
+                    let child_node = Node {
+                        state: ScopeState::default(),
+                        compose: NodeCompose::Ptr(child_ptr),
+                        children: Vec::new(),
+                    };
+
+                    let child_key = self.nodes.insert(child_node);
+                    self.nodes.get_mut(key).unwrap().children.push(child_key);
+                    keys.push(child_key);
+                }
+            }
         }
 
-        Ok(())
+        self.update();
     }
-}
 
-struct UpdateReceiver {
-    shared: Rc<RefCell<Shared>>,
-}
+    pub fn recompose(&mut self) {
+        let mut keys = vec![self.root];
+        while let Some(key) = keys.pop() {
+            let node = self.nodes.get(key).unwrap();
+            node.state.hook_idx.set(0);
 
-impl UpdateReceiver {
-    async fn recv(&mut self) -> Option<Update> {
-        future::poll_fn(|cx| {
-            let mut shared = self.shared.borrow_mut();
-            shared.waker = Some(cx.waker().clone());
+            self.rt.inner.borrow_mut().key = key;
 
-            if let Some(update) = shared.updates.pop() {
-                Poll::Ready(Some(update))
-            } else {
-                Poll::Pending
+            let content = unsafe { node.compose.compose(&node.state) };
+            let compose = unsafe { mem::transmute(content) };
+
+            let mut idx = 0;
+            if let Some(child_key) = node.children.get(idx).copied() {
+                self.nodes.get_mut(child_key).unwrap().compose = NodeCompose::Box(compose);
+                idx += 1;
+                keys.push(child_key);
             }
-        })
-        .await
+
+            for child_ptr in mem::take(&mut self.rt.inner.borrow_mut().children) {
+                let child_key = self.nodes.get(key).unwrap().children[idx];
+                idx += 1;
+                self.nodes.get_mut(child_key).unwrap().compose = NodeCompose::Ptr(child_ptr);
+                keys.push(child_key);
+            }
+        }
+
+        self.update();
+    }
+
+    fn remove_node(&mut self, key: DefaultKey) {
+        let node = self.nodes.remove(key).unwrap();
+        for child_key in node.children {
+            self.remove_node(child_key);
+        }
+    }
+
+    fn update(&mut self) {
+        let updates = mem::take(&mut self.rt.inner.borrow_mut().updates);
+        for mut update in updates {
+            let node = self.nodes.get_mut(update.key).unwrap();
+            let value = node.state.hooks.get();
+            let value = unsafe { &mut *value };
+            let any = value.get_mut(update.idx).unwrap();
+            (update.f)(&mut **any);
+        }
     }
 }
 
-#[cfg(feature = "web")]
-pub struct WebView<V> {
-    view: V,
-    node: web_sys::Node,
-}
-
-#[cfg(feature = "web")]
-impl<V: View + Clone> View for WebView<V> {
-    fn body(&self, cx: &Scope) -> impl View {
-        use_provider(cx, || self.node.clone());
-
-        self.view.clone()
+impl Drop for Composer {
+    fn drop(&mut self) {
+        self.remove_node(self.root);
     }
-}
-
-#[cfg(feature = "web")]
-pub fn mount(view: impl View + Clone, node: web_sys::Node) {
-    wasm_bindgen_futures::spawn_local(run(WebView { view, node }))
-}
-
-#[macro_export]
-macro_rules! clone {
-    ($($v:tt),*) => {
-        $( let $v = $v.clone(); )*
-    };
 }

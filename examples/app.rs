@@ -1,18 +1,34 @@
-use actuate::{use_state, Scope, View};
+use actuate::{use_mut, Compose, Composer, Data, Mut, Scope};
 
-struct App;
+#[derive(Data)]
+struct Button<'a> {
+    count: Mut<'a, i32>,
+}
 
-impl View for App {
-    fn body(&self, cx: &Scope) -> impl View {
-        let (count, set_count) = use_state(cx, || 0);
-
-        dbg!(count);
-
-        set_count.set(count + 1)
+impl Compose for Button<'_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.me.count.update(|x| *x += 1)
     }
 }
 
-#[tokio::main]
-async fn main() {
-    actuate::run(App).await
+#[derive(Data)]
+struct Counter {
+    initial: i32,
+}
+
+impl Compose for Counter {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let count = use_mut(&cx, || cx.me.initial);
+
+        dbg!(*count);
+
+        (Button { count }, Button { count })
+    }
+}
+
+fn main() {
+    let mut composer = Composer::new(Counter { initial: 0 });
+    composer.compose();
+    composer.recompose();
+    composer.recompose();
 }
