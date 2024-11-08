@@ -1,7 +1,36 @@
 use slotmap::{DefaultKey, SlotMap};
-use std::{cell::RefCell, mem, rc::Rc};
+use std::{
+    any::Any,
+    cell::{Cell, RefCell, UnsafeCell},
+    mem,
+    ops::Deref,
+    rc::Rc,
+};
 
-pub struct ScopeState {}
+#[derive(Default)]
+pub struct ScopeState {
+    hooks: UnsafeCell<Vec<Box<dyn Any>>>,
+    hook_idx: Cell<usize>,
+}
+
+impl ScopeState {
+    pub fn use_ref<T: 'static>(&self, make_value: impl FnOnce() -> T) -> &T {
+        let hooks = unsafe { &mut *self.hooks.get() };
+
+        let idx = self.hook_idx.get();
+        self.hook_idx.set(idx + 1);
+
+        dbg!(idx);
+
+        let any = if idx >= hooks.len() {
+            hooks.push(Box::new(make_value()));
+            hooks.last().unwrap()
+        } else {
+            hooks.get(idx).unwrap()
+        };
+        any.downcast_ref().unwrap()
+    }
+}
 
 pub struct Scoped<'a, C: ?Sized> {
     pub me: &'a C,
@@ -18,6 +47,14 @@ impl<C> Clone for Scoped<'_, C> {
 }
 
 impl<C> Copy for Scoped<'_, C> {}
+
+impl<'a, C> Deref for Scoped<'a, C> {
+    type Target = &'a ScopeState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.state
+    }
+}
 
 pub type Scope<'a, C> = Scoped<'a, C>;
 
@@ -96,7 +133,7 @@ pub struct Composer {
 impl Composer {
     pub fn new(content: impl Compose + 'static) -> Self {
         let node = Node {
-            state: ScopeState {},
+            state: ScopeState::default(),
             compose: Box::new(content),
             children: Vec::new(),
         };
@@ -126,7 +163,7 @@ impl Composer {
             } else {
                 let compose = unsafe { mem::transmute(child) };
                 let child_node = Node {
-                    state: ScopeState {},
+                    state: ScopeState::default(),
                     compose,
                     children: Vec::new(),
                 };
