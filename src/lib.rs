@@ -114,6 +114,27 @@ impl Compose for () {
     }
 }
 
+impl<C: Compose> Compose for &C {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        C::compose(Scope {
+            me: *cx.me,
+            state: cx.state,
+        })
+    }
+}
+
+impl Compose for Box<dyn AnyCompose + '_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        (**cx.me).any_compose(cx.state)
+    }
+}
+
+impl Compose for Rc<dyn AnyCompose + '_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        (**cx.me).any_compose(cx.state)
+    }
+}
+
 pub trait AnyCompose {
     fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a>;
 }

@@ -1,12 +1,23 @@
-use actuate::{Compose, Composer, Scope};
+use actuate::{AnyCompose, Compose, Composer, Scope};
 
 struct A<'a> {
     name: &'a str,
+    child: Box<dyn AnyCompose + 'a>,
 }
 
 impl Compose for A<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         dbg!(cx.me.name);
+
+        &cx.me.child
+    }
+}
+
+struct B;
+
+impl Compose for B {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        dbg!("B");
     }
 }
 
@@ -24,7 +35,10 @@ impl Compose for App {
 
         let name = cx.use_ref(|| (*name_mut).clone());
 
-        A { name }
+        A {
+            name,
+            child: Box::new(B),
+        }
     }
 }
 
