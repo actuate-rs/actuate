@@ -1,10 +1,9 @@
-use actuate::{Compose, Data, Composer, Mut, Scope};
+use actuate::{Compose, Composer, Data, Mut, Scope};
 
+#[derive(Data)]
 struct Button<'a> {
     count: Mut<'a, i32>,
 }
-
-unsafe impl Data for Button<'_> {}
 
 impl Compose for Button<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
@@ -12,11 +11,10 @@ impl Compose for Button<'_> {
     }
 }
 
+#[derive(Data)]
 struct Counter {
     initial: i32,
 }
-
-unsafe impl Data for Counter {}
 
 impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {

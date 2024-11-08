@@ -7,6 +7,8 @@ use std::{
     rc::Rc,
 };
 
+pub use actuate_macros::Data;
+
 pub struct Mut<'a, T> {
     key: DefaultKey,
     idx: usize,
@@ -103,6 +105,24 @@ impl<'a, C> Deref for Scope<'a, C> {
         &self.state
     }
 }
+
+pub unsafe trait StateField {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+unsafe impl<T: 'static> StateField for &T {}
+
+unsafe impl<T: 'static> StateField for Mut<'_, T> {}
+
+pub unsafe trait DataField {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+unsafe impl<T: Data> DataField for &&T {}
 
 pub unsafe trait Data {}
 

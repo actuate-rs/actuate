@@ -6,5 +6,12 @@ license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
 repository = "https://github.com/matthunz/actuate"
 
+[workspace]
+members = [
+    ".",
+    "macros"
+]
+
 [dependencies]
+actuate-macros = { path = "macros" }
 slotmap = "1.0.7"
