@@ -13,6 +13,16 @@ pub struct Mut<'a, T> {
     value: &'a T,
 }
 
+impl<T: 'static> Mut<'_, T> {
+    pub fn update(&self, f: impl FnOnce(&mut T) + 'static) {
+        let mut cell = Some(f);
+        Runtime::current().update(self.key, self.idx, move |any| {
+            let value = any.downcast_mut().unwrap();
+            cell.take().unwrap()(value);
+        });
+    }
+}
+
 impl<T> Clone for Mut<'_, T> {
     fn clone(&self) -> Self {
         Self {
@@ -41,20 +51,7 @@ pub struct ScopeState {
 
 impl ScopeState {
     pub fn use_ref<T: 'static>(&self, make_value: impl FnOnce() -> T) -> &T {
-        let hooks = unsafe { &mut *self.hooks.get() };
-
-        let idx = self.hook_idx.get();
-        self.hook_idx.set(idx + 1);
-
-        dbg!(idx);
-
-        let any = if idx >= hooks.len() {
-            hooks.push(Box::new(make_value()));
-            hooks.last().unwrap()
-        } else {
-            hooks.get(idx).unwrap()
-        };
-        any.downcast_ref().unwrap()
+        self.use_ref_with_idx(make_value).0
     }
 
     pub fn use_mut<T: 'static>(&self, make_value: impl FnOnce() -> T) -> Mut<T> {
@@ -127,10 +124,17 @@ impl<C: Compose> AnyCompose for C {
     }
 }
 
+struct Update {
+    key: DefaultKey,
+    idx: usize,
+    f: Box<dyn FnMut(&mut dyn Any)>,
+}
+
 #[derive(Default)]
 struct Inner {
     is_empty: bool,
     key: DefaultKey,
+    updates: Vec<Update>,
 }
 
 #[derive(Clone, Default)]
@@ -165,6 +169,14 @@ impl Runtime {
 
     pub fn key(&self) -> DefaultKey {
         self.inner.borrow().key
+    }
+
+    pub fn update(&self, key: DefaultKey, idx: usize, f: impl FnMut(&mut dyn Any) + 'static) {
+        self.inner.borrow_mut().updates.push(Update {
+            key,
+            idx,
+            f: Box::new(f),
+        });
     }
 }
 
@@ -209,6 +221,8 @@ impl Composer {
 
         loop {
             let node = self.nodes.get(key).unwrap();
+
+            self.rt.inner.borrow_mut().key = key;
             let child: Box<dyn AnyCompose> = node.compose.any_compose(&node.state);
 
             if self.rt.is_empty() {
@@ -227,5 +241,27 @@ impl Composer {
                 key = child_key;
             }
         }
+
+        let updates = mem::take(&mut self.rt.inner.borrow_mut().updates);
+        for mut update in updates {
+            let node = self.nodes.get_mut(update.key).unwrap();
+            let value = node.state.hooks.get();
+            let value = unsafe { &mut *value };
+            let any = value.get_mut(update.idx).unwrap();
+            (update.f)(&mut **any);
+        }
+    }
+
+    fn remove_node(&mut self, key: DefaultKey) {
+        let node = self.nodes.remove(key).unwrap();
+        for child_key in node.children {
+            self.remove_node(child_key);
+        }
+    }
+}
+
+impl Drop for Composer {
+    fn drop(&mut self) {
+        self.remove_node(self.root);
     }
 }

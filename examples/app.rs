@@ -16,9 +16,11 @@ struct App {
 
 impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        dbg!("App");
+        dbg!(&cx.me.name);
 
-        let name_mut = cx.use_mut(|| String::new());
+        let name_mut = cx.use_mut(|| String::from("bar"));
+
+        name_mut.update(|name| name.push('a'));
 
         let name = cx.use_ref(|| (*name_mut).clone());
 
@@ -28,7 +30,7 @@ impl Compose for App {
 
 fn main() {
     Composer::new(App {
-        name: String::from("Hello, World!"),
+        name: String::from("foo"),
     })
     .compose();
 }
