@@ -27,35 +27,39 @@ Views combine together to form a statically-typed view tree that can be stored o
 giving this architecture its high performance.
 
 ```rust
+use actuate::{use_mut, Compose, Composer, Data, Mut, Scope};
+
+#[derive(Data)]
+struct Button<'a> {
+    count: Mut<'a, i32>,
+}
+
+impl Compose for Button<'_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.me.count.update(|x| *x += 1)
+    }
+}
+
+#[derive(Data)]
 struct Counter {
     initial: i32,
 }
 
-impl View for Counter {
-    fn body(&self, cx: &Scope) -> impl View {
-        let (count, set_count) = use_state(cx, || self.initial);
+impl Compose for Counter {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let count = use_mut(&cx, || cx.me.initial);
 
-        (
-            text(format!("High five count: {}", count)),
-            div(text("Up high!")).on_click({
-                clone!(count, set_count);
-                move || set_count.set(count + 1)
-            }),
-            div(text("Down low!")).on_click({
-                clone!(count);
-                move || set_count.set(count - 1)
-            }),
-        )
+        dbg!(*count);
+
+        (Button { count }, Button { count })
     }
 }
 
-#[derive(Clone)]
-struct App;
-
-impl View for App {
-    fn body(&self, _cx: &Scope) -> impl View {
-        (Counter { initial: 0 }, Counter { initial: 100 })
-    }
+fn main() {
+    let mut composer = Composer::new(Counter { initial: 0 });
+    composer.compose();
+    composer.recompose();
+    composer.recompose();
 }
 ```
 
