@@ -132,8 +132,6 @@ unsafe impl Data for Box<dyn AnyCompose + '_> {}
 
 unsafe impl Data for Rc<dyn AnyCompose + '_> {}
 
-unsafe impl<T1: Data, T2: Data> Data for (T1, T2) {}
-
 pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
 }
@@ -165,18 +163,37 @@ impl Compose for Rc<dyn AnyCompose + '_> {
     }
 }
 
-impl<C1: Compose, C2: Compose> Compose for (C1, C2) {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        let a: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me.0 as *const dyn AnyCompose) };
-        let b: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me.0 as *const dyn AnyCompose) };
+macro_rules! impl_tuples {
+    ($($t:tt),*) => {
+        unsafe impl<$($t: Data),*> Data for ($($t,)*) {}
 
-        Runtime::current()
-            .inner
-            .borrow_mut()
-            .children
-            .extend([a, b]);
-    }
+        impl<$($t: Compose),*> Compose for ($($t,)*) {
+            #[allow(non_snake_case)]
+            fn compose(cx: Scope<Self>) -> impl Compose {
+                let ($($t,)*) = cx.me;
+
+                $(let $t: *const dyn AnyCompose = unsafe { mem::transmute($t as *const dyn AnyCompose) };)*
+
+                Runtime::current()
+                    .inner
+                    .borrow_mut()
+                    .children
+                    .extend([
+                        $($t),*
+                    ]);
+            }
+        }
+    };
 }
+
+impl_tuples!(T1);
+impl_tuples!(T1, T2);
+impl_tuples!(T1, T2, T3);
+impl_tuples!(T1, T2, T3, T4);
+impl_tuples!(T1, T2, T3, T4, T5);
+impl_tuples!(T1, T2, T3, T4, T5, T6);
+impl_tuples!(T1, T2, T3, T4, T5, T6, T7);
+impl_tuples!(T1, T2, T3, T4, T5, T6, T7, T8);
 
 pub trait AnyCompose {
     fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a>;
