@@ -135,6 +135,19 @@ impl Compose for Rc<dyn AnyCompose + '_> {
     }
 }
 
+impl<C1: Compose, C2: Compose> Compose for (C1, C2) {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let a: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me.0 as *const dyn AnyCompose) };
+        let b: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me.0 as *const dyn AnyCompose) };
+
+        Runtime::current()
+            .inner
+            .borrow_mut()
+            .children
+            .extend([a, b]);
+    }
+}
+
 pub trait AnyCompose {
     fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a>;
 }
@@ -156,6 +169,7 @@ struct Inner {
     is_empty: bool,
     key: DefaultKey,
     updates: Vec<Update>,
+    children: Vec<*const dyn AnyCompose>,
 }
 
 #[derive(Clone, Default)]
@@ -205,9 +219,23 @@ thread_local! {
     static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
 }
 
+enum NodeCompose {
+    Box(Box<dyn AnyCompose>),
+    Ptr(*const dyn AnyCompose),
+}
+
+impl NodeCompose {
+    unsafe fn compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a> {
+        match self {
+            Self::Box(b) => b.any_compose(state),
+            Self::Ptr(p) => (&**p).any_compose(state),
+        }
+    }
+}
+
 struct Node {
     state: ScopeState,
-    compose: Box<dyn AnyCompose>,
+    compose: NodeCompose,
     children: Vec<DefaultKey>,
 }
 
@@ -221,7 +249,7 @@ impl Composer {
     pub fn new(content: impl Compose + 'static) -> Self {
         let node = Node {
             state: ScopeState::default(),
-            compose: Box::new(content),
+            compose: NodeCompose::Box(Box::new(content)),
             children: Vec::new(),
         };
 
@@ -238,28 +266,39 @@ impl Composer {
     pub fn compose(&mut self) {
         self.rt.enter();
 
-        let mut key = self.root;
+        let mut keys = vec![self.root];
 
-        loop {
+        while let Some(key) = keys.pop() {
             let node = self.nodes.get(key).unwrap();
 
             self.rt.inner.borrow_mut().key = key;
-            let child: Box<dyn AnyCompose> = node.compose.any_compose(&node.state);
+            let child: Box<dyn AnyCompose> = unsafe { node.compose.compose(&node.state) };
 
             if self.rt.is_empty() {
                 self.rt.set_is_empty(false);
-                break;
             } else {
                 let compose = unsafe { mem::transmute(child) };
                 let child_node = Node {
                     state: ScopeState::default(),
-                    compose,
+                    compose: NodeCompose::Box(compose),
                     children: Vec::new(),
                 };
 
                 let child_key = self.nodes.insert(child_node);
                 self.nodes.get_mut(key).unwrap().children.push(child_key);
-                key = child_key;
+                keys.push(child_key);
+
+                for child_ptr in mem::take(&mut self.rt.inner.borrow_mut().children) {
+                    let child_node = Node {
+                        state: ScopeState::default(),
+                        compose: NodeCompose::Ptr(child_ptr),
+                        children: Vec::new(),
+                    };
+
+                    let child_key = self.nodes.insert(child_node);
+                    self.nodes.get_mut(key).unwrap().children.push(child_key);
+                    keys.push(child_key);
+                }
             }
         }
 
@@ -270,6 +309,18 @@ impl Composer {
             let value = unsafe { &mut *value };
             let any = value.get_mut(update.idx).unwrap();
             (update.f)(&mut **any);
+        }
+    }
+
+    pub fn recompose(&mut self) {
+        let mut keys = vec![self.root];
+        while let Some(key) = keys.pop() {
+            let node = self.nodes.get(key).unwrap();
+            node.state.hook_idx.set(0);
+            let content = unsafe { node.compose.compose(&node.state) };
+            // TODO
+
+            keys.extend_from_slice(&node.children);
         }
     }
 

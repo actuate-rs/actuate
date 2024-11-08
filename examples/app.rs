@@ -1,50 +1,31 @@
-use actuate::{AnyCompose, Compose, Composer, Scope};
+use actuate::{Compose, Composer, Mut, Scope};
 
-struct A<'a> {
-    name: &'a str,
-    child: Box<dyn AnyCompose + 'a>,
+struct Button<'a> {
+    count: Mut<'a, i32>,
 }
 
-impl Compose for A<'_> {
+impl Compose for Button<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        dbg!(cx.me.name);
-
-        &cx.me.child
+        cx.me.count.update(|x| *x += 1)
     }
 }
 
-struct B;
-
-impl Compose for B {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        dbg!("B");
-    }
+struct Counter {
+    initial: i32,
 }
 
-struct App {
-    name: String,
-}
-
-impl Compose for App {
+impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        dbg!(&cx.me.name);
+        let count = cx.use_mut(|| cx.me.initial);
 
-        let name_mut = cx.use_mut(|| String::from("bar"));
+        dbg!(*count);
 
-        name_mut.update(|name| name.push('a'));
-
-        let name = cx.use_ref(|| (*name_mut).clone());
-
-        A {
-            name,
-            child: Box::new(B),
-        }
+        (Button { count }, Button { count })
     }
 }
 
 fn main() {
-    Composer::new(App {
-        name: String::from("foo"),
-    })
-    .compose();
+    let mut composer = Composer::new(Counter { initial: 0 });
+    composer.compose();
+    composer.recompose();
 }
