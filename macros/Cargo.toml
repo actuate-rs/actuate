@@ -1,7 +1,10 @@
 [package]
 name = "actuate-macros"
+description = "Macros for Actuate"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/actuate-rs/actuate"
 
 [lib]
 proc-macro = true
