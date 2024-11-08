@@ -104,7 +104,19 @@ impl<'a, C> Deref for Scope<'a, C> {
     }
 }
 
-pub trait Compose {
+pub unsafe trait Data {}
+
+unsafe impl Data for () {}
+
+unsafe impl<T: Data> Data for &T {}
+
+unsafe impl Data for Box<dyn AnyCompose + '_> {}
+
+unsafe impl Data for Rc<dyn AnyCompose + '_> {}
+
+unsafe impl<T1: Data, T2: Data> Data for (T1, T2) {}
+
+pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
 }
 
