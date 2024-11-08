@@ -22,9 +22,7 @@
 <br />
 
 A high-performance reactive user-interface framework for Rust.
-This crate provides a generic library that lets you define UI using declarative, type-safe syntax.
-Views combine together to form a statically-typed view tree that can be stored on the stack,
-giving this architecture its high performance.
+This crate provides a generic library that lets you define UI using declarative, borrow-checker friendly syntax.
 
 ```rust
 use actuate::{use_mut, Compose, Composer, Data, Mut, Scope};
