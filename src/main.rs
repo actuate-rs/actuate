@@ -11,6 +11,8 @@ struct A<'a> {
     count: &'a State<i32>,
 }
 
+unsafe impl Props for A<'_> {}
+
 fn a<'a>(scope: Scope<'a, A<'a>>) -> Option<Component<'a>> {
     dbg!(scope.props.name);
 
@@ -168,6 +170,10 @@ impl<T> Clone for Scope<'_, T> {
 
 impl<T> Copy for Scope<'_, T> {}
 
+pub unsafe trait Props {}
+
+unsafe impl Props for String {}
+
 pub struct Component<'a> {
     props: *mut (),
     f: Box<dyn Fn(*const (), *const ()) -> Option<Self>>,
@@ -175,9 +181,8 @@ pub struct Component<'a> {
 }
 
 impl<'a> Component<'a> {
-    pub fn new<'b, T>(props: T, f: fn(Scope<'a, T>) -> Option<Component<'b>>) -> Self
+    pub fn new<T: Props>(props: T, f: fn(Scope<'a, T>) -> Option<Component<'a>>) -> Self
     where
-        'a: 'b,
         T: 'a,
     {
         let f: Box<dyn Fn(_, _) -> Option<Self>> =
