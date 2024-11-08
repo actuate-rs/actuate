@@ -51,35 +51,33 @@ pub struct ScopeState {
     hook_idx: Cell<usize>,
 }
 
-impl ScopeState {
-    pub fn use_ref<T: 'static>(&self, make_value: impl FnOnce() -> T) -> &T {
-        self.use_ref_with_idx(make_value).0
+pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
+    use_ref_with_idx(scope, make_value).0
+}
+
+pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
+    let (value, idx) = use_ref_with_idx(scope, || make_value());
+
+    Mut {
+        value,
+        idx,
+        key: Runtime::current().key(),
     }
+}
 
-    pub fn use_mut<T: 'static>(&self, make_value: impl FnOnce() -> T) -> Mut<T> {
-        let (value, idx) = self.use_ref_with_idx(|| make_value());
+fn use_ref_with_idx<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> (&T, usize) {
+    let hooks = unsafe { &mut *scope.hooks.get() };
 
-        Mut {
-            value,
-            idx,
-            key: Runtime::current().key(),
-        }
-    }
+    let idx = scope.hook_idx.get();
+    scope.hook_idx.set(idx + 1);
 
-    fn use_ref_with_idx<T: 'static>(&self, make_value: impl FnOnce() -> T) -> (&T, usize) {
-        let hooks = unsafe { &mut *self.hooks.get() };
-
-        let idx = self.hook_idx.get();
-        self.hook_idx.set(idx + 1);
-
-        let any = if idx >= hooks.len() {
-            hooks.push(Box::new(make_value()));
-            hooks.last().unwrap()
-        } else {
-            hooks.get(idx).unwrap()
-        };
-        (any.downcast_ref().unwrap(), idx)
-    }
+    let any = if idx >= hooks.len() {
+        hooks.push(Box::new(make_value()));
+        hooks.last().unwrap()
+    } else {
+        hooks.get(idx).unwrap()
+    };
+    (any.downcast_ref().unwrap(), idx)
 }
 
 pub struct Scope<'a, C: ?Sized> {

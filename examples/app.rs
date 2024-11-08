@@ -1,4 +1,4 @@
-use actuate::{Compose, Composer, Data, Mut, Scope};
+use actuate::{use_mut, Compose, Composer, Data, Mut, Scope};
 
 #[derive(Data)]
 struct Button<'a> {
@@ -18,7 +18,7 @@ struct Counter {
 
 impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let count = cx.use_mut(|| cx.me.initial);
+        let count = use_mut(&cx, || cx.me.initial);
 
         dbg!(*count);
 
