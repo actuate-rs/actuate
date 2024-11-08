@@ -349,14 +349,7 @@ impl Composer {
             }
         }
 
-        let updates = mem::take(&mut self.rt.inner.borrow_mut().updates);
-        for mut update in updates {
-            let node = self.nodes.get_mut(update.key).unwrap();
-            let value = node.state.hooks.get();
-            let value = unsafe { &mut *value };
-            let any = value.get_mut(update.idx).unwrap();
-            (update.f)(&mut **any);
-        }
+        self.update();
     }
 
     pub fn recompose(&mut self) {
@@ -364,17 +357,45 @@ impl Composer {
         while let Some(key) = keys.pop() {
             let node = self.nodes.get(key).unwrap();
             node.state.hook_idx.set(0);
-            let content = unsafe { node.compose.compose(&node.state) };
-            // TODO
 
-            keys.extend_from_slice(&node.children);
+            self.rt.inner.borrow_mut().key = key;
+
+            let content = unsafe { node.compose.compose(&node.state) };
+            let compose = unsafe { mem::transmute(content) };
+
+            let mut idx = 0;
+            if let Some(child_key) = node.children.get(idx).copied() {
+                self.nodes.get_mut(child_key).unwrap().compose = NodeCompose::Box(compose);
+                idx += 1;
+                keys.push(child_key);
+            }
+
+            for child_ptr in mem::take(&mut self.rt.inner.borrow_mut().children) {
+                let child_key = self.nodes.get(key).unwrap().children[idx];
+                idx += 1;
+                self.nodes.get_mut(child_key).unwrap().compose = NodeCompose::Ptr(child_ptr);
+                keys.push(child_key);
+            }
         }
+
+        self.update();
     }
 
     fn remove_node(&mut self, key: DefaultKey) {
         let node = self.nodes.remove(key).unwrap();
         for child_key in node.children {
             self.remove_node(child_key);
+        }
+    }
+
+    fn update(&mut self) {
+        let updates = mem::take(&mut self.rt.inner.borrow_mut().updates);
+        for mut update in updates {
+            let node = self.nodes.get_mut(update.key).unwrap();
+            let value = node.state.hooks.get();
+            let value = unsafe { &mut *value };
+            let any = value.get_mut(update.idx).unwrap();
+            (update.f)(&mut **any);
         }
     }
 }

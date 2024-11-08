@@ -30,4 +30,5 @@ fn main() {
     let mut composer = Composer::new(Counter { initial: 0 });
     composer.compose();
     composer.recompose();
+    composer.recompose();
 }
