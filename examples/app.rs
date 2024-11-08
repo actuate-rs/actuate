@@ -18,7 +18,9 @@ impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
         dbg!("App");
 
-        let name = cx.use_ref(|| String::new());
+        let name_mut = cx.use_mut(|| String::new());
+
+        let name = cx.use_ref(|| (*name_mut).clone());
 
         A { name }
     }

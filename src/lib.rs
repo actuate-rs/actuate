@@ -7,6 +7,32 @@ use std::{
     rc::Rc,
 };
 
+pub struct Mut<'a, T> {
+    key: DefaultKey,
+    idx: usize,
+    value: &'a T,
+}
+
+impl<T> Clone for Mut<'_, T> {
+    fn clone(&self) -> Self {
+        Self {
+            key: self.key,
+            idx: self.idx,
+            value: self.value,
+        }
+    }
+}
+
+impl<T> Copy for Mut<'_, T> {}
+
+impl<'a, T> Deref for Mut<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
 #[derive(Default)]
 pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
@@ -30,14 +56,39 @@ impl ScopeState {
         };
         any.downcast_ref().unwrap()
     }
+
+    pub fn use_mut<T: 'static>(&self, make_value: impl FnOnce() -> T) -> Mut<T> {
+        let (value, idx) = self.use_ref_with_idx(|| make_value());
+
+        Mut {
+            value,
+            idx,
+            key: Runtime::current().key(),
+        }
+    }
+
+    fn use_ref_with_idx<T: 'static>(&self, make_value: impl FnOnce() -> T) -> (&T, usize) {
+        let hooks = unsafe { &mut *self.hooks.get() };
+
+        let idx = self.hook_idx.get();
+        self.hook_idx.set(idx + 1);
+
+        let any = if idx >= hooks.len() {
+            hooks.push(Box::new(make_value()));
+            hooks.last().unwrap()
+        } else {
+            hooks.get(idx).unwrap()
+        };
+        (any.downcast_ref().unwrap(), idx)
+    }
 }
 
-pub struct Scoped<'a, C: ?Sized> {
+pub struct Scope<'a, C: ?Sized> {
     pub me: &'a C,
     pub state: &'a ScopeState,
 }
 
-impl<C> Clone for Scoped<'_, C> {
+impl<C> Clone for Scope<'_, C> {
     fn clone(&self) -> Self {
         Self {
             me: self.me,
@@ -46,17 +97,15 @@ impl<C> Clone for Scoped<'_, C> {
     }
 }
 
-impl<C> Copy for Scoped<'_, C> {}
+impl<C> Copy for Scope<'_, C> {}
 
-impl<'a, C> Deref for Scoped<'a, C> {
+impl<'a, C> Deref for Scope<'a, C> {
     type Target = &'a ScopeState;
 
     fn deref(&self) -> &Self::Target {
         &self.state
     }
 }
-
-pub type Scope<'a, C> = Scoped<'a, C>;
 
 pub trait Compose {
     fn compose(cx: Scope<Self>) -> impl Compose;
@@ -74,13 +123,14 @@ pub trait AnyCompose {
 
 impl<C: Compose> AnyCompose for C {
     fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a> {
-        Box::new(C::compose(Scoped { me: self, state }))
+        Box::new(C::compose(Scope { me: self, state }))
     }
 }
 
 #[derive(Default)]
 struct Inner {
     is_empty: bool,
+    key: DefaultKey,
 }
 
 #[derive(Clone, Default)]
@@ -111,6 +161,10 @@ impl Runtime {
 
     pub fn set_is_empty(&self, is_empty: bool) {
         self.inner.borrow_mut().is_empty = is_empty;
+    }
+
+    pub fn key(&self) -> DefaultKey {
+        self.inner.borrow().key
     }
 }
 
