@@ -104,7 +104,7 @@ pub struct Scope<'a, C: ?Sized> {
 }
 
 impl<'a, C: ?Sized> Scope<'a, C> {
-    pub fn me(&self) -> &'a C {
+    pub fn me(&self) -> &C {
         self.me
     }
 
