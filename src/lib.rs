@@ -6,9 +6,9 @@ use std::{
     ops::Deref,
     rc::Rc,
 };
+use tokio::sync::mpsc;
 
 pub use actuate_macros::Data;
-use tokio::sync::mpsc;
 
 pub struct Ref<'a, T> {
     value: &'a T,
@@ -96,7 +96,18 @@ pub struct ScopeState {
 }
 
 pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
-    use_ref_with_idx(scope, make_value).0
+    let hooks = unsafe { &mut *scope.hooks.get() };
+
+    let idx = scope.hook_idx.get();
+    scope.hook_idx.set(idx + 1);
+
+    let any = if idx >= hooks.len() {
+        hooks.push(Box::new(make_value()));
+        hooks.last().unwrap()
+    } else {
+        hooks.get(idx).unwrap()
+    };
+    any.downcast_ref().unwrap()
 }
 
 pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
@@ -120,26 +131,11 @@ pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
     }
 }
 
-fn use_ref_with_idx<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> (&T, usize) {
-    let hooks = unsafe { &mut *scope.hooks.get() };
-
-    let idx = scope.hook_idx.get();
-    scope.hook_idx.set(idx + 1);
-
-    let any = if idx >= hooks.len() {
-        hooks.push(Box::new(make_value()));
-        hooks.last().unwrap()
-    } else {
-        hooks.get(idx).unwrap()
-    };
-    (any.downcast_ref().unwrap(), idx)
-}
-
-pub fn use_memo<D: PartialEq + 'static, T: 'static>(
-    scope: &ScopeState,
-    dependency: D,
-    make_value: impl FnOnce() -> T,
-) -> Ref<T> {
+pub fn use_memo<D, T>(scope: &ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
+where
+    D: PartialEq + 'static,
+    T: 'static,
+{
     let mut make_value_cell = Some(make_value);
     let value_mut = use_mut(scope, || make_value_cell.take().unwrap()());
 
