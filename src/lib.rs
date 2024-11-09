@@ -14,6 +14,14 @@ pub struct Ref<'a, T> {
     value: &'a T,
 }
 
+impl<'a, T: 'static> Ref<'a, T> {
+    pub fn map<U>(&self, f: impl FnOnce(&'a T) -> &'a U) -> Ref<'a, U> {
+        Ref {
+            value: f(self.value),
+        }
+    }
+}
+
 impl<T> Clone for Ref<'_, T> {
     fn clone(&self) -> Self {
         Self { value: self.value }
