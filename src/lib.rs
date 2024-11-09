@@ -11,16 +11,22 @@ pub use actuate_macros::Data;
 pub struct Mut<'a, T> {
     ptr: *mut T,
     value: &'a T,
+    is_changed: *const Cell<bool>,
 }
 
 impl<T: 'static> Mut<'_, T> {
     pub fn update(&self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
         let ptr = self.ptr;
+        let is_changed = self.is_changed;
 
         Runtime::current().update(move || {
             let value = unsafe { &mut *ptr };
             cell.take().unwrap()(value);
+
+            unsafe {
+                (*is_changed).set(true);
+            }
         });
     }
 }
@@ -30,6 +36,7 @@ impl<T> Clone for Mut<'_, T> {
         Self {
             ptr: self.ptr,
             value: self.value,
+            is_changed: self.is_changed,
         }
     }
 }
@@ -48,6 +55,7 @@ impl<'a, T> Deref for Mut<'a, T> {
 pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
+    is_changed: Cell<bool>,
 }
 
 pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
@@ -71,6 +79,7 @@ pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
     Mut {
         ptr: value as *mut T,
         value,
+        is_changed: &scope.is_changed,
     }
 }
 
@@ -90,8 +99,18 @@ fn use_ref_with_idx<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() ->
 }
 
 pub struct Scope<'a, C: ?Sized> {
-    pub me: &'a C,
-    pub state: &'a ScopeState,
+    me: &'a C,
+    state: &'a ScopeState,
+}
+
+impl<'a, C: ?Sized> Scope<'a, C> {
+    pub fn me(&self) -> &'a C {
+        self.me
+    }
+
+    pub fn state(&self) -> &'a ScopeState {
+        self.state
+    }
 }
 
 impl<C> Clone for Scope<'_, C> {
@@ -141,12 +160,23 @@ unsafe impl Data for Box<dyn AnyCompose + '_> {}
 
 unsafe impl Data for Rc<dyn AnyCompose + '_> {}
 
+#[derive(Clone, Copy, Default)]
+pub struct RebuildContext {
+    is_changed: bool,
+}
+
 pub trait Node {
     type State: 'static;
 
     fn build(&self) -> Self::State;
 
-    fn rebuild(&self, state: &mut Self::State);
+    fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext);
+}
+
+pub struct ComposeNodeState {
+    scope: ScopeState,
+    node: Box<dyn AnyNode>,
+    node_state: Box<dyn Any>,
 }
 
 pub struct ComposeNode<C> {
@@ -154,17 +184,17 @@ pub struct ComposeNode<C> {
 }
 
 impl<C: Compose> Node for ComposeNode<C> {
-    type State = (ScopeState, Box<dyn AnyNode>, Box<dyn Any>);
+    type State = ComposeNodeState;
 
     fn build(&self) -> Self::State {
         let rt = Runtime::default();
         rt.enter();
 
-        let scope_state = ScopeState::default();
+        let scope = ScopeState::default();
 
         let child = C::compose(Scope {
             me: &self.compose,
-            state: unsafe { mem::transmute(&scope_state) },
+            state: unsafe { mem::transmute(&scope) },
         });
 
         let node: Box<dyn AnyNode> = Box::new(child.into_node());
@@ -174,35 +204,46 @@ impl<C: Compose> Node for ComposeNode<C> {
             (update.f)()
         }
 
-        (scope_state, unsafe { mem::transmute(node) }, node_state)
+        let node = unsafe { mem::transmute(node) };
+
+        ComposeNodeState {
+            scope,
+            node,
+            node_state,
+        }
     }
 
-    fn rebuild(&self, state: &mut Self::State) {
+    fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
         let rt = Runtime::default();
         rt.enter();
 
-        state.0.hook_idx.set(0);
+        let mut cx = *cx;
+        if cx.is_changed || state.scope.is_changed.take() {
+            cx.is_changed = true;
 
-        let child = C::compose(Scope {
-            me: &self.compose,
-            state: &state.0,
-        });
+            state.scope.hook_idx.set(0);
 
-        let node: Box<dyn AnyNode> = Box::new(child.into_node());
-        state.1 = unsafe { mem::transmute(node) };
+            let child = C::compose(Scope {
+                me: &self.compose,
+                state: &state.scope,
+            });
 
-        state.1.any_rebuild(&mut *state.2);
+            let node: Box<dyn AnyNode> = Box::new(child.into_node());
+            state.node = unsafe { mem::transmute(node) };
 
-        for mut update in mem::take(&mut rt.inner.borrow_mut().updates) {
-            (update.f)()
+            for mut update in mem::take(&mut rt.inner.borrow_mut().updates) {
+                (update.f)()
+            }
         }
+
+        state.node.any_rebuild(&mut *state.node_state, &cx);
     }
 }
 
 pub trait AnyNode {
     fn any_build(&self) -> Box<dyn Any>;
 
-    fn any_rebuild(&self, state: &mut dyn Any);
+    fn any_rebuild(&self, state: &mut dyn Any, cx: &RebuildContext);
 }
 
 impl<T: Node> AnyNode for T {
@@ -210,8 +251,8 @@ impl<T: Node> AnyNode for T {
         Box::new(self.build())
     }
 
-    fn any_rebuild(&self, state: &mut dyn Any) {
-        self.rebuild(state.downcast_mut().unwrap())
+    fn any_rebuild(&self, state: &mut dyn Any, cx: &RebuildContext) {
+        self.rebuild(state.downcast_mut().unwrap(), cx)
     }
 }
 
@@ -234,8 +275,9 @@ impl Node for () {
 
     fn build(&self) -> Self::State {}
 
-    fn rebuild(&self, state: &mut Self::State) {
+    fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
         let _ = state;
+        let _ = cx;
     }
 }
 
@@ -281,8 +323,8 @@ macro_rules! impl_tuples {
                 ($(self.$idx.build(),)*)
             }
 
-            fn rebuild(&self, state: &mut Self::State) {
-                $(self.$idx.rebuild(&mut state.$idx);)*
+            fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
+                $(self.$idx.rebuild(&mut state.$idx, cx);)*
             }
         }
     };
@@ -313,7 +355,6 @@ struct Update {
 
 #[derive(Default)]
 struct Inner {
-    is_empty: bool,
     updates: Vec<Update>,
 }
 
@@ -337,14 +378,6 @@ impl Runtime {
         RUNTIME.with(|runtime| {
             *runtime.borrow_mut() = Some(self.clone());
         });
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.inner.borrow().is_empty
-    }
-
-    pub fn set_is_empty(&self, is_empty: bool) {
-        self.inner.borrow_mut().is_empty = is_empty;
     }
 
     pub fn update(&self, f: impl FnMut() + 'static) {

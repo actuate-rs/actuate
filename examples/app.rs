@@ -1,4 +1,4 @@
-use actuate::{use_mut, Compose, Data, Mut, Node, Scope};
+use actuate::{use_mut, Compose, Data, Mut, Node, RebuildContext, Scope};
 
 #[derive(Data)]
 struct Button<'a> {
@@ -7,7 +7,7 @@ struct Button<'a> {
 
 impl Compose for Button<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.me.count.update(|x| *x += 1)
+        cx.me().count.update(|x| *x += 1)
     }
 }
 
@@ -18,7 +18,7 @@ struct Counter {
 
 impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let count = use_mut(&cx, || cx.me.initial);
+        let count = use_mut(&cx, || cx.me().initial);
 
         dbg!(*count);
 
@@ -29,6 +29,6 @@ impl Compose for Counter {
 fn main() {
     let node = Counter { initial: 0 }.into_node();
     let mut state = node.build();
-    node.rebuild(&mut state);
-    node.rebuild(&mut state);
+    node.rebuild(&mut state, &RebuildContext::default());
+    node.rebuild(&mut state, &RebuildContext::default());
 }
