@@ -382,6 +382,8 @@ impl<T: Node> Node for MemoNode<T> {
     }
 
     fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
+        let _ = cx;
+
         let is_changed = if self.hash != state.0 {
             state.0 = self.hash;
             true
