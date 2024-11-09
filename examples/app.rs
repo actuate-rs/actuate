@@ -1,4 +1,4 @@
-use actuate::{use_mut, Compose, Data, Mut, Node, RebuildContext, Scope};
+use actuate::{use_mut, Compose, Data, Mut, Scope};
 
 #[derive(Data)]
 struct Button<'a> {
@@ -26,9 +26,7 @@ impl Compose for Counter {
     }
 }
 
-fn main() {
-    let node = Counter { initial: 0 }.into_node();
-    let mut state = node.build();
-    node.rebuild(&mut state, &RebuildContext::default());
-    node.rebuild(&mut state, &RebuildContext::default());
+#[tokio::main]
+async fn main() {
+    actuate::run(Counter { initial: 0 }).await;
 }

@@ -14,3 +14,4 @@ members = [
 
 [dependencies]
 actuate-macros = { version = "0.1.0", path = "macros" }
+tokio = { version = "1.41.1", features = ["full"] }

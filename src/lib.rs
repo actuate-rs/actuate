@@ -7,6 +7,7 @@ use std::{
 };
 
 pub use actuate_macros::Data;
+use tokio::sync::mpsc;
 
 pub struct Ref<'a, T> {
     value: &'a T,
@@ -229,7 +230,7 @@ pub trait Node {
 }
 
 pub struct ComposeNodeState {
-    scope: ScopeState,
+    scope: Box<ScopeState>,
     node: Box<dyn AnyNode>,
     node_state: Box<dyn Any>,
 }
@@ -242,22 +243,15 @@ impl<C: Compose> Node for ComposeNode<C> {
     type State = ComposeNodeState;
 
     fn build(&self) -> Self::State {
-        let rt = Runtime::default();
-        rt.enter();
-
-        let scope = ScopeState::default();
+        let scope = Box::new(ScopeState::default());
 
         let child = C::compose(Scope {
             me: &self.compose,
-            state: unsafe { mem::transmute(&scope) },
+            state: unsafe { mem::transmute(&*scope) },
         });
 
         let node: Box<dyn AnyNode> = Box::new(child.into_node());
         let node_state = node.any_build();
-
-        for mut update in mem::take(&mut rt.inner.borrow_mut().updates) {
-            (update.f)()
-        }
 
         let node = unsafe { mem::transmute(node) };
 
@@ -269,9 +263,6 @@ impl<C: Compose> Node for ComposeNode<C> {
     }
 
     fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
-        let rt = Runtime::default();
-        rt.enter();
-
         let mut cx = *cx;
         if cx.is_changed || state.scope.is_changed.take() {
             cx.is_changed = true;
@@ -285,10 +276,6 @@ impl<C: Compose> Node for ComposeNode<C> {
 
             let node: Box<dyn AnyNode> = Box::new(child.into_node());
             state.node = unsafe { mem::transmute(node) };
-
-            for mut update in mem::take(&mut rt.inner.borrow_mut().updates) {
-                (update.f)()
-            }
         }
 
         state.node.any_rebuild(&mut *state.node_state, &cx);
@@ -408,14 +395,9 @@ struct Update {
     f: Box<dyn FnMut()>,
 }
 
-#[derive(Default)]
-struct Inner {
-    updates: Vec<Update>,
-}
-
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Runtime {
-    inner: Rc<RefCell<Inner>>,
+    tx: mpsc::UnboundedSender<Update>,
 }
 
 impl Runtime {
@@ -436,13 +418,46 @@ impl Runtime {
     }
 
     pub fn update(&self, f: impl FnMut() + 'static) {
-        self.inner
-            .borrow_mut()
-            .updates
-            .push(Update { f: Box::new(f) });
+        self.tx.send(Update { f: Box::new(f) }).unwrap();
     }
 }
 
 thread_local! {
     static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
+}
+
+pub struct Composer {
+    rt: Runtime,
+    rx: mpsc::UnboundedReceiver<Update>,
+}
+
+impl Composer {
+    pub fn new() -> Self {
+        let (tx, rx) = mpsc::unbounded_channel();
+        Self {
+            rt: Runtime { tx },
+            rx,
+        }
+    }
+
+    pub async fn run(&mut self, compose: impl Compose) {
+        self.rt.enter();
+
+        let node = compose.into_node();
+        let mut state = node.build();
+
+        while let Some(mut update) = self.rx.recv().await {
+            (update.f)();
+
+            while let Ok(mut update) = self.rx.try_recv() {
+                (update.f)();
+            }
+
+            node.rebuild(&mut state, &RebuildContext { is_changed: false });
+        }
+    }
+}
+
+pub async fn run(compose: impl Compose) {
+    Composer::new().run(compose).await;
 }
