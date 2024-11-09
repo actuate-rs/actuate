@@ -1,4 +1,4 @@
-use actuate::{use_mut, Compose, Composer, Data, Mut, Scope};
+use actuate::{use_mut, Compose, Data, Mut, Node, Scope};
 
 #[derive(Data)]
 struct Button<'a> {
@@ -27,8 +27,8 @@ impl Compose for Counter {
 }
 
 fn main() {
-    let mut composer = Composer::new(Counter { initial: 0 });
-    composer.compose();
-    composer.recompose();
-    composer.recompose();
+    let node = Counter { initial: 0 }.into_node();
+    let mut state = node.build();
+    node.rebuild(&mut state);
+    node.rebuild(&mut state);
 }

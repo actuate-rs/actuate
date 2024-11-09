@@ -1,4 +1,3 @@
-use slotmap::{DefaultKey, SlotMap};
 use std::{
     any::Any,
     cell::{Cell, RefCell, UnsafeCell},
@@ -10,16 +9,17 @@ use std::{
 pub use actuate_macros::Data;
 
 pub struct Mut<'a, T> {
-    key: DefaultKey,
-    idx: usize,
+    ptr: *mut T,
     value: &'a T,
 }
 
 impl<T: 'static> Mut<'_, T> {
     pub fn update(&self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
-        Runtime::current().update(self.key, self.idx, move |any| {
-            let value = any.downcast_mut().unwrap();
+        let ptr = self.ptr;
+
+        Runtime::current().update(move || {
+            let value = unsafe { &mut *ptr };
             cell.take().unwrap()(value);
         });
     }
@@ -28,8 +28,7 @@ impl<T: 'static> Mut<'_, T> {
 impl<T> Clone for Mut<'_, T> {
     fn clone(&self) -> Self {
         Self {
-            key: self.key,
-            idx: self.idx,
+            ptr: self.ptr,
             value: self.value,
         }
     }
@@ -56,12 +55,22 @@ pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
 }
 
 pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
-    let (value, idx) = use_ref_with_idx(scope, || make_value());
+    let hooks = unsafe { &mut *scope.hooks.get() };
+
+    let idx = scope.hook_idx.get();
+    scope.hook_idx.set(idx + 1);
+
+    let any = if idx >= hooks.len() {
+        hooks.push(Box::new(make_value()));
+        hooks.last_mut().unwrap()
+    } else {
+        hooks.get_mut(idx).unwrap()
+    };
+    let value = any.downcast_mut().unwrap();
 
     Mut {
+        ptr: value as *mut T,
         value,
-        idx,
-        key: Runtime::current().key(),
     }
 }
 
@@ -132,13 +141,101 @@ unsafe impl Data for Box<dyn AnyCompose + '_> {}
 
 unsafe impl Data for Rc<dyn AnyCompose + '_> {}
 
-pub trait Compose: Data {
+pub trait Node {
+    type State: 'static;
+
+    fn build(&self) -> Self::State;
+
+    fn rebuild(&self, state: &mut Self::State);
+}
+
+pub struct ComposeNode<C> {
+    compose: C,
+}
+
+impl<C: Compose> Node for ComposeNode<C> {
+    type State = (ScopeState, Box<dyn AnyNode>, Box<dyn Any>);
+
+    fn build(&self) -> Self::State {
+        let rt = Runtime::default();
+        rt.enter();
+
+        let scope_state = ScopeState::default();
+
+        let child = C::compose(Scope {
+            me: &self.compose,
+            state: unsafe { mem::transmute(&scope_state) },
+        });
+
+        let node: Box<dyn AnyNode> = Box::new(child.into_node());
+        let node_state = node.any_build();
+
+        for mut update in mem::take(&mut rt.inner.borrow_mut().updates) {
+            (update.f)()
+        }
+
+        (scope_state, unsafe { mem::transmute(node) }, node_state)
+    }
+
+    fn rebuild(&self, state: &mut Self::State) {
+        let rt = Runtime::default();
+        rt.enter();
+
+        state.0.hook_idx.set(0);
+
+        let child = C::compose(Scope {
+            me: &self.compose,
+            state: &state.0,
+        });
+
+        let node: Box<dyn AnyNode> = Box::new(child.into_node());
+        state.1 = unsafe { mem::transmute(node) };
+
+        state.1.any_rebuild(&mut *state.2);
+
+        for mut update in mem::take(&mut rt.inner.borrow_mut().updates) {
+            (update.f)()
+        }
+    }
+}
+
+pub trait AnyNode {
+    fn any_build(&self) -> Box<dyn Any>;
+
+    fn any_rebuild(&self, state: &mut dyn Any);
+}
+
+impl<T: Node> AnyNode for T {
+    fn any_build(&self) -> Box<dyn Any> {
+        Box::new(self.build())
+    }
+
+    fn any_rebuild(&self, state: &mut dyn Any) {
+        self.rebuild(state.downcast_mut().unwrap())
+    }
+}
+
+pub trait Compose: Data + Sized {
     fn compose(cx: Scope<Self>) -> impl Compose;
+
+    fn into_node(self) -> impl Node {
+        ComposeNode { compose: self }
+    }
 }
 
 impl Compose for () {
-    fn compose(_cx: Scope<Self>) -> impl Compose {
-        Runtime::current().set_is_empty(true)
+    fn compose(_cx: Scope<Self>) -> impl Compose {}
+
+    fn into_node(self) -> impl Node {}
+}
+
+impl Node for () {
+    type State = ();
+
+    fn build(&self) -> Self::State {}
+
+    fn rebuild(&self, state: &mut Self::State) {
+        let _ = state;
     }
 }
 
@@ -151,6 +248,7 @@ impl<C: Compose> Compose for &C {
     }
 }
 
+/*TODO
 impl Compose for Box<dyn AnyCompose + '_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         (**cx.me).any_compose(cx.state)
@@ -162,61 +260,63 @@ impl Compose for Rc<dyn AnyCompose + '_> {
         (**cx.me).any_compose(cx.state)
     }
 }
+ */
 
 macro_rules! impl_tuples {
-    ($($t:tt),*) => {
+    ($($t:tt : $idx:tt),*) => {
         unsafe impl<$($t: Data),*> Data for ($($t,)*) {}
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
-            #[allow(non_snake_case)]
             fn compose(cx: Scope<Self>) -> impl Compose {
-                let ($($t,)*) = cx.me;
+               let _ = cx;
+            }
 
-                $(let $t: *const dyn AnyCompose = unsafe { mem::transmute($t as *const dyn AnyCompose) };)*
+            fn into_node(self) -> impl Node {
+                ($(self.$idx.into_node(),)*)
+            }
+        }
 
-                Runtime::current()
-                    .inner
-                    .borrow_mut()
-                    .children
-                    .extend([
-                        $($t),*
-                    ]);
+        impl<$($t: Node),*> Node for ($($t,)*) {
+            type State = ($($t::State,)*);
+
+            fn build(&self) -> Self::State {
+                ($(self.$idx.build(),)*)
+            }
+
+            fn rebuild(&self, state: &mut Self::State) {
+                $(self.$idx.rebuild(&mut state.$idx);)*
             }
         }
     };
 }
 
-impl_tuples!(T1);
-impl_tuples!(T1, T2);
-impl_tuples!(T1, T2, T3);
-impl_tuples!(T1, T2, T3, T4);
-impl_tuples!(T1, T2, T3, T4, T5);
-impl_tuples!(T1, T2, T3, T4, T5, T6);
-impl_tuples!(T1, T2, T3, T4, T5, T6, T7);
-impl_tuples!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_tuples!(T1:0);
+impl_tuples!(T1:0, T2:1);
+impl_tuples!(T1:0, T2:1, T3:2);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5, T7:6);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5, T7:6, T8:7);
 
 pub trait AnyCompose {
-    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a>;
+    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyNode + 'a>;
 }
 
 impl<C: Compose> AnyCompose for C {
-    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a> {
-        Box::new(C::compose(Scope { me: self, state }))
+    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyNode + 'a> {
+        Box::new(C::compose(Scope { me: self, state }).into_node())
     }
 }
 
 struct Update {
-    key: DefaultKey,
-    idx: usize,
-    f: Box<dyn FnMut(&mut dyn Any)>,
+    f: Box<dyn FnMut()>,
 }
 
 #[derive(Default)]
 struct Inner {
     is_empty: bool,
-    key: DefaultKey,
     updates: Vec<Update>,
-    children: Vec<*const dyn AnyCompose>,
 }
 
 #[derive(Clone, Default)]
@@ -249,159 +349,14 @@ impl Runtime {
         self.inner.borrow_mut().is_empty = is_empty;
     }
 
-    pub fn key(&self) -> DefaultKey {
-        self.inner.borrow().key
-    }
-
-    pub fn update(&self, key: DefaultKey, idx: usize, f: impl FnMut(&mut dyn Any) + 'static) {
-        self.inner.borrow_mut().updates.push(Update {
-            key,
-            idx,
-            f: Box::new(f),
-        });
+    pub fn update(&self, f: impl FnMut() + 'static) {
+        self.inner
+            .borrow_mut()
+            .updates
+            .push(Update { f: Box::new(f) });
     }
 }
 
 thread_local! {
     static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
-}
-
-enum NodeCompose {
-    Box(Box<dyn AnyCompose>),
-    Ptr(*const dyn AnyCompose),
-}
-
-impl NodeCompose {
-    unsafe fn compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a> {
-        match self {
-            Self::Box(b) => b.any_compose(state),
-            Self::Ptr(p) => (&**p).any_compose(state),
-        }
-    }
-}
-
-struct Node {
-    state: ScopeState,
-    compose: NodeCompose,
-    children: Vec<DefaultKey>,
-}
-
-pub struct Composer {
-    rt: Runtime,
-    nodes: SlotMap<DefaultKey, Node>,
-    root: DefaultKey,
-}
-
-impl Composer {
-    pub fn new(content: impl Compose + 'static) -> Self {
-        let node = Node {
-            state: ScopeState::default(),
-            compose: NodeCompose::Box(Box::new(content)),
-            children: Vec::new(),
-        };
-
-        let mut nodes = SlotMap::new();
-        let root = nodes.insert(node);
-
-        Self {
-            rt: Runtime::default(),
-            nodes,
-            root,
-        }
-    }
-
-    pub fn compose(&mut self) {
-        self.rt.enter();
-
-        let mut keys = vec![self.root];
-
-        while let Some(key) = keys.pop() {
-            let node = self.nodes.get(key).unwrap();
-
-            self.rt.inner.borrow_mut().key = key;
-            let child: Box<dyn AnyCompose> = unsafe { node.compose.compose(&node.state) };
-
-            if self.rt.is_empty() {
-                self.rt.set_is_empty(false);
-            } else {
-                let compose = unsafe { mem::transmute(child) };
-                let child_node = Node {
-                    state: ScopeState::default(),
-                    compose: NodeCompose::Box(compose),
-                    children: Vec::new(),
-                };
-
-                let child_key = self.nodes.insert(child_node);
-                self.nodes.get_mut(key).unwrap().children.push(child_key);
-                keys.push(child_key);
-
-                for child_ptr in mem::take(&mut self.rt.inner.borrow_mut().children) {
-                    let child_node = Node {
-                        state: ScopeState::default(),
-                        compose: NodeCompose::Ptr(child_ptr),
-                        children: Vec::new(),
-                    };
-
-                    let child_key = self.nodes.insert(child_node);
-                    self.nodes.get_mut(key).unwrap().children.push(child_key);
-                    keys.push(child_key);
-                }
-            }
-        }
-
-        self.update();
-    }
-
-    pub fn recompose(&mut self) {
-        let mut keys = vec![self.root];
-        while let Some(key) = keys.pop() {
-            let node = self.nodes.get(key).unwrap();
-            node.state.hook_idx.set(0);
-
-            self.rt.inner.borrow_mut().key = key;
-
-            let content = unsafe { node.compose.compose(&node.state) };
-            let compose = unsafe { mem::transmute(content) };
-
-            let mut idx = 0;
-            if let Some(child_key) = node.children.get(idx).copied() {
-                self.nodes.get_mut(child_key).unwrap().compose = NodeCompose::Box(compose);
-                idx += 1;
-                keys.push(child_key);
-            }
-
-            for child_ptr in mem::take(&mut self.rt.inner.borrow_mut().children) {
-                let child_key = self.nodes.get(key).unwrap().children[idx];
-                idx += 1;
-                self.nodes.get_mut(child_key).unwrap().compose = NodeCompose::Ptr(child_ptr);
-                keys.push(child_key);
-            }
-        }
-
-        self.update();
-    }
-
-    fn remove_node(&mut self, key: DefaultKey) {
-        let node = self.nodes.remove(key).unwrap();
-        for child_key in node.children {
-            self.remove_node(child_key);
-        }
-    }
-
-    fn update(&mut self) {
-        let updates = mem::take(&mut self.rt.inner.borrow_mut().updates);
-        for mut update in updates {
-            let node = self.nodes.get_mut(update.key).unwrap();
-            let value = node.state.hooks.get();
-            let value = unsafe { &mut *value };
-            let any = value.get_mut(update.idx).unwrap();
-            (update.f)(&mut **any);
-        }
-    }
-}
-
-impl Drop for Composer {
-    fn drop(&mut self) {
-        self.remove_node(self.root);
-    }
 }

@@ -14,4 +14,3 @@ members = [
 
 [dependencies]
 actuate-macros = { version = "0.1.0", path = "macros" }
-slotmap = "1.0.7"
