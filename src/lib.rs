@@ -8,13 +8,33 @@ use std::{
 
 pub use actuate_macros::Data;
 
+pub struct Ref<'a, T> {
+    value: &'a T,
+}
+
+impl<T> Clone for Ref<'_, T> {
+    fn clone(&self) -> Self {
+        Self { value: self.value }
+    }
+}
+
+impl<T> Copy for Ref<'_, T> {}
+
+impl<'a, T> Deref for Ref<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
 pub struct Mut<'a, T> {
     ptr: *mut T,
     value: &'a T,
     is_changed: *const Cell<bool>,
 }
 
-impl<T: 'static> Mut<'_, T> {
+impl<'a, T: 'static> Mut<'a, T> {
     pub fn update(&self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
         let ptr = self.ptr;
@@ -28,6 +48,20 @@ impl<T: 'static> Mut<'_, T> {
                 (*is_changed).set(true);
             }
         });
+    }
+
+    pub fn with(&self, f: impl FnOnce(&mut T) + 'static) {
+        let mut cell = Some(f);
+        let ptr = self.ptr;
+
+        Runtime::current().update(move || {
+            let value = unsafe { &mut *ptr };
+            cell.take().unwrap()(value);
+        });
+    }
+
+    pub fn as_ref(&self) -> Ref<'a, T> {
+        Ref { value: self.value }
     }
 }
 
@@ -96,6 +130,27 @@ fn use_ref_with_idx<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() ->
         hooks.get(idx).unwrap()
     };
     (any.downcast_ref().unwrap(), idx)
+}
+
+pub fn use_memo<D: PartialEq + 'static, T: 'static>(
+    scope: &ScopeState,
+    dependency: D,
+    make_value: impl FnOnce() -> T,
+) -> Ref<T> {
+    let mut make_value_cell = Some(make_value);
+    let value_mut = use_mut(scope, || make_value_cell.take().unwrap()());
+
+    let mut dependency_cell = Some(dependency);
+    let dependency_mut = use_mut(scope, || dependency_cell.take().unwrap());
+
+    if let Some(dependency) = dependency_cell {
+        if *dependency_mut != dependency {
+            let value = make_value_cell.take().unwrap()();
+            value_mut.with(move |update| *update = value);
+        }
+    }
+
+    value_mut.as_ref()
 }
 
 pub struct Scope<'a, C: ?Sized> {
