@@ -1,6 +1,6 @@
-use actuate::{use_mut, Compose, Data, Mut, Scope};
+use actuate::{use_mut, Compose, Data, Memo, Mut, Scope};
 
-#[derive(Data)]
+#[derive(Hash, Data)]
 struct Button<'a> {
     count: Mut<'a, i32>,
 }
@@ -22,7 +22,7 @@ impl Compose for Counter {
 
         dbg!(*count);
 
-        (Button { count }, Button { count })
+        (Memo::new(Button { count }), Button { count })
     }
 }
 

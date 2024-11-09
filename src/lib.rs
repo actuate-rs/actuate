@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     cell::{Cell, RefCell, UnsafeCell},
+    hash::{DefaultHasher, Hash, Hasher},
     mem,
     ops::Deref,
     rc::Rc,
@@ -29,6 +30,7 @@ impl<'a, T> Deref for Ref<'a, T> {
     }
 }
 
+#[derive(Hash)]
 pub struct Mut<'a, T> {
     ptr: *mut T,
     value: &'a T,
@@ -341,6 +343,58 @@ impl Compose for Box<dyn AnyCompose + '_> {
 impl Compose for Rc<dyn AnyCompose + '_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         (**cx.me).any_compose(cx.state)
+    }
+}
+
+pub struct Memo<C> {
+    compose: C,
+}
+
+impl<C: Compose + Hash> Memo<C> {
+    pub fn new(compose: C) -> Self {
+        Self { compose }
+    }
+}
+
+unsafe impl<C: Data> Data for Memo<C> {}
+
+impl<C: Compose + Hash> Compose for Memo<C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let _ = cx;
+    }
+
+    fn into_node(self) -> impl Node {
+        let mut hasher = DefaultHasher::new();
+        self.compose.hash(&mut hasher);
+
+        MemoNode {
+            hash: hasher.finish(),
+            node: self.compose.into_node(),
+        }
+    }
+}
+pub struct MemoNode<T> {
+    hash: u64,
+    node: T,
+}
+
+impl<T: Node> Node for MemoNode<T> {
+    type State = (u64, T::State);
+
+    fn build(&self) -> Self::State {
+        (self.hash, self.node.build())
+    }
+
+    fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
+        let is_changed = if self.hash != state.0 {
+            state.0 = self.hash;
+            true
+        } else {
+            false
+        };
+
+        self.node
+            .rebuild(&mut state.1, &RebuildContext { is_changed });
     }
 }
 
