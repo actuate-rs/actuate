@@ -10,8 +10,53 @@ use tokio::sync::mpsc;
 
 pub use actuate_macros::Data;
 
-pub struct Ref<'a, T: ?Sized> {
+pub struct Map<'a, T: ?Sized> {
+    ptr: *const (),
+    g: *const (),
+    f: fn(*const (), *const ()) -> &'a T,
+}
+
+impl<T: ?Sized> Clone for Map<'_, T> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            g: self.g,
+            f: self.f,
+        }
+    }
+}
+
+impl<T: ?Sized> Copy for Map<'_, T> {}
+
+impl<'a, T: ?Sized> Deref for Map<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        (self.f)(self.ptr, self.g)
+    }
+}
+
+impl<T: Hash + ?Sized> Hash for Map<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+}
+
+pub struct Ref<'a, T> {
     value: &'a T,
+}
+
+impl<'a, T> Ref<'a, T> {
+    pub fn map<U: ?Sized>(self, f: fn(&T) -> &U) -> Map<'a, U> {
+        Map {
+            ptr: self.value as *const _ as _,
+            g: f as _,
+            f: |ptr, g| unsafe {
+                let g: fn(&T) -> &U = mem::transmute(g);
+                g(&*(ptr as *const T))
+            },
+        }
+    }
 }
 
 impl<T> Clone for Ref<'_, T> {
@@ -152,12 +197,12 @@ where
     value_mut.as_ref()
 }
 
-pub struct Scope<'a, C: ?Sized> {
+pub struct Scope<'a, C> {
     me: &'a C,
     state: &'a ScopeState,
 }
 
-impl<'a, C: ?Sized> Scope<'a, C> {
+impl<'a, C> Scope<'a, C> {
     pub fn me(&self) -> Ref<'a, C> {
         Ref { value: self.me }
     }

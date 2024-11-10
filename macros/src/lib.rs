@@ -16,7 +16,7 @@ pub fn data(input: TokenStream) -> TokenStream {
         let field_ident = field.ident.as_ref().unwrap();
         let check_ident = format_ident!("check_{}", field_ident);
         quote! {
-           fn #check_ident(t: #ident) {
+           fn #check_ident(t: #ident #generics) {
                 use actuate::{DataField, StateField};
 
                 (&t.#field_ident).check()
