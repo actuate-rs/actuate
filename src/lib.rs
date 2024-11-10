@@ -12,16 +12,16 @@ pub use actuate_macros::Data;
 
 pub struct Map<'a, T: ?Sized> {
     ptr: *const (),
-    g: *const (),
-    f: fn(*const (), *const ()) -> &'a T,
+    map_fn: *const (),
+    deref_fn: fn(*const (), *const ()) -> &'a T,
 }
 
 impl<T: ?Sized> Clone for Map<'_, T> {
     fn clone(&self) -> Self {
         Self {
             ptr: self.ptr,
-            g: self.g,
-            f: self.f,
+            map_fn: self.map_fn,
+            deref_fn: self.deref_fn,
         }
     }
 }
@@ -32,7 +32,7 @@ impl<'a, T: ?Sized> Deref for Map<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        (self.f)(self.ptr, self.g)
+        (self.deref_fn)(self.ptr, self.map_fn)
     }
 }
 
@@ -50,8 +50,8 @@ impl<'a, T> Ref<'a, T> {
     pub fn map<U: ?Sized>(self, f: fn(&T) -> &U) -> Map<'a, U> {
         Map {
             ptr: self.value as *const _ as _,
-            g: f as _,
-            f: |ptr, g| unsafe {
+            map_fn: f as _,
+            deref_fn: |ptr, g| unsafe {
                 let g: fn(&T) -> &U = mem::transmute(g);
                 g(&*(ptr as *const T))
             },
@@ -174,6 +174,27 @@ pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
         value,
         is_changed: &scope.is_changed,
     }
+}
+
+struct UseDrop {
+    f: Box<dyn FnMut()>,
+}
+
+impl Drop for UseDrop {
+    fn drop(&mut self) {
+        (self.f)()
+    }
+}
+
+pub fn use_drop<'a>(scope: &'a ScopeState, f: impl FnOnce() + 'a) {
+    let mut f_cell = Some(f);
+
+    let f: Box<dyn FnMut() + 'a> = Box::new(move || {
+        f_cell.take().unwrap()();
+    });
+    let f: Box<dyn FnMut() + 'static> = unsafe { mem::transmute(f) };
+
+    use_ref(scope, move || UseDrop { f });
 }
 
 pub fn use_memo<D, T>(scope: &ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
