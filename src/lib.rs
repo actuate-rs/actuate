@@ -10,16 +10,8 @@ use tokio::sync::mpsc;
 
 pub use actuate_macros::Data;
 
-pub struct Ref<'a, T> {
+pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
-}
-
-impl<'a, T: 'static> Ref<'a, T> {
-    pub fn map<U>(&self, f: impl FnOnce(&'a T) -> &'a U) -> Ref<'a, U> {
-        Ref {
-            value: f(self.value),
-        }
-    }
 }
 
 impl<T> Clone for Ref<'_, T> {
@@ -166,8 +158,8 @@ pub struct Scope<'a, C: ?Sized> {
 }
 
 impl<'a, C: ?Sized> Scope<'a, C> {
-    pub fn me(&self) -> &C {
-        self.me
+    pub fn me(&self) -> Ref<'a, C> {
+        Ref { value: self.me }
     }
 
     pub fn state(&self) -> &'a ScopeState {
@@ -338,6 +330,7 @@ impl<C: Compose> Compose for &C {
     }
 }
 
+/* TODO
 impl Compose for Box<dyn AnyCompose + '_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         (**cx.me).any_compose(cx.state)
@@ -349,6 +342,7 @@ impl Compose for Rc<dyn AnyCompose + '_> {
         (**cx.me).any_compose(cx.state)
     }
 }
+*/
 
 pub struct Memo<C> {
     compose: C,
@@ -442,12 +436,33 @@ impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5, T7:6);
 impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5, T7:6, T8:7);
 
 pub trait AnyCompose {
-    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a>;
+    fn as_ptr_mut(&mut self) -> *mut ();
+
+    fn any_compose<'a>(
+        &'a self,
+        state: &'a ScopeState,
+        content: &mut Option<Box<dyn AnyCompose + 'a>>,
+    );
 }
 
 impl<C: Compose> AnyCompose for C {
-    fn any_compose<'a>(&'a self, state: &'a ScopeState) -> Box<dyn AnyCompose + 'a> {
-        Box::new(C::compose(Scope { me: self, state }))
+    fn as_ptr_mut(&mut self) -> *mut () {
+        self as *mut Self as *mut ()
+    }
+
+    fn any_compose<'a>(
+        &'a self,
+        state: &'a ScopeState,
+        content: &mut Option<Box<dyn AnyCompose + 'a>>,
+    ) {
+        let child = C::compose(Scope { me: self, state });
+        unsafe {
+            if let Some(ref mut content) = content {
+                *(&mut *(content.as_ptr_mut() as *mut _)) = child
+            } else {
+                *content = Some(Box::new(child))
+            }
+        }
     }
 }
 
