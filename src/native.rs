@@ -1,6 +1,6 @@
-use crate::{use_context, use_memo, use_provider, use_ref, Compose, Composer, Data, Scope};
+use crate::{use_context, use_memo, use_provider, use_ref, Compose, Composer, Data, Ref, Scope};
 use masonry::event_loop_runner::{MasonryState, MasonryUserEvent};
-use masonry::widget::{Flex, Label, RootWidget, WidgetMut};
+use masonry::widget::{Flex as FlexWidget, Label, RootWidget, WidgetMut};
 use masonry::{Action, AppDriver, Color, DriverCtx, WidgetId};
 use std::cell::RefCell;
 use std::mem;
@@ -10,7 +10,7 @@ use winit::event_loop::{EventLoop, EventLoopProxy};
 use winit::window::Window;
 
 pub fn run(compose: impl Compose + 'static) {
-    let main_widget = Flex::column();
+    let main_widget = FlexWidget::column();
 
     let event_loop = EventLoop::with_user_event().build().unwrap();
     let proxy = event_loop.create_proxy();
@@ -25,10 +25,15 @@ pub fn run(compose: impl Compose + 'static) {
     .unwrap();
 }
 
+struct Inner {
+    child_idx: usize,
+    widget: Option<WidgetMut<'static, FlexWidget>>,
+}
+
 #[derive(Clone)]
 pub struct TreeContext {
     proxy: EventLoopProxy<MasonryUserEvent>,
-    widget: Rc<RefCell<Option<WidgetMut<'static, RootWidget<Flex>>>>>,
+    inner: Rc<RefCell<Inner>>,
 }
 
 pub struct Tree<C> {
@@ -55,7 +60,10 @@ impl Driver {
     pub fn new(content: impl Compose + 'static, proxy: EventLoopProxy<MasonryUserEvent>) -> Self {
         let tree_cx = TreeContext {
             proxy,
-            widget: Rc::new(RefCell::new(None)),
+            inner: Rc::new(RefCell::new(Inner {
+                widget: None,
+                child_idx: 0,
+            })),
         };
 
         Self {
@@ -70,14 +78,16 @@ impl Driver {
 
 impl AppDriver for Driver {
     fn on_action(&mut self, masonry_ctx: &mut DriverCtx, _widget_id: WidgetId, _action: Action) {
-        let widget: WidgetMut<'_, RootWidget<Flex>> = masonry_ctx.get_root::<RootWidget<Flex>>();
-        let widget: WidgetMut<'static, RootWidget<Flex>> = unsafe { mem::transmute(widget) };
+        let mut root = masonry_ctx.get_root::<RootWidget<FlexWidget>>();
+        let flex = RootWidget::child_mut(&mut root);
+        let widget: WidgetMut<'static, FlexWidget> = unsafe { mem::transmute(flex) };
 
-        *self.tree_cx.widget.borrow_mut() = Some(widget);
+        self.tree_cx.inner.borrow_mut().widget = Some(widget);
+        self.tree_cx.inner.borrow_mut().child_idx = 0;
 
         self.composer.rebuild();
 
-        *self.tree_cx.widget.borrow_mut() = None;
+        self.tree_cx.inner.borrow_mut().widget = None;
 
         while let Ok(mut update) = self.composer.rx.try_recv() {
             (update.f)();
@@ -86,14 +96,16 @@ impl AppDriver for Driver {
 
     fn on_start(&mut self, state: &mut MasonryState) {
         state.get_root().edit_root_widget(|mut root| {
-            let widget: WidgetMut<'_, RootWidget<Flex>> = root.downcast();
-            let widget: WidgetMut<'static, RootWidget<Flex>> = unsafe { mem::transmute(widget) };
+            let mut root = root.downcast::<RootWidget<FlexWidget>>();
+            let flex = RootWidget::child_mut(&mut root);
+            let widget: WidgetMut<'static, FlexWidget> = unsafe { mem::transmute(flex) };
 
-            *self.tree_cx.widget.borrow_mut() = Some(widget);
+            self.tree_cx.inner.borrow_mut().widget = Some(widget);
+            self.tree_cx.inner.borrow_mut().child_idx = 0;
 
             self.composer.build();
 
-            *self.tree_cx.widget.borrow_mut() = None;
+            self.tree_cx.inner.borrow_mut().widget = None;
         });
 
         while let Ok(mut update) = self.composer.rx.try_recv() {
@@ -102,6 +114,7 @@ impl AppDriver for Driver {
     }
 }
 
+#[derive(Clone)]
 pub struct Text<T>(pub T);
 
 unsafe impl<T: Data> Data for Text<T> {}
@@ -120,15 +133,19 @@ where
             ))
             .unwrap();
 
-        let mut widget_cell = tree_cx.widget.borrow_mut();
+        let mut tree_inner = tree_cx.inner.borrow_mut();
+
+        let child_idx = tree_inner.child_idx;
+        tree_inner.child_idx += 1;
+
+        let widget_cell = &mut tree_inner.widget;
 
         let mut is_build = false;
         use_ref(&cx, || {
-            let widget = widget_cell.as_mut().unwrap();
-            let mut flex = RootWidget::child_mut(widget);
+            let mut widget = widget_cell.as_mut().unwrap();
 
             let label = Label::new(cx.me().0.to_string());
-            Flex::add_child(&mut flex, label);
+            FlexWidget::add_child(&mut widget, label);
 
             is_build = true;
         });
@@ -136,13 +153,25 @@ where
         // TODO don't clone
         use_memo(&cx, cx.me().0.to_string(), || {
             if !is_build {
-                let widget = widget_cell.as_mut().unwrap();
-                let mut flex = RootWidget::child_mut(widget);
+                let mut widget = widget_cell.as_mut().unwrap();
 
-                let mut child = Flex::child_mut(&mut flex, 0).unwrap();
+                let mut child = FlexWidget::child_mut(&mut widget, child_idx).unwrap();
                 let mut label = child.downcast::<Label>();
                 Label::set_text(&mut label, cx.me().0.to_string());
             }
         });
+    }
+}
+
+pub struct Flex<C>(pub C);
+
+unsafe impl<C: Data> Data for Flex<C> {}
+
+impl<C> Compose for Flex<C>
+where
+    C: Compose + Clone,
+{
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.me().0.clone()
     }
 }
