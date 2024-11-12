@@ -10,9 +10,11 @@ impl Compose for App {
 
         dbg!(*x);
 
-        //x.update(|x| *x += 1);
+        if *x == 0 {
+            x.update(|x| *x += 1);
+        }
 
-        Text("Hello, World!")
+        Text(format!("{}", *x))
     }
 }
 

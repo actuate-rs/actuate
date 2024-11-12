@@ -1,6 +1,10 @@
 use crate::{Contexts, Mut, Scope, ScopeState};
 use std::{
-    any::Any, cell::RefCell, hash::{DefaultHasher, Hash, Hasher}, mem, rc::Rc
+    any::Any,
+    cell::RefCell,
+    hash::{DefaultHasher, Hash, Hasher},
+    mem,
+    rc::Rc,
 };
 
 #[doc(hidden)]
@@ -28,6 +32,8 @@ pub unsafe trait Data {}
 unsafe impl Data for () {}
 
 unsafe impl Data for &'static str {}
+
+unsafe impl Data for String {}
 
 unsafe impl<T: Data> Data for &T {}
 
@@ -62,7 +68,10 @@ impl<C: Compose> Node for ComposeNode<C> {
     type State = ComposeNodeState;
 
     fn build(&self, contexts: &Contexts) -> Self::State {
-        let scope = Box::new(ScopeState { contexts: RefCell::new(contexts.clone()),..Default::default()});
+        let scope = Box::new(ScopeState {
+            contexts: RefCell::new(contexts.clone()),
+            ..Default::default()
+        });
 
         let child = C::compose(Scope {
             me: &self.compose,
@@ -134,7 +143,9 @@ impl Compose for () {
 impl Node for () {
     type State = ();
 
-    fn build(&self, contexts: &Contexts) -> Self::State {}
+    fn build(&self, contexts: &Contexts) -> Self::State {
+        let _ = contexts;
+    }
 
     fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
         let _ = state;
