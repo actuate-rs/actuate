@@ -1,9 +1,6 @@
-use crate::{Mut, Scope, ScopeState};
+use crate::{Contexts, Mut, Scope, ScopeState};
 use std::{
-    any::Any,
-    hash::{DefaultHasher, Hash, Hasher},
-    mem,
-    rc::Rc,
+    any::Any, cell::RefCell, hash::{DefaultHasher, Hash, Hasher}, mem, rc::Rc
 };
 
 #[doc(hidden)]
@@ -44,7 +41,7 @@ pub struct RebuildContext {
 pub trait Node {
     type State: 'static;
 
-    fn build(&self) -> Self::State;
+    fn build(&self, contexts: &Contexts) -> Self::State;
 
     fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext);
 }
@@ -62,8 +59,8 @@ pub struct ComposeNode<C> {
 impl<C: Compose> Node for ComposeNode<C> {
     type State = ComposeNodeState;
 
-    fn build(&self) -> Self::State {
-        let scope = Box::new(ScopeState::default());
+    fn build(&self, contexts: &Contexts) -> Self::State {
+        let scope = Box::new(ScopeState { contexts: RefCell::new(contexts.clone()),..Default::default()});
 
         let child = C::compose(Scope {
             me: &self.compose,
@@ -71,7 +68,7 @@ impl<C: Compose> Node for ComposeNode<C> {
         });
 
         let node: Box<dyn AnyNode> = Box::new(child.into_node());
-        let node_state = node.any_build();
+        let node_state = node.any_build(contexts);
 
         let node = unsafe { mem::transmute(node) };
 
@@ -103,14 +100,14 @@ impl<C: Compose> Node for ComposeNode<C> {
 }
 
 pub trait AnyNode {
-    fn any_build(&self) -> Box<dyn Any>;
+    fn any_build(&self, contexts: &Contexts) -> Box<dyn Any>;
 
     fn any_rebuild(&self, state: &mut dyn Any, cx: &RebuildContext);
 }
 
 impl<T: Node> AnyNode for T {
-    fn any_build(&self) -> Box<dyn Any> {
-        Box::new(self.build())
+    fn any_build(&self, contexts: &Contexts) -> Box<dyn Any> {
+        Box::new(self.build(contexts))
     }
 
     fn any_rebuild(&self, state: &mut dyn Any, cx: &RebuildContext) {
@@ -135,7 +132,7 @@ impl Compose for () {
 impl Node for () {
     type State = ();
 
-    fn build(&self) -> Self::State {}
+    fn build(&self, contexts: &Contexts) -> Self::State {}
 
     fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
         let _ = state;
@@ -201,8 +198,8 @@ pub struct MemoNode<T> {
 impl<T: Node> Node for MemoNode<T> {
     type State = (u64, T::State);
 
-    fn build(&self) -> Self::State {
-        (self.hash, self.node.build())
+    fn build(&self, contexts: &Contexts) -> Self::State {
+        (self.hash, self.node.build(contexts))
     }
 
     fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {
@@ -237,8 +234,8 @@ macro_rules! impl_tuples {
         impl<$($t: Node),*> Node for ($($t,)*) {
             type State = ($($t::State,)*);
 
-            fn build(&self) -> Self::State {
-                ($(self.$idx.build(),)*)
+            fn build(&self, contexts: &Contexts) -> Self::State {
+                ($(self.$idx.build(contexts),)*)
             }
 
             fn rebuild(&self, state: &mut Self::State, cx: &RebuildContext) {

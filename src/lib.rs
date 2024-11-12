@@ -1,9 +1,11 @@
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
+    collections::HashMap,
     hash::{Hash, Hasher},
     mem,
     ops::Deref,
+    rc::Rc,
 };
 
 use tokio::sync::mpsc;
@@ -137,11 +139,17 @@ impl<'a, T> Deref for Mut<'a, T> {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct Contexts {
+    values: HashMap<TypeId, Rc<dyn Any>>,
+}
+
 #[derive(Default)]
 pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
     is_changed: Cell<bool>,
+    contexts: RefCell<Contexts>,
 }
 
 pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
@@ -178,6 +186,32 @@ pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
         value,
         is_changed: &scope.is_changed,
     }
+}
+
+pub fn use_context<T: 'static>(scope: &ScopeState) -> Rc<T> {
+    scope
+        .contexts
+        .borrow()
+        .values
+        .get(&TypeId::of::<T>())
+        .unwrap()
+        .clone()
+        .downcast()
+        .unwrap()
+}
+
+pub fn use_provider<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Rc<T> {
+    // TODO
+    let r = use_ref(scope, || {
+        let value = Rc::new(make_value());
+        scope
+            .contexts
+            .borrow_mut()
+            .values
+            .insert(TypeId::of::<T>(), value.clone());
+        value
+    });
+    (*r).clone()
 }
 
 struct UseDrop {
@@ -309,7 +343,7 @@ impl Composer {
         self.rt.enter();
 
         let node = compose.into_node();
-        let mut state = node.build();
+        let mut state = node.build(&Contexts::default());
 
         while let Some(mut update) = self.rx.recv().await {
             (update.f)();
