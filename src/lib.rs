@@ -83,9 +83,33 @@ impl Compose for () {
     }
 }
 
-impl Compose for Box<dyn AnyCompose> {
+pub struct DynCompose<'a> {
+    compose: UnsafeCell<Option<Box<dyn AnyCompose + 'a>>>,
+}
+
+impl<'a> DynCompose<'a> {
+    pub fn new(content: impl Compose + 'a) -> Self {
+        Self {
+            compose: UnsafeCell::new(Some(Box::new(content))),
+        }
+    }
+}
+
+impl<'a> Compose for DynCompose<'a> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        (**cx.me()).any_compose(cx.state())
+        let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
+        let cell = unsafe { &mut *cell.get() };
+
+        let compose = unsafe { &mut *cx.me().compose.get() }.take().unwrap();
+        let compose: Box<dyn AnyCompose> = unsafe { mem::transmute(compose) };
+
+        if let Some(content) = cell {
+            unsafe { *(&mut *(content.as_ptr_mut() as *mut _)) = compose }
+        } else {
+            *cell = Some(compose);
+        }
+
+        cell.as_mut().unwrap().any_compose(cx.state);
     }
 }
 
@@ -150,16 +174,16 @@ impl Composer {
 
 #[cfg(test)]
 mod tests {
-    use crate::{AnyCompose, Compose, Composer};
+    use crate::{AnyCompose, Compose, Composer, DynCompose};
     use std::{cell::Cell, rc::Rc};
 
-    struct B2 {
+    struct Counter {
         x: Rc<Cell<i32>>,
     }
 
-    impl Compose for B2 {
+    impl Compose for Counter {
         fn compose(cx: crate::Scope<Self>) -> impl Compose {
-            cx.me().x.set(1);
+            cx.me().x.set(cx.me().x.get() + 1);
         }
     }
 
@@ -171,15 +195,20 @@ mod tests {
 
         impl Compose for Wrap {
             fn compose(cx: crate::Scope<Self>) -> impl Compose {
-                B2 {
+                Counter {
                     x: cx.me().x.clone(),
                 }
             }
         }
 
         let x = Rc::new(Cell::new(0));
-        Composer::new(Wrap { x: x.clone() }).compose();
+        let mut composer = Composer::new(Wrap { x: x.clone() });
+
+        composer.compose();
         assert_eq!(x.get(), 1);
+
+        composer.compose();
+        assert_eq!(x.get(), 2);
     }
 
     #[test]
@@ -190,14 +219,19 @@ mod tests {
 
         impl Compose for Wrap {
             fn compose(cx: crate::Scope<Self>) -> impl Compose {
-                Box::new(B2 {
+                DynCompose::new(Counter {
                     x: cx.me().x.clone(),
-                }) as Box<dyn AnyCompose>
+                })
             }
         }
 
         let x = Rc::new(Cell::new(0));
-        Composer::new(Wrap { x: x.clone() }).compose();
+        let mut composer = Composer::new(Wrap { x: x.clone() });
+
+        composer.compose();
         assert_eq!(x.get(), 1);
+
+        composer.compose();
+        assert_eq!(x.get(), 2);
     }
 }
