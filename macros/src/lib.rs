@@ -24,10 +24,20 @@ pub fn data(input: TokenStream) -> TokenStream {
         }
     });
 
+    let data_ident = format_ident!("__{}Data", ident);
+
     let gen = quote! {
         #(#checks)*
 
-        unsafe impl #generics actuate::Data for #ident #generics {}
+        struct #data_ident;
+
+        unsafe impl #generics actuate::Data for #ident #generics {
+            type Id = #data_ident;
+
+            fn data_id() -> Self::Id {
+                #data_ident
+            }
+        }
     };
     gen.into()
 }

@@ -1,11 +1,12 @@
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, UnsafeCell},
+    cell::{Cell, RefCell, UnsafeCell},
     hash::{Hash, Hasher},
     marker::PhantomData,
     mem,
     ops::Deref,
 };
+use tokio::sync::mpsc;
 
 /// A mapped immutable reference to a value of type `T`.
 pub struct Map<'a, T: ?Sized> {
@@ -65,6 +66,99 @@ impl<T: ?Sized> Deref for Ref<'_, T> {
     fn deref(&self) -> &Self::Target {
         self.value
     }
+}
+
+#[derive(Hash)]
+pub struct Mut<'a, T> {
+    ptr: *mut T,
+    value: &'a T,
+    is_changed: *const Cell<bool>,
+}
+
+impl<'a, T: 'static> Mut<'a, T> {
+    pub fn update(&self, f: impl FnOnce(&mut T) + 'static) {
+        let mut cell = Some(f);
+        let ptr = self.ptr;
+        let is_changed = self.is_changed;
+
+        Runtime::current().update(move || {
+            let value = unsafe { &mut *ptr };
+            cell.take().unwrap()(value);
+
+            unsafe {
+                (*is_changed).set(true);
+            }
+        });
+    }
+
+    pub fn with(&self, f: impl FnOnce(&mut T) + 'static) {
+        let mut cell = Some(f);
+        let ptr = self.ptr;
+
+        Runtime::current().update(move || {
+            let value = unsafe { &mut *ptr };
+            cell.take().unwrap()(value);
+        });
+    }
+
+    pub fn as_ref(&self) -> Ref<'a, T> {
+        Ref { value: self.value }
+    }
+}
+
+impl<T> Clone for Mut<'_, T> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            value: self.value,
+            is_changed: self.is_changed,
+        }
+    }
+}
+
+impl<T> Copy for Mut<'_, T> {}
+
+impl<'a, T> Deref for Mut<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+struct Update {
+    f: Box<dyn FnMut()>,
+}
+
+#[derive(Clone)]
+pub struct Runtime {
+    tx: mpsc::UnboundedSender<Update>,
+}
+
+impl Runtime {
+    pub fn current() -> Self {
+        RUNTIME.with(|runtime| {
+            runtime
+                .borrow()
+                .as_ref()
+                .expect("Runtime::current() called outside of a runtime")
+                .clone()
+        })
+    }
+
+    pub fn enter(&self) {
+        RUNTIME.with(|runtime| {
+            *runtime.borrow_mut() = Some(self.clone());
+        });
+    }
+
+    pub fn update(&self, f: impl FnMut() + 'static) {
+        self.tx.send(Update { f: Box::new(f) }).unwrap();
+    }
+}
+
+thread_local! {
+    static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
 }
 
 #[derive(Default)]
@@ -159,6 +253,26 @@ unsafe impl Data for DynCompose<'_> {
         PhantomData
     }
 }
+
+#[doc(hidden)]
+pub unsafe trait StateField {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+unsafe impl<T: 'static> StateField for &T {}
+
+unsafe impl<T: 'static> StateField for Mut<'_, T> {}
+
+#[doc(hidden)]
+pub unsafe trait DataField {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+unsafe impl<T: Data> DataField for &&T {}
 
 pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
@@ -296,21 +410,32 @@ where
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
     scope_state: ScopeState,
+    rt: Runtime,
+    rx: mpsc::UnboundedReceiver<Update>,
 }
 
 impl Composer {
     pub fn new(content: impl Compose + 'static) -> Self {
+        let (tx, rx) = mpsc::unbounded_channel();
         Self {
             compose: Box::new(content),
             scope_state: ScopeState::default(),
+            rt: Runtime { tx },
+            rx,
         }
     }
 
     pub fn compose(&mut self) {
+        self.rt.enter();
+
         self.compose.any_compose(&Scope {
             me: &self.compose,
             state: &self.scope_state,
         });
+
+        while let Ok(mut update) = self.rx.try_recv() {
+            (update.f)();
+        }
     }
 }
 
