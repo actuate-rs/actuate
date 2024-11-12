@@ -1,4 +1,7 @@
-use crate::{use_context, use_memo, use_provider, use_ref, Compose, Composer, Data, Ref, Scope};
+use crate::{
+    use_context, use_memo, use_provider, use_ref, Compose, Composer, Data, Ref, Scope, Update,
+    Updater,
+};
 use masonry::event_loop_runner::{MasonryState, MasonryUserEvent};
 use masonry::widget::{Flex as FlexWidget, Label, RootWidget, WidgetMut};
 use masonry::{Action, AppDriver, Color, DriverCtx, WidgetId};
@@ -53,36 +56,66 @@ impl<C: Compose> Compose for Tree<C> {
     }
 }
 
+struct DriverUpdate(Update);
+
+unsafe impl Send for DriverUpdate {}
+
+struct DriverUpdater {
+    proxy: EventLoopProxy<MasonryUserEvent>,
+}
+
+impl Updater for DriverUpdater {
+    fn update(&self, update: crate::Update) {
+        self.proxy
+            .send_event(MasonryUserEvent::Action(
+                Action::Other(Box::new(DriverUpdate(update))),
+                WidgetId::reserved(u16::MAX),
+            ))
+            .unwrap();
+    }
+}
+
 pub struct Driver {
-    composer: Composer,
+    composer: Box<Composer>,
     tree_cx: TreeContext,
 }
 
 impl Driver {
     pub fn new(content: impl Compose + 'static, proxy: EventLoopProxy<MasonryUserEvent>) -> Self {
         let tree_cx = TreeContext {
-            proxy,
+            proxy: proxy.clone(),
             inner: Rc::new(RefCell::new(Inner {
                 widget: None,
                 child_idx: 0,
             })),
         };
 
+        let updater = DriverUpdater { proxy };
+
         Self {
-            composer: Composer::new(Tree {
-                content,
-                tree_cx: tree_cx.clone(),
-            }),
+            composer: Box::new(Composer::new(
+                Tree {
+                    content,
+                    tree_cx: tree_cx.clone(),
+                },
+                updater,
+            )),
             tree_cx,
         }
     }
 }
 
 impl AppDriver for Driver {
-    fn on_action(&mut self, masonry_ctx: &mut DriverCtx, _widget_id: WidgetId, _action: Action) {
+    fn on_action(&mut self, masonry_ctx: &mut DriverCtx, _widget_id: WidgetId, action: Action) {
         let mut root = masonry_ctx.get_root::<RootWidget<FlexWidget>>();
         let flex = RootWidget::child_mut(&mut root);
         let widget: WidgetMut<'static, FlexWidget> = unsafe { mem::transmute(flex) };
+
+        if let Action::Other(mut action) = action {
+            if let Some(update) = action.downcast_mut::<DriverUpdate>() {
+                (update.0.f)();
+            }
+        }
 
         self.tree_cx.inner.borrow_mut().widget = Some(widget);
         self.tree_cx.inner.borrow_mut().child_idx = 0;
@@ -90,10 +123,6 @@ impl AppDriver for Driver {
         self.composer.compose();
 
         self.tree_cx.inner.borrow_mut().widget = None;
-
-        while let Ok(mut update) = self.composer.rx.try_recv() {
-            (update.f)();
-        }
     }
 
     fn on_start(&mut self, state: &mut MasonryState) {
@@ -109,10 +138,6 @@ impl AppDriver for Driver {
 
             self.tree_cx.inner.borrow_mut().widget = None;
         });
-
-        while let Ok(mut update) = self.composer.rx.try_recv() {
-            (update.f)();
-        }
     }
 }
 
@@ -171,6 +196,10 @@ where
     C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        let tree_cx = use_context::<TreeContext>(&cx);
+        let mut tree_inner = tree_cx.inner.borrow_mut();
+        tree_inner.child_idx = 0;
+
         Ref::map(cx.me(), |me| &me.0)
     }
 }
