@@ -1,6 +1,6 @@
 use actuate::{
     native::{Flex, Text},
-    use_mut, Compose, Data, Scope,
+    use_mut, Compose, Scope,
 };
 use actuate_macros::Data;
 
@@ -12,7 +12,7 @@ impl Compose for App {
         let count = use_mut(&cx, || 0);
 
         if *count == 0 {
-            //count.update(|x| *x += 1);
+            count.update(|x| *x += 1);
         }
 
         Flex((

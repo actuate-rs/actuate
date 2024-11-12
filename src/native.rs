@@ -129,13 +129,6 @@ where
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let tree_cx = use_context::<TreeContext>(&cx);
-        /* tree_cx
-        .proxy
-        .send_event(MasonryUserEvent::Action(
-            Action::Other(Box::new(())),
-            WidgetId::reserved(u16::MAX),
-        ))
-        .unwrap(); */
 
         let mut tree_inner = tree_cx.inner.borrow_mut();
 

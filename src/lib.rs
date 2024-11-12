@@ -175,8 +175,15 @@ pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
     is_changed: Cell<bool>,
+    is_parent_changed: Cell<bool>,
     is_empty: Cell<bool>,
     contexts: RefCell<Contexts>,
+}
+
+impl ScopeState {
+    pub fn set_changed(&self) {
+        self.is_changed.set(true);
+    }
 }
 
 /// Composable scope.
@@ -226,7 +233,7 @@ pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &
     } else {
         hooks.get(idx).unwrap()
     };
-    any.downcast_ref().unwrap()
+    (**any).downcast_ref().unwrap()
 }
 
 pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
@@ -302,8 +309,13 @@ where
     value_mut.as_ref()
 }
 
-pub unsafe trait Data {
+pub unsafe trait Data: Sized {
     type Id: 'static;
+
+    unsafe fn reborrow(self, ptr: *mut ()) {
+        let x = ptr as *mut Self;
+        *x = self;
+    }
 }
 
 unsafe impl Data for () {
@@ -314,8 +326,8 @@ unsafe impl Data for String {
     type Id = Self;
 }
 
-unsafe impl Data for str {
-    type Id = &'static Self;
+unsafe impl Data for &str {
+    type Id = &'static str;
 }
 
 unsafe impl<T: ?Sized + Data> Data for &T {
@@ -366,7 +378,7 @@ impl Compose for () {
 
 impl<C: Compose> Compose for &C {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.me().any_compose(&cx);
+        (**cx.me()).any_compose(&cx);
     }
 }
 
@@ -376,14 +388,19 @@ impl<C: Compose> Compose for Map<'_, C> {
     }
 }
 
+enum DynComposeInner<'a> {
+    Boxed(Box<dyn AnyCompose + 'a>),
+    Ptr(*const dyn AnyCompose),
+}
+
 pub struct DynCompose<'a> {
-    compose: UnsafeCell<Option<Box<dyn AnyCompose + 'a>>>,
+    compose: UnsafeCell<Option<DynComposeInner<'a>>>,
 }
 
 impl<'a> DynCompose<'a> {
     pub fn new(content: impl Compose + 'a) -> Self {
         Self {
-            compose: UnsafeCell::new(Some(Box::new(content))),
+            compose: UnsafeCell::new(Some(DynComposeInner::Boxed(Box::new(content)))),
         }
     }
 }
@@ -398,23 +415,50 @@ impl<'a> Compose for DynCompose<'a> {
         let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
-        let compose = unsafe { &mut *cx.me().compose.get() }.take().unwrap();
-        let compose: Box<dyn AnyCompose> = unsafe { mem::transmute(compose) };
+        let inner = unsafe { &mut *cx.me().compose.get() }.take().unwrap();
 
-        if let Some(state) = cell {
-            if state.data_id != compose.data_id() {
-                todo!()
+        let child_state = use_ref(&cx, || ScopeState {
+            contexts: cx.state.contexts.clone(),
+            ..Default::default()
+        });
+
+        match inner {
+            DynComposeInner::Boxed(any_compose) => {
+                let mut compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
+
+                let ptr = if let Some(state) = cell {
+                    if state.data_id != compose.data_id() {
+                        todo!()
+                    }
+
+                    let ptr = (*state.compose).as_ptr_mut();
+
+                    unsafe {
+                        compose.reborrow(ptr);
+                    }
+
+                    ptr
+                } else {
+                    let ptr = (*compose).as_ptr_mut();
+                    *cell = Some(DynComposeState {
+                        data_id: compose.data_id(),
+                        compose,
+                    });
+                    ptr
+                };
+
+                cell.as_mut().unwrap().compose.any_compose(child_state);
+
+                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+
+                *unsafe { &mut *cx.me().compose.get() } = Some(DynComposeInner::Ptr(ptr));
             }
+            DynComposeInner::Ptr(ptr) => {
+                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
 
-            unsafe { *(&mut *(state.compose.as_ptr_mut() as *mut _)) = compose }
-        } else {
-            *cell = Some(DynComposeState {
-                data_id: compose.data_id(),
-                compose,
-            });
+                unsafe { &*ptr }.any_compose(child_state);
+            }
         }
-
-        cell.as_mut().unwrap().compose.any_compose(cx.state);
     }
 }
 
@@ -427,7 +471,9 @@ macro_rules! impl_tuples {
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
                 $(cx.me().$idx.any_compose(use_ref(&cx, || ScopeState {
-                    contexts: cx.contexts.clone(), ..Default::default()
+                    contexts: cx.contexts.clone(),
+                    is_parent_changed: cx.is_parent_changed.clone(),
+                    ..Default::default()
                 }));)*
             }
         }
@@ -449,6 +495,8 @@ trait AnyCompose {
 
     fn as_ptr_mut(&mut self) -> *mut ();
 
+    unsafe fn reborrow(&mut self, ptr: *mut ());
+
     fn any_compose<'a>(&'a self, state: &'a ScopeState);
 }
 
@@ -464,31 +512,45 @@ where
         self as *mut Self as *mut ()
     }
 
+    unsafe fn reborrow(&mut self, ptr: *mut ()) {
+        std::ptr::swap(self, ptr as _);
+    }
+
     fn any_compose<'a>(&'a self, state: &'a ScopeState) {
+        state.hook_idx.set(0);
+
         let cx = Scope { me: self, state };
 
         let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
-        let child = C::compose(cx);
-        unsafe {
-            if let Some(ref mut content) = cell {
-                *(&mut *(content.as_ptr_mut() as *mut _)) = child
-            } else {
-                let boxed: Box<dyn AnyCompose> = Box::new(child);
-                *cell = Some(mem::transmute(boxed));
-            }
-        }
-
-        if cx.state.is_empty.get() {
-            cx.state.is_empty.set(false);
-            return;
-        }
-
         let child_state = use_ref(&cx, || ScopeState {
             contexts: state.contexts.clone(),
             ..Default::default()
         });
+
+        if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
+            let child = C::compose(cx);
+
+            *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+
+            unsafe {
+                if let Some(ref mut content) = cell {
+                    child.reborrow((**content).as_ptr_mut());
+                } else {
+                    let boxed: Box<dyn AnyCompose> = Box::new(child);
+                    *cell = Some(mem::transmute(boxed));
+                }
+            }
+
+            if cx.state.is_empty.take() {
+                cx.state.is_empty.set(false);
+                return;
+            }
+
+            child_state.is_parent_changed.set(true);
+        }
+
         let child = cell.as_mut().unwrap();
         (**child).any_compose(child_state);
     }
@@ -542,6 +604,8 @@ mod tests {
     impl Compose for Counter {
         fn compose(cx: crate::Scope<Self>) -> impl Compose {
             cx.me().x.set(cx.me().x.get() + 1);
+
+            cx.set_changed();
         }
     }
 
