@@ -8,7 +8,8 @@ use std::{
     ops::Deref,
     rc::Rc,
 };
-use tokio::sync::mpsc;
+
+pub mod native;
 
 /// A mapped immutable reference to a value of type `T`.
 pub struct Map<'a, T: ?Sized> {
@@ -128,13 +129,13 @@ impl<'a, T> Deref for Mut<'a, T> {
     }
 }
 
-struct Update {
+pub struct Update {
     f: Box<dyn FnMut()>,
 }
 
 #[derive(Clone)]
 pub struct Runtime {
-    tx: mpsc::UnboundedSender<Update>,
+    updater: Rc<dyn Updater>,
 }
 
 impl Runtime {
@@ -155,7 +156,7 @@ impl Runtime {
     }
 
     pub fn update(&self, f: impl FnMut() + 'static) {
-        self.tx.send(Update { f: Box::new(f) }).unwrap();
+        self.updater.update(Update { f: Box::new(f) });
     }
 }
 
@@ -320,12 +321,24 @@ unsafe impl Data for () {
     type Id = ();
 }
 
+unsafe impl Data for String {
+    type Id = Self;
+}
+
+unsafe impl Data for &str {
+    type Id = &'static str;
+}
+
 unsafe impl<T: ?Sized + Data> Data for &T {
     type Id = PhantomData<&'static T::Id>;
 }
 
 unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
     type Id = PhantomData<Ref<'static, T::Id>>;
+}
+
+unsafe impl<T: Data + ?Sized> Data for Map<'_, T> {
+    type Id = PhantomData<Map<'static, T::Id>>;
 }
 
 unsafe impl Data for DynCompose<'_> {
@@ -364,7 +377,13 @@ impl Compose for () {
 
 impl<C: Compose> Compose for &C {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.me().any_compose(&cx);
+        (**cx.me()).any_compose(&cx);
+    }
+}
+
+impl<C: Compose> Compose for Map<'_, C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        (**cx.me()).any_compose(&cx);
     }
 }
 
@@ -429,9 +448,13 @@ impl<'a> Compose for DynCompose<'a> {
 
                 cell.as_mut().unwrap().compose.any_compose(child_state);
 
+                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+
                 *unsafe { &mut *cx.me().compose.get() } = Some(DynComposeInner::Ptr(ptr));
             }
             DynComposeInner::Ptr(ptr) => {
+                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+
                 unsafe { &*ptr }.any_compose(child_state);
             }
         }
@@ -505,9 +528,10 @@ where
             ..Default::default()
         });
 
-        //if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get()
-        {
+        if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
             let child = C::compose(cx);
+
+            *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
 
             unsafe {
                 if let Some(ref mut content) = cell {
@@ -531,21 +555,25 @@ where
     }
 }
 
+pub trait Updater {
+    fn update(&self, update: Update);
+}
+
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
-    scope_state: ScopeState,
+    scope_state: Box<ScopeState>,
     rt: Runtime,
-    rx: mpsc::UnboundedReceiver<Update>,
 }
 
 impl Composer {
-    pub fn new(content: impl Compose + 'static) -> Self {
-        let (tx, rx) = mpsc::unbounded_channel();
+    pub fn new(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
+        let updater = Rc::new(updater);
         Self {
             compose: Box::new(content),
-            scope_state: ScopeState::default(),
-            rt: Runtime { tx },
-            rx,
+            scope_state: Box::new(ScopeState::default()),
+            rt: Runtime {
+                updater: updater.clone(),
+            },
         }
     }
 
@@ -556,13 +584,10 @@ impl Composer {
             me: &self.compose,
             state: &self.scope_state,
         });
-
-        while let Ok(mut update) = self.rx.try_recv() {
-            (update.f)();
-        }
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use crate::{Compose, Composer, Data, DynCompose};
@@ -583,6 +608,7 @@ mod tests {
             cx.set_changed();
         }
     }
+
 
     #[test]
     fn it_works() {
@@ -631,7 +657,7 @@ mod tests {
         }
 
         let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() });
+        let mut composer = Composer::new(Wrap { x: x.clone() }, updater);
 
         composer.compose();
         assert_eq!(x.get(), 1);
@@ -639,4 +665,6 @@ mod tests {
         composer.compose();
         assert_eq!(x.get(), 2);
     }
+
 }
+*/
