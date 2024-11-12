@@ -1,5 +1,5 @@
 use actuate::{
-    native::{Flex, Text},
+    native::{Button, Flex, Text},
     use_mut, Compose, Scope,
 };
 use actuate_macros::Data;
@@ -15,10 +15,14 @@ impl Compose for App {
             count.update(|x| *x += 1);
         }
 
-        Flex((
-            Text(format!("High five count: {}", *count)),
-            Text("Up high!"),
-            Text("Down low!"),
+        Flex::column((
+            Text::new(format!("High five count: {}", *count)),
+            Button::new("Up high!").on_press(move || {
+                count.update(|x| *x += 1);
+            }),
+            Button::new("Down low!").on_press(move || {
+                count.update(|x| *x -= 1);
+            }),
         ))
     }
 }

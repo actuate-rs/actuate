@@ -8,7 +8,6 @@ use std::{
     ops::Deref,
     rc::Rc,
 };
-use tokio::sync::mpsc;
 
 pub mod native;
 
@@ -130,7 +129,7 @@ impl<'a, T> Deref for Mut<'a, T> {
     }
 }
 
-struct Update {
+pub struct Update {
     f: Box<dyn FnMut()>,
 }
 
@@ -562,7 +561,7 @@ pub trait Updater {
 
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
-    scope_state: ScopeState,
+    scope_state: Box<ScopeState>,
     rt: Runtime,
 }
 
@@ -571,9 +570,10 @@ impl Composer {
         let updater = Rc::new(updater);
         Self {
             compose: Box::new(content),
-            scope_state: ScopeState::default(),
-            rt: Runtime { updater: updater.clone() },
-           
+            scope_state: Box::new(ScopeState::default()),
+            rt: Runtime {
+                updater: updater.clone(),
+            },
         }
     }
 
@@ -584,11 +584,10 @@ impl Composer {
             me: &self.compose,
             state: &self.scope_state,
         });
-
-        
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use crate::{Compose, Composer, Data, DynCompose};
@@ -610,7 +609,7 @@ mod tests {
         }
     }
 
-    /*
+
     #[test]
     fn it_works() {
         struct Wrap {
@@ -666,5 +665,6 @@ mod tests {
         composer.compose();
         assert_eq!(x.get(), 2);
     }
-     */
+
 }
+*/
