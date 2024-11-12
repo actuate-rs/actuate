@@ -2,17 +2,17 @@ use actuate::{
     native::{Flex, Text},
     use_mut, Compose, Data, Scope,
 };
+use actuate_macros::Data;
 
+#[derive(Data)]
 struct App;
-
-unsafe impl Data for App {}
 
 impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let count = use_mut(&cx, || 0);
 
         if *count == 0 {
-            count.update(|x| *x += 1);
+            //count.update(|x| *x += 1);
         }
 
         Flex((

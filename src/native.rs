@@ -41,7 +41,9 @@ pub struct Tree<C> {
     tree_cx: TreeContext,
 }
 
-unsafe impl<C: Data> Data for Tree<C> {}
+unsafe impl<C: Data> Data for Tree<C> {
+    type Id = Tree<C::Id>;
+}
 
 impl<C: Compose> Compose for Tree<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
@@ -85,7 +87,7 @@ impl AppDriver for Driver {
         self.tree_cx.inner.borrow_mut().widget = Some(widget);
         self.tree_cx.inner.borrow_mut().child_idx = 0;
 
-        self.composer.rebuild();
+        self.composer.compose();
 
         self.tree_cx.inner.borrow_mut().widget = None;
 
@@ -103,7 +105,7 @@ impl AppDriver for Driver {
             self.tree_cx.inner.borrow_mut().widget = Some(widget);
             self.tree_cx.inner.borrow_mut().child_idx = 0;
 
-            self.composer.build();
+            self.composer.compose();
 
             self.tree_cx.inner.borrow_mut().widget = None;
         });
@@ -117,7 +119,9 @@ impl AppDriver for Driver {
 #[derive(Clone)]
 pub struct Text<T>(pub T);
 
-unsafe impl<T: Data> Data for Text<T> {}
+unsafe impl<T: Data> Data for Text<T> {
+    type Id = Text<T::Id>;
+}
 
 impl<T> Compose for Text<T>
 where
@@ -125,13 +129,13 @@ where
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let tree_cx = use_context::<TreeContext>(&cx);
-        tree_cx
-            .proxy
-            .send_event(MasonryUserEvent::Action(
-                Action::Other(Box::new(())),
-                WidgetId::reserved(u16::MAX),
-            ))
-            .unwrap();
+        /* tree_cx
+        .proxy
+        .send_event(MasonryUserEvent::Action(
+            Action::Other(Box::new(())),
+            WidgetId::reserved(u16::MAX),
+        ))
+        .unwrap(); */
 
         let mut tree_inner = tree_cx.inner.borrow_mut();
 
@@ -165,13 +169,15 @@ where
 
 pub struct Flex<C>(pub C);
 
-unsafe impl<C: Data> Data for Flex<C> {}
+unsafe impl<C: Data> Data for Flex<C> {
+    type Id = Flex<C::Id>;
+}
 
 impl<C> Compose for Flex<C>
 where
-    C: Compose + Clone,
+    C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.me().0.clone()
+        Ref::map(cx.me(), |me| &me.0)
     }
 }
