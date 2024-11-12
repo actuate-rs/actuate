@@ -6,11 +6,14 @@ use std::{
     ops::Deref,
 };
 
+use compose::AnyNode;
 use tokio::sync::mpsc;
 
 pub mod compose;
+use self::compose::RebuildContext;
 pub use self::compose::{AnyCompose, Compose, Data, DataField, Memo, StateField};
-use self::compose::{Node, RebuildContext};
+
+pub mod native;
 
 pub use actuate_macros::Data;
 
@@ -294,22 +297,25 @@ thread_local! {
 pub struct Composer {
     rt: Runtime,
     rx: mpsc::UnboundedReceiver<Update>,
+    node: Box<dyn AnyNode>,
+    state: Option<Box<dyn Any>>,
 }
 
 impl Composer {
-    pub fn new() -> Self {
+    pub fn new(compose: impl Compose + 'static) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         Self {
             rt: Runtime { tx },
             rx,
+            node: Box::new(compose.into_node()),
+            state: None,
         }
     }
 
-    pub async fn run(&mut self, compose: impl Compose) {
+    pub async fn run(&mut self) {
         self.rt.enter();
 
-        let node = compose.into_node();
-        let mut state = node.build();
+        let mut state = self.node.any_build();
 
         while let Some(mut update) = self.rx.recv().await {
             (update.f)();
@@ -318,11 +324,25 @@ impl Composer {
                 (update.f)();
             }
 
-            node.rebuild(&mut state, &RebuildContext { is_changed: false });
+            self.node
+                .any_rebuild(&mut state, &RebuildContext { is_changed: false });
         }
+    }
+
+    pub fn build(&mut self) {
+        self.rt.enter();
+
+        let state = self.node.any_build();
+        self.state = Some(state);
+    }
+
+    pub fn rebuild(&mut self) {
+        let state = self.state.as_mut().unwrap();
+        self.node
+            .any_rebuild(state, &RebuildContext { is_changed: false });
     }
 }
 
-pub async fn run(compose: impl Compose) {
-    Composer::new().run(compose).await;
+pub async fn run(compose: impl Compose + 'static) {
+    Composer::new(compose).run().await;
 }
