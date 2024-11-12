@@ -339,7 +339,7 @@ impl Composer {
     pub fn rebuild(&mut self) {
         let state = self.state.as_mut().unwrap();
         self.node
-            .any_rebuild(state, &RebuildContext { is_changed: false });
+            .any_rebuild(&mut **state, &RebuildContext { is_changed: false });
     }
 }
 

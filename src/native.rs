@@ -35,6 +35,7 @@ impl AppDriver for Driver {
         widget_id: masonry::WidgetId,
         action: masonry::Action,
     ) {
+        dbg!("action");
         self.composer.rebuild();
     }
 
