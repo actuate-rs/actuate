@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     cell::{Cell, UnsafeCell},
+    mem,
     ops::Deref,
 };
 
@@ -21,6 +22,7 @@ impl<T: ?Sized> Deref for Ref<'_, T> {
 pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
+    is_empty: Cell<bool>,
 }
 pub struct Scope<'a, C: ?Sized> {
     me: &'a C,
@@ -73,4 +75,103 @@ pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
 
 pub trait Compose {
     fn compose(cx: Scope<Self>) -> impl Compose;
+}
+
+impl Compose for () {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.is_empty.set(true);
+    }
+}
+
+pub trait AnyCompose {
+    fn as_ptr_mut(&mut self) -> *mut ();
+
+    fn any_compose<'a>(&'a self, state: &'a ScopeState);
+}
+
+impl<C: Compose> AnyCompose for C {
+    fn as_ptr_mut(&mut self) -> *mut () {
+        self as *mut Self as *mut ()
+    }
+
+    fn any_compose<'a>(&'a self, state: &'a ScopeState) {
+        let cx = Scope { me: self, state };
+
+        let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
+        let cell = unsafe { &mut *cell.get() };
+
+        let child = C::compose(cx);
+        unsafe {
+            if let Some(ref mut content) = cell {
+                *(&mut *(content.as_ptr_mut() as *mut _)) = child
+            } else {
+                let boxed: Box<dyn AnyCompose> = Box::new(child);
+                *cell = Some(mem::transmute(boxed));
+            }
+        }
+
+        if cx.state.is_empty.get() {
+            cx.state.is_empty.set(false);
+            return;
+        }
+
+        let child_state = use_ref(&cx, || ScopeState::default());
+        cell.as_mut().unwrap().any_compose(child_state);
+    }
+}
+
+pub struct Composer {
+    compose: Box<dyn AnyCompose>,
+    scope_state: ScopeState,
+}
+
+impl Composer {
+    pub fn new(content: impl Compose + 'static) -> Self {
+        Self {
+            compose: Box::new(content),
+            scope_state: ScopeState::default(),
+        }
+    }
+
+    pub fn compose(&mut self) {
+        self.compose.any_compose(&Scope {
+            me: &self.compose,
+            state: &self.scope_state,
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Compose, Composer};
+    use std::{cell::Cell, rc::Rc};
+
+    struct A {
+        x: Rc<Cell<i32>>,
+    }
+
+    impl Compose for A {
+        fn compose(cx: crate::Scope<Self>) -> impl Compose {
+            B {
+                x: cx.me().x.clone(),
+            }
+        }
+    }
+
+    struct B {
+        x: Rc<Cell<i32>>,
+    }
+
+    impl Compose for B {
+        fn compose(cx: crate::Scope<Self>) -> impl Compose {
+            cx.me().x.set(1);
+        }
+    }
+
+    #[test]
+    fn it_works() {
+        let x = Rc::new(Cell::new(0));
+        Composer::new(A { x: x.clone() }).compose();
+        assert_eq!(x.get(), 1);
+    }
 }
