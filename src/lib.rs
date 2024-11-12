@@ -1,13 +1,60 @@
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
+    hash::{Hash, Hasher},
+    marker::PhantomData,
     mem,
     ops::Deref,
 };
 
+pub struct Map<'a, T: ?Sized> {
+    ptr: *const (),
+    map_fn: *const (),
+    deref_fn: fn(*const (), *const ()) -> &'a T,
+}
+
+impl<T: ?Sized> Clone for Map<'_, T> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            map_fn: self.map_fn,
+            deref_fn: self.deref_fn,
+        }
+    }
+}
+
+impl<T: ?Sized> Copy for Map<'_, T> {}
+
+impl<'a, T: ?Sized> Deref for Map<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        (self.deref_fn)(self.ptr, self.map_fn)
+    }
+}
+
+impl<T: Hash + ?Sized> Hash for Map<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+}
+
 /// An immutable reference to a value of type `T`.
 pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
+}
+
+impl<'a, T> Ref<'a, T> {
+    pub fn map<U: ?Sized>(self, f: fn(&T) -> &U) -> Map<'a, U> {
+        Map {
+            ptr: self.value as *const _ as _,
+            map_fn: f as _,
+            deref_fn: |ptr, g| unsafe {
+                let g: fn(&T) -> &U = mem::transmute(g);
+                g(&*(ptr as *const T))
+            },
+        }
+    }
 }
 
 impl<T: ?Sized> Deref for Ref<'_, T> {
@@ -58,11 +105,11 @@ impl<'a, C> Deref for Scope<'a, C> {
     }
 }
 
-pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
-    let hooks = unsafe { &mut *scope.hooks.get() };
+pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
+    let hooks = unsafe { &mut *cx.hooks.get() };
 
-    let idx = scope.hook_idx.get();
-    scope.hook_idx.set(idx + 1);
+    let idx = cx.hook_idx.get();
+    cx.hook_idx.set(idx + 1);
 
     let any = if idx >= hooks.len() {
         hooks.push(Box::new(make_value()));
@@ -73,7 +120,37 @@ pub fn use_ref<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
     any.downcast_ref().unwrap()
 }
 
-pub trait Compose {
+pub unsafe trait Data {
+    type Id: 'static;
+
+    fn data_id() -> Self::Id;
+}
+
+unsafe impl Data for () {
+    type Id = ();
+
+    fn data_id() -> Self::Id {}
+}
+
+pub struct RefMarker;
+
+unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
+    type Id = (RefMarker, T::Id);
+
+    fn data_id() -> Self::Id {
+        (RefMarker, T::data_id())
+    }
+}
+
+unsafe impl Data for DynCompose<'_> {
+    type Id = PhantomData<DynCompose<'static>>;
+
+    fn data_id() -> Self::Id {
+        PhantomData
+    }
+}
+
+pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
 }
 
@@ -95,31 +172,52 @@ impl<'a> DynCompose<'a> {
     }
 }
 
+struct DynComposeState {
+    compose: Box<dyn AnyCompose>,
+    data_id: TypeId,
+}
+
 impl<'a> Compose for DynCompose<'a> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
+        let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
         let compose = unsafe { &mut *cx.me().compose.get() }.take().unwrap();
         let compose: Box<dyn AnyCompose> = unsafe { mem::transmute(compose) };
 
-        if let Some(content) = cell {
-            unsafe { *(&mut *(content.as_ptr_mut() as *mut _)) = compose }
+        if let Some(state) = cell {
+            if state.data_id != compose.data_id() {
+                todo!()
+            }
+
+            unsafe { *(&mut *(state.compose.as_ptr_mut() as *mut _)) = compose }
         } else {
-            *cell = Some(compose);
+            *cell = Some(DynComposeState {
+                data_id: compose.data_id(),
+                compose,
+            });
         }
 
-        cell.as_mut().unwrap().any_compose(cx.state);
+        cell.as_mut().unwrap().compose.any_compose(cx.state);
     }
 }
 
-pub trait AnyCompose {
+trait AnyCompose {
+    fn data_id(&self) -> TypeId;
+
     fn as_ptr_mut(&mut self) -> *mut ();
 
     fn any_compose<'a>(&'a self, state: &'a ScopeState);
 }
 
-impl<C: Compose> AnyCompose for C {
+impl<C> AnyCompose for C
+where
+    C: Compose + Data,
+{
+    fn data_id(&self) -> TypeId {
+        C::data_id().type_id()
+    }
+
     fn as_ptr_mut(&mut self) -> *mut () {
         self as *mut Self as *mut ()
     }
@@ -174,11 +272,19 @@ impl Composer {
 
 #[cfg(test)]
 mod tests {
-    use crate::{AnyCompose, Compose, Composer, DynCompose};
-    use std::{cell::Cell, rc::Rc};
+    use crate::{Compose, Composer, Data, DynCompose};
+    use std::{cell::Cell, marker::PhantomData, rc::Rc};
 
     struct Counter {
         x: Rc<Cell<i32>>,
+    }
+
+    unsafe impl Data for Counter {
+        type Id = PhantomData<Self>;
+
+        fn data_id() -> Self::Id {
+            PhantomData
+        }
     }
 
     impl Compose for Counter {
@@ -191,6 +297,14 @@ mod tests {
     fn it_works() {
         struct Wrap {
             x: Rc<Cell<i32>>,
+        }
+
+        unsafe impl Data for Wrap {
+            type Id = PhantomData<Self>;
+
+            fn data_id() -> Self::Id {
+                PhantomData
+            }
         }
 
         impl Compose for Wrap {
@@ -215,6 +329,14 @@ mod tests {
     fn it_composes_any_compose() {
         struct Wrap {
             x: Rc<Cell<i32>>,
+        }
+
+        unsafe impl Data for Wrap {
+            type Id = PhantomData<Self>;
+
+            fn data_id() -> Self::Id {
+                PhantomData
+            }
         }
 
         impl Compose for Wrap {
