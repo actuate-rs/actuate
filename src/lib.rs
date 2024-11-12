@@ -83,6 +83,12 @@ impl Compose for () {
     }
 }
 
+impl Compose for Box<dyn AnyCompose> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        (**cx.me()).any_compose(cx.state())
+    }
+}
+
 pub trait AnyCompose {
     fn as_ptr_mut(&mut self) -> *mut ();
 
@@ -116,7 +122,8 @@ impl<C: Compose> AnyCompose for C {
         }
 
         let child_state = use_ref(&cx, || ScopeState::default());
-        cell.as_mut().unwrap().any_compose(child_state);
+        let child = cell.as_mut().unwrap();
+        (**child).any_compose(child_state);
     }
 }
 
@@ -143,26 +150,14 @@ impl Composer {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Compose, Composer};
+    use crate::{AnyCompose, Compose, Composer};
     use std::{cell::Cell, rc::Rc};
 
-    struct A {
+    struct B2 {
         x: Rc<Cell<i32>>,
     }
 
-    impl Compose for A {
-        fn compose(cx: crate::Scope<Self>) -> impl Compose {
-            B {
-                x: cx.me().x.clone(),
-            }
-        }
-    }
-
-    struct B {
-        x: Rc<Cell<i32>>,
-    }
-
-    impl Compose for B {
+    impl Compose for B2 {
         fn compose(cx: crate::Scope<Self>) -> impl Compose {
             cx.me().x.set(1);
         }
@@ -170,8 +165,39 @@ mod tests {
 
     #[test]
     fn it_works() {
+        struct Wrap {
+            x: Rc<Cell<i32>>,
+        }
+
+        impl Compose for Wrap {
+            fn compose(cx: crate::Scope<Self>) -> impl Compose {
+                B2 {
+                    x: cx.me().x.clone(),
+                }
+            }
+        }
+
         let x = Rc::new(Cell::new(0));
-        Composer::new(A { x: x.clone() }).compose();
+        Composer::new(Wrap { x: x.clone() }).compose();
+        assert_eq!(x.get(), 1);
+    }
+
+    #[test]
+    fn it_composes_any_compose() {
+        struct Wrap {
+            x: Rc<Cell<i32>>,
+        }
+
+        impl Compose for Wrap {
+            fn compose(cx: crate::Scope<Self>) -> impl Compose {
+                Box::new(B2 {
+                    x: cx.me().x.clone(),
+                }) as Box<dyn AnyCompose>
+            }
+        }
+
+        let x = Rc::new(Cell::new(0));
+        Composer::new(Wrap { x: x.clone() }).compose();
         assert_eq!(x.get(), 1);
     }
 }
