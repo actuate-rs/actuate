@@ -220,38 +220,22 @@ pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &
 
 pub unsafe trait Data {
     type Id: 'static;
-
-    fn data_id() -> Self::Id;
 }
 
 unsafe impl Data for () {
     type Id = ();
-
-    fn data_id() -> Self::Id {}
 }
 
 unsafe impl<T: ?Sized + Data> Data for &T {
     type Id = PhantomData<&'static T::Id>;
-
-    fn data_id() -> Self::Id {
-        PhantomData
-    }
 }
 
 unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
     type Id = PhantomData<Ref<'static, T::Id>>;
-
-    fn data_id() -> Self::Id {
-        PhantomData
-    }
 }
 
 unsafe impl Data for DynCompose<'_> {
     type Id = PhantomData<DynCompose<'static>>;
-
-    fn data_id() -> Self::Id {
-        PhantomData
-    }
 }
 
 #[doc(hidden)]
@@ -336,10 +320,6 @@ macro_rules! impl_tuples {
     ($($t:tt : $idx:tt),*) => {
         unsafe impl<$($t: Data),*> Data for ($($t,)*) {
             type Id = ($($t::Id,)*);
-
-            fn data_id() -> Self::Id {
-                ($($t::data_id(),)*)
-            }
         }
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
@@ -373,7 +353,7 @@ where
     C: Compose + Data,
 {
     fn data_id(&self) -> TypeId {
-        C::data_id().type_id()
+        TypeId::of::<C::Id>()
     }
 
     fn as_ptr_mut(&mut self) -> *mut () {
@@ -442,18 +422,14 @@ impl Composer {
 #[cfg(test)]
 mod tests {
     use crate::{Compose, Composer, Data, DynCompose};
-    use std::{cell::Cell, marker::PhantomData, rc::Rc};
+    use std::{cell::Cell, rc::Rc};
 
     struct Counter {
         x: Rc<Cell<i32>>,
     }
 
     unsafe impl Data for Counter {
-        type Id = PhantomData<Self>;
-
-        fn data_id() -> Self::Id {
-            PhantomData
-        }
+        type Id = Self;
     }
 
     impl Compose for Counter {
@@ -469,11 +445,7 @@ mod tests {
         }
 
         unsafe impl Data for Wrap {
-            type Id = PhantomData<Self>;
-
-            fn data_id() -> Self::Id {
-                PhantomData
-            }
+            type Id = Self;
         }
 
         impl Compose for Wrap {
@@ -501,11 +473,7 @@ mod tests {
         }
 
         unsafe impl Data for Wrap {
-            type Id = PhantomData<Self>;
-
-            fn data_id() -> Self::Id {
-                PhantomData
-            }
+            type Id = Self;
         }
 
         impl Compose for Wrap {

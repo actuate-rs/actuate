@@ -33,10 +33,6 @@ pub fn data(input: TokenStream) -> TokenStream {
 
         unsafe impl #generics actuate::Data for #ident #generics {
             type Id = #data_ident;
-
-            fn data_id() -> Self::Id {
-                #data_ident
-            }
         }
     };
     gen.into()
