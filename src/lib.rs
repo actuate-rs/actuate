@@ -1,10 +1,12 @@
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
+    collections::HashMap,
     hash::{Hash, Hasher},
     marker::PhantomData,
     mem,
     ops::Deref,
+    rc::Rc,
 };
 use tokio::sync::mpsc;
 
@@ -161,11 +163,17 @@ thread_local! {
     static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
 }
 
+#[derive(Clone, Default)]
+struct Contexts {
+    values: HashMap<TypeId, Rc<dyn Any>>,
+}
+
 #[derive(Default)]
 pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
     is_empty: Cell<bool>,
+    contexts: RefCell<Contexts>,
 }
 
 /// Composable scope.
@@ -216,6 +224,32 @@ pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &
         hooks.get(idx).unwrap()
     };
     any.downcast_ref().unwrap()
+}
+
+pub fn use_context<T: 'static>(scope: &ScopeState) -> Rc<T> {
+    scope
+        .contexts
+        .borrow()
+        .values
+        .get(&TypeId::of::<T>())
+        .unwrap()
+        .clone()
+        .downcast()
+        .unwrap()
+}
+
+pub fn use_provider<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Rc<T> {
+    // TODO
+    let r = use_ref(scope, || {
+        let value = Rc::new(make_value());
+        scope
+            .contexts
+            .borrow_mut()
+            .values
+            .insert(TypeId::of::<T>(), value.clone());
+        value
+    });
+    (*r).clone()
 }
 
 pub unsafe trait Data {
@@ -324,7 +358,9 @@ macro_rules! impl_tuples {
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
-                $(cx.me().$idx.any_compose(use_ref(&cx, ScopeState::default));)*
+                $(cx.me().$idx.any_compose(use_ref(&cx, || ScopeState {
+                    contexts: cx.contexts.clone(), ..Default::default()
+                }));)*
             }
         }
 
@@ -381,7 +417,10 @@ where
             return;
         }
 
-        let child_state = use_ref(&cx, || ScopeState::default());
+        let child_state = use_ref(&cx, || ScopeState {
+            contexts: state.contexts.clone(),
+            ..Default::default()
+        });
         let child = cell.as_mut().unwrap();
         (**child).any_compose(child_state);
     }
