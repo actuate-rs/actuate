@@ -9,12 +9,13 @@ repository = "https://github.com/actuate-rs/actuate"
 [workspace]
 members = [
     ".",
-    "macros"
+    "crates/core",
+    "crates/macros"
 ]
 
 [dependencies]
 accesskit = "0.14.0"
-actuate-macros = { version = "0.1.0", path = "macros" }
+actuate-core = { path = "crates/core" }
 masonry = { git = "https://github.com/linebender/xilem" }
 smallvec = "1.13.2"
 tokio = { version = "1.41.1", features = ["full"] }

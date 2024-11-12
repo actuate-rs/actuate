@@ -119,12 +119,19 @@ name = "actuate"
 version = "0.4.0-alpha.3"
 dependencies = [
  "accesskit 0.14.0",
- "actuate-macros",
+ "actuate-core",
  "masonry",
  "smallvec",
  "tokio",
  "vello 0.3.0",
  "winit",
+]
+
+[[package]]
+name = "actuate-core"
+version = "0.1.0"
+dependencies = [
+ "actuate-macros",
 ]
 
 [[package]]

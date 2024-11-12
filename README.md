@@ -25,37 +25,25 @@ A high-performance reactive user-interface framework for Rust.
 This crate provides a generic library that lets you define UI using declarative, borrow-checker friendly syntax.
 
 ```rust
-use actuate::{use_mut, Compose, Data, Memo, Mut, Scope};
-
-#[derive(Hash, Data)]
-struct Button<'a> {
-    count: Mut<'a, i32>,
-}
-
-impl Compose for Button<'_> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.me().count.update(|x| *x += 1)
-    }
-}
+use actuate::prelude::*;
 
 #[derive(Data)]
-struct Counter {
-    initial: i32,
-}
+struct App;
 
-impl Compose for Counter {
+impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let count = use_mut(&cx, || cx.me().initial);
+        let count = use_mut(&cx, || 0);
 
-        dbg!(*count);
-
-        (Memo::new(Button { count }), Button { count })
+        Flex::column((
+            Text::new(format!("High five count: {}", *count)),
+            Button::new("Up high!").on_press(move || count.update(|x| *x += 1)),
+            Button::new("Down low!").on_press(move || count.update(|x| *x -= 1)),
+        ))
     }
 }
 
-#[tokio::main]
-async fn main() {
-    actuate::run(Counter { initial: 0 }).await;
+fn main() {
+    actuate::run(App);
 }
 ```
 

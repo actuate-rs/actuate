@@ -1,0 +1,7 @@
+[package]
+name = "actuate-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actuate-macros = { version = "0.1.0", path = "../macros" }
