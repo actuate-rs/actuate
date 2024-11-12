@@ -7,6 +7,7 @@ use std::{
     ops::Deref,
 };
 
+/// A mapped immutable reference to a value of type `T`.
 pub struct Map<'a, T: ?Sized> {
     ptr: *const (),
     map_fn: *const (),
@@ -45,6 +46,7 @@ pub struct Ref<'a, T: ?Sized> {
 }
 
 impl<'a, T> Ref<'a, T> {
+    /// Map this reference to a value of type `U`.
     pub fn map<U: ?Sized>(self, f: fn(&T) -> &U) -> Map<'a, U> {
         Map {
             ptr: self.value as *const _ as _,
@@ -71,6 +73,8 @@ pub struct ScopeState {
     hook_idx: Cell<usize>,
     is_empty: Cell<bool>,
 }
+
+/// Composable scope.
 pub struct Scope<'a, C: ?Sized> {
     me: &'a C,
     state: &'a ScopeState,
@@ -201,6 +205,34 @@ impl<'a> Compose for DynCompose<'a> {
         cell.as_mut().unwrap().compose.any_compose(cx.state);
     }
 }
+
+macro_rules! impl_tuples {
+    ($($t:tt : $idx:tt),*) => {
+        unsafe impl<$($t: Data),*> Data for ($($t,)*) {
+            type Id = ($($t::Id,)*);
+
+            fn data_id() -> Self::Id {
+                ($($t::data_id(),)*)
+            }
+        }
+
+        impl<$($t: Compose),*> Compose for ($($t,)*) {
+            fn compose(cx: Scope<Self>) -> impl Compose {
+                $(cx.me().$idx.any_compose(use_ref(&cx, ScopeState::default));)*
+            }
+        }
+
+    };
+}
+
+impl_tuples!(T1:0);
+impl_tuples!(T1:0, T2:1);
+impl_tuples!(T1:0, T2:1, T3:2);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5, T7:6);
+impl_tuples!(T1:0, T2:1, T3:2, T4:3, T5:4, T6:5, T7:6, T8:7);
 
 trait AnyCompose {
     fn data_id(&self) -> TypeId;
