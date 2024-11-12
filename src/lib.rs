@@ -2,7 +2,7 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
     collections::HashMap,
-    hash::{Hash, Hasher},
+    hash::{DefaultHasher, Hash, Hasher},
     marker::PhantomData,
     mem,
     ops::Deref,
@@ -172,6 +172,7 @@ struct Contexts {
 pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
+    is_changed: Cell<bool>,
     is_empty: Cell<bool>,
     contexts: RefCell<Contexts>,
 }
@@ -226,6 +227,27 @@ pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &
     any.downcast_ref().unwrap()
 }
 
+pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
+    let hooks = unsafe { &mut *scope.hooks.get() };
+
+    let idx = scope.hook_idx.get();
+    scope.hook_idx.set(idx + 1);
+
+    let any = if idx >= hooks.len() {
+        hooks.push(Box::new(make_value()));
+        hooks.last_mut().unwrap()
+    } else {
+        hooks.get_mut(idx).unwrap()
+    };
+    let value = any.downcast_mut().unwrap();
+
+    Mut {
+        ptr: value as *mut T,
+        value,
+        is_changed: &scope.is_changed,
+    }
+}
+
 pub fn use_context<T: 'static>(scope: &ScopeState) -> Rc<T> {
     scope
         .contexts
@@ -250,6 +272,32 @@ pub fn use_provider<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() ->
         value
     });
     (*r).clone()
+}
+
+pub fn use_memo<D, T>(scope: &ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
+where
+    D: Hash,
+    T: 'static,
+{
+    let mut hasher = DefaultHasher::new();
+    dependency.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    let mut make_value_cell = Some(make_value);
+    let value_mut = use_mut(scope, || make_value_cell.take().unwrap()());
+
+    let hash_mut = use_mut(scope, || hash);
+
+    if let Some(make_value) = make_value_cell {
+        if hash != *hash_mut {
+            let value = make_value();
+            value_mut.with(move |update| *update = value);
+
+            hash_mut.with(move |dst| *dst = hash);
+        }
+    }
+
+    value_mut.as_ref()
 }
 
 pub unsafe trait Data {
