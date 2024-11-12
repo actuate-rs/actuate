@@ -10,9 +10,9 @@ impl Compose for App {
 
         dbg!(*x);
 
-        x.update(|x| *x += 1);
+        //x.update(|x| *x += 1);
 
-        Text {}
+        Text("Hello, World!")
     }
 }
 

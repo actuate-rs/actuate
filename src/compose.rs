@@ -27,6 +27,8 @@ pub unsafe trait Data {}
 
 unsafe impl Data for () {}
 
+unsafe impl Data for &'static str {}
+
 unsafe impl<T: Data> Data for &T {}
 
 unsafe impl Data for Box<dyn AnyCompose + '_> {}
