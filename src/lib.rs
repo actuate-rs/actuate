@@ -136,13 +136,19 @@ unsafe impl Data for () {
     fn data_id() -> Self::Id {}
 }
 
-pub struct RefMarker;
-
-unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
-    type Id = (RefMarker, T::Id);
+unsafe impl<T: ?Sized + Data> Data for &T {
+    type Id = PhantomData<&'static T::Id>;
 
     fn data_id() -> Self::Id {
-        (RefMarker, T::data_id())
+        PhantomData
+    }
+}
+
+unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
+    type Id = PhantomData<Ref<'static, T::Id>>;
+
+    fn data_id() -> Self::Id {
+        PhantomData
     }
 }
 
@@ -161,6 +167,12 @@ pub trait Compose: Data {
 impl Compose for () {
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_empty.set(true);
+    }
+}
+
+impl<C: Compose> Compose for &C {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.me().any_compose(&cx);
     }
 }
 
