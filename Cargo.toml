@@ -1,6 +1,6 @@
 [package]
 name = "actuate"
-version = "0.4.0-alpha.3"
+version = "0.4.0-alpha.4"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
@@ -15,7 +15,7 @@ members = [
 
 [dependencies]
 accesskit = "0.14.0"
-actuate-core = { version = "1.1", path = "crates/core" }
+actuate-core = { version = "0.1.1", path = "crates/core" }
 masonry = { git = "https://github.com/linebender/xilem" }
 smallvec = "1.13.2"
 tokio = { version = "1.41.1", features = ["full"] }

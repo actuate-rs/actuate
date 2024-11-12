@@ -116,7 +116,7 @@ dependencies = [
 
 [[package]]
 name = "actuate"
-version = "0.4.0-alpha.3"
+version = "0.4.0-alpha.4"
 dependencies = [
  "accesskit 0.14.0",
  "actuate-core",
@@ -129,14 +129,14 @@ dependencies = [
 
 [[package]]
 name = "actuate-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actuate-macros",
 ]
 
 [[package]]
 name = "actuate-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "quote",
  "syn 2.0.87",
