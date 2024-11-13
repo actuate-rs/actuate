@@ -8,10 +8,11 @@ repository = "https://github.com/actuate-rs/actuate"
 
 [workspace]
 members = [
-    ".",
-    "crates/core",
-    "crates/macros"
+    ".", "crates/actuate-winit",
+    "crates/actuate-core",
+    "crates/actuate-macros",
+    "crates/actuate-winit"
 ]
 
 [dependencies]
-actuate-core = { version = "0.1.1", path = "crates/core" }
+actuate-core = { version = "0.1.1", path = "crates/actuate-core" }

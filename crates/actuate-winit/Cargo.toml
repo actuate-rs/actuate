@@ -1,0 +1,9 @@
+[package]
+name = "actuate-winit"
+version = "0.1.0"
+edition = "2021"
+description = "Winit window bindings for Actuate"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/actuate-rs/actuate"
+
+[dependencies]
