@@ -13,7 +13,8 @@ pub use actuate_macros::Data;
 
 pub mod prelude {
     pub use crate::{
-        use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, Map, Mut, Ref, Scope,
+        use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
+        DynCompose, Map, Mut, Ref, Scope, StateField,
     };
 }
 
@@ -648,7 +649,7 @@ impl Composer {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Compose, Composer, Data, DynCompose, Updater};
+    use crate::{prelude::*, Composer, Updater};
     use std::{cell::Cell, rc::Rc};
 
     struct Counter {
@@ -679,12 +680,9 @@ mod tests {
 
     #[test]
     fn it_works() {
+        #[derive(Data)]
         struct Wrap {
             x: Rc<Cell<i32>>,
-        }
-
-        unsafe impl Data for Wrap {
-            type Id = Self;
         }
 
         impl Compose for Wrap {
@@ -707,12 +705,9 @@ mod tests {
 
     #[test]
     fn it_composes_any_compose() {
+        #[derive(Data)]
         struct Wrap {
             x: Rc<Cell<i32>>,
-        }
-
-        unsafe impl Data for Wrap {
-            type Id = Self;
         }
 
         impl Compose for Wrap {

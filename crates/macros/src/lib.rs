@@ -17,8 +17,6 @@ pub fn data(input: TokenStream) -> TokenStream {
         let check_ident = format_ident!("check_{}", field_ident);
         quote! {
            fn #check_ident(t: #ident #generics) {
-                use actuate_core::{DataField, StateField};
-
                 (&t.#field_ident).check()
            }
         }
@@ -31,7 +29,7 @@ pub fn data(input: TokenStream) -> TokenStream {
 
         struct #data_ident;
 
-        unsafe impl #generics actuate_core::Data for #ident #generics {
+        unsafe impl #generics Data for #ident #generics {
             type Id = #data_ident;
         }
     };

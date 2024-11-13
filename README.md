@@ -28,9 +28,9 @@ This crate provides a generic library that lets you define UI using declarative,
 use actuate::prelude::*;
 
 #[derive(Data)]
-struct App;
+struct Counter;
 
-impl Compose for App {
+impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let count = use_mut(&cx, || 0);
 
@@ -43,7 +43,7 @@ impl Compose for App {
 }
 
 fn main() {
-    actuate::run(App);
+    actuate::run(Counter);
 }
 ```
 
