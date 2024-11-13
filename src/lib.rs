@@ -45,7 +45,6 @@ struct Inner {
 
 #[derive(Clone)]
 pub struct TreeContext {
-    proxy: EventLoopProxy<MasonryUserEvent>,
     inner: Rc<RefCell<Inner>>,
 }
 
@@ -93,7 +92,6 @@ pub struct Driver {
 impl Driver {
     pub fn new(content: impl Compose + 'static, proxy: EventLoopProxy<MasonryUserEvent>) -> Self {
         let tree_cx = TreeContext {
-            proxy: proxy.clone(),
             inner: Rc::new(RefCell::new(Inner {
                 widget: None,
                 child_idx: 0,
@@ -200,16 +198,13 @@ where
         let widget_cell = &mut tree_inner.widget;
 
         let mut is_build = false;
-        let id = use_ref(&cx, || {
+        use_ref(&cx, || {
             let mut widget = widget_cell.as_mut().unwrap();
 
             let label = Label::new(cx.me().0.to_string());
-            let pod = WidgetPod::new(label).boxed();
-            let id = pod.id();
-            FlexWidget::insert_child_pod(&mut widget, child_idx, pod);
+            FlexWidget::insert_child(&mut widget, child_idx, label);
 
             is_build = true;
-            id
         });
 
         // TODO don't clone
@@ -223,8 +218,6 @@ where
                 Label::set_text(&mut label, cx.me().0.to_string());
             }
         });
-
-        drop(tree_inner);
     }
 }
 
@@ -295,7 +288,7 @@ where
 
         let f = cx.me().on_press.take();
 
-        use_listener(&cx, *id, move |action| {
+        use_listener(&cx, *id, move |_action| {
             if let Some(f) = &f {
                 f();
             }
