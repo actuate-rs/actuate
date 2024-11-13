@@ -590,6 +590,14 @@ where
         let child_state = use_ref(&cx, ScopeState::default);
 
         if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
+            #[cfg(feature = "tracing")]
+            let span = tracing::span!(tracing::Level::INFO, "Composer", composable = %std::any::type_name::<C>());
+            #[cfg(feature = "tracing")]
+            let _guard = span.enter();
+
+            #[cfg(feature = "tracing")]
+            tracing::info!("Compose::compose");
+
             let child = C::compose(cx);
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
@@ -597,8 +605,14 @@ where
 
             unsafe {
                 if let Some(ref mut content) = cell {
+                    #[cfg(feature = "tracing")]
+                    tracing::trace!("Reborrow composable");
+
                     child.reborrow((**content).as_ptr_mut());
                 } else {
+                    #[cfg(feature = "tracing")]
+                    tracing::trace!("Allocate new composable");
+
                     let boxed: Box<dyn AnyCompose> = Box::new(child);
                     *cell = Some(mem::transmute(boxed));
                 }
@@ -619,6 +633,16 @@ pub trait Updater {
     fn update(&self, update: Update);
 }
 
+struct DefaultUpdater;
+
+impl Updater for DefaultUpdater {
+    fn update(&self, mut update: crate::Update) {
+        unsafe {
+            update.apply();
+        }
+    }
+}
+
 /// Composer for composable content.
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
@@ -627,8 +651,13 @@ pub struct Composer {
 }
 
 impl Composer {
-    /// Create a new [`Composer`] with the given content and updater.
-    pub fn new(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
+    /// Create a new [`Composer`] with the given content and default updater.
+    pub fn new(content: impl Compose + 'static) -> Self {
+        Self::with_updater(content, DefaultUpdater)
+    }
+
+    /// Create a new [`Composer`] with the given content and default updater.
+    pub fn with_updater(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
         let updater = Rc::new(updater);
         Self {
             compose: Box::new(content),
@@ -652,15 +681,12 @@ impl Composer {
 
 #[cfg(test)]
 mod tests {
-    use crate::{prelude::*, Composer, Updater};
+    use crate::{prelude::*, Composer};
     use std::{cell::Cell, rc::Rc};
 
+    #[derive(Data)]
     struct Counter {
         x: Rc<Cell<i32>>,
-    }
-
-    unsafe impl Data for Counter {
-        type Id = Self;
     }
 
     impl Compose for Counter {
@@ -668,16 +694,6 @@ mod tests {
             cx.me().x.set(cx.me().x.get() + 1);
 
             cx.set_changed();
-        }
-    }
-
-    struct U;
-
-    impl Updater for U {
-        fn update(&self, mut update: crate::Update) {
-            unsafe {
-                update.apply();
-            }
         }
     }
 
@@ -697,7 +713,7 @@ mod tests {
         }
 
         let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() }, U);
+        let mut composer = Composer::new(Wrap { x: x.clone() });
 
         composer.compose();
         assert_eq!(x.get(), 1);
@@ -722,7 +738,7 @@ mod tests {
         }
 
         let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() }, U);
+        let mut composer = Composer::new(Wrap { x: x.clone() });
 
         composer.compose();
         assert_eq!(x.get(), 1);

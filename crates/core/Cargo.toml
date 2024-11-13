@@ -6,5 +6,13 @@ license = "MIT OR Apache-2.0"
 description = "A reactivity framework"
 repository = "https://github.com/actuate-rs/actuate"
 
+[features]
+tracing = ["dep:tracing"]
+default = ["tracing"]
+
 [dependencies]
 actuate-macros = { version = "0.1.1", path = "../macros" }
+tracing = { version = "0.1.40", optional = true }
+
+[dev-dependencies]
+tracing-subscriber = "0.3.18"
