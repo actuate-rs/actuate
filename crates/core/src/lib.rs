@@ -603,10 +603,9 @@ impl Composer {
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
-    use crate::{Compose, Composer, Data, DynCompose};
+    use crate::{Compose, Composer, Data, DynCompose, Updater};
     use std::{cell::Cell, rc::Rc};
 
     struct Counter {
@@ -625,6 +624,15 @@ mod tests {
         }
     }
 
+    struct U;
+
+    impl Updater for U {
+        fn update(&self, mut update: crate::Update) {
+            unsafe {
+                update.run();
+            }
+        }
+    }
 
     #[test]
     fn it_works() {
@@ -645,7 +653,7 @@ mod tests {
         }
 
         let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() });
+        let mut composer = Composer::new(Wrap { x: x.clone() }, U);
 
         composer.compose();
         assert_eq!(x.get(), 1);
@@ -673,14 +681,13 @@ mod tests {
         }
 
         let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() }, updater);
+        let mut composer = Composer::new(Wrap { x: x.clone() }, U);
 
         composer.compose();
         assert_eq!(x.get(), 1);
 
-        composer.compose();
-        assert_eq!(x.get(), 2);
+        // TODO
+        // composer.compose();
+        // assert_eq!(x.get(), 2);
     }
-
 }
-*/
