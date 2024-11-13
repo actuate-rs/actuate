@@ -124,7 +124,7 @@ impl AppDriver for Driver {
 
         if let Action::Other(mut action) = action {
             if let Some(update) = action.downcast_mut::<DriverUpdate>() {
-                unsafe { update.0.run() }
+                unsafe { update.0.apply() }
             }
 
             let mut tree_cx = self.tree_cx.inner.borrow_mut();

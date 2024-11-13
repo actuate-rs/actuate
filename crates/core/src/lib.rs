@@ -17,7 +17,7 @@ pub mod prelude {
     };
 }
 
-/// A mapped immutable reference to a value of type `T`.
+/// Mapped immutable reference to a value of type `T`.
 pub struct Map<'a, T: ?Sized> {
     ptr: *const (),
     map_fn: *const (),
@@ -50,7 +50,7 @@ impl<T: Hash + ?Sized> Hash for Map<'_, T> {
     }
 }
 
-/// An immutable reference to a value of type `T`.
+/// Immutable reference to a value of type `T`.
 pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
 }
@@ -77,6 +77,7 @@ impl<T: ?Sized> Deref for Ref<'_, T> {
     }
 }
 
+/// Mutable reference to a value of type `T`.
 #[derive(Hash)]
 pub struct Mut<'a, T> {
     ptr: *mut T,
@@ -85,7 +86,8 @@ pub struct Mut<'a, T> {
 }
 
 impl<'a, T: 'static> Mut<'a, T> {
-    pub fn update(&self, f: impl FnOnce(&mut T) + 'static) {
+    /// Queue an update to this value, triggering an update to the component owning this value.
+    pub fn update(self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
         let ptr = self.ptr;
         let is_changed = self.is_changed;
@@ -100,7 +102,8 @@ impl<'a, T: 'static> Mut<'a, T> {
         });
     }
 
-    pub fn with(&self, f: impl FnOnce(&mut T) + 'static) {
+    /// Queue an update to this value wtihout triggering an update.
+    pub fn with(self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
         let ptr = self.ptr;
 
@@ -110,7 +113,8 @@ impl<'a, T: 'static> Mut<'a, T> {
         });
     }
 
-    pub fn as_ref(&self) -> Ref<'a, T> {
+    /// Convert this mutable reference to an immutable reference.
+    pub fn as_ref(self) -> Ref<'a, T> {
         Ref { value: self.value }
     }
 }
@@ -135,22 +139,32 @@ impl<'a, T> Deref for Mut<'a, T> {
     }
 }
 
+/// An update to apply to a composable.
 pub struct Update {
     f: Box<dyn FnMut()>,
 }
 
 impl Update {
-    pub unsafe fn run(&mut self) {
+    /// Apply this update.
+    ///
+    /// # Safety
+    /// The caller must ensure the composable triggering this update still exists.
+    pub unsafe fn apply(&mut self) {
         (self.f)();
     }
 }
 
+/// Runtime for a [`Composer`].
 #[derive(Clone)]
 pub struct Runtime {
     updater: Rc<dyn Updater>,
 }
 
 impl Runtime {
+    /// Get the current [`Runtime`].
+    ///
+    /// # Panics
+    /// Panics if called outside of a runtime.
     pub fn current() -> Self {
         RUNTIME.with(|runtime| {
             runtime
@@ -161,12 +175,14 @@ impl Runtime {
         })
     }
 
+    /// Enter this runtime, making it available to [`Runtime::current`].
     pub fn enter(&self) {
         RUNTIME.with(|runtime| {
             *runtime.borrow_mut() = Some(self.clone());
         });
     }
 
+    /// Queue an update to run after [`Composer::compose`].
     pub fn update(&self, f: impl FnMut() + 'static) {
         self.updater.update(Update { f: Box::new(f) });
     }
@@ -176,11 +192,13 @@ thread_local! {
     static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
 }
 
+/// Map of [`TypeId`] to context values.
 #[derive(Clone, Default)]
 struct Contexts {
     values: HashMap<TypeId, Rc<dyn Any>>,
 }
 
+/// State of a composable.
 #[derive(Default)]
 pub struct ScopeState {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
@@ -236,6 +254,9 @@ impl<'a, C> Deref for Scope<'a, C> {
     }
 }
 
+/// Use an immutable reference to a value of type `T`.
+///
+/// `make_value` will only be called once to initialize this value.
 pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
@@ -251,6 +272,9 @@ pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &
     (**any).downcast_ref().unwrap()
 }
 
+/// Use a mutable reference to a value of type `T`.
+///
+/// `make_value` will only be called once to initialize this value.
 pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
     let hooks = unsafe { &mut *scope.hooks.get() };
 
@@ -272,6 +296,10 @@ pub fn use_mut<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -
     }
 }
 
+/// Use a context value of type `T`.
+///
+/// # Panics
+/// Panics if the context value is not found.
 pub fn use_context<T: 'static>(scope: &ScopeState) -> Rc<T> {
     scope
         .contexts
@@ -284,6 +312,9 @@ pub fn use_context<T: 'static>(scope: &ScopeState) -> Rc<T> {
         .unwrap()
 }
 
+/// Provide a context value of type `T`.
+///
+/// This value will be available to [`use_context`] to all children of this composable.
 pub fn use_provider<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() -> T) -> Rc<T> {
     // TODO
     let r = use_ref(scope, || {
@@ -298,6 +329,9 @@ pub fn use_provider<T: 'static>(scope: &ScopeState, make_value: impl FnOnce() ->
     (*r).clone()
 }
 
+/// Use a memoized value of type `T` with a dependency of type `D`.
+///
+/// `make_value` will update the returned value whenver `dependency` is changed.
 pub fn use_memo<D, T>(scope: &ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
 where
     D: Hash,
@@ -324,6 +358,9 @@ where
     value_mut.as_ref()
 }
 
+/// Composable data.
+///
+/// This trait should be derived with `#[derive(Data)]`.
 pub unsafe trait Data: Sized {
     type Id: 'static;
 
@@ -381,6 +418,7 @@ pub unsafe trait DataField {
 
 unsafe impl<T: Data> DataField for &&T {}
 
+/// A composable function.
 pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
 }
@@ -408,6 +446,7 @@ enum DynComposeInner<'a> {
     Ptr(*const dyn AnyCompose),
 }
 
+/// Dynamically-typed composable.
 pub struct DynCompose<'a> {
     compose: UnsafeCell<Option<DynComposeInner<'a>>>,
 }
@@ -571,10 +610,12 @@ where
     }
 }
 
+/// Updater for a [`Composer`].
 pub trait Updater {
     fn update(&self, update: Update);
 }
 
+/// Composer for composable content.
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
     scope_state: Box<ScopeState>,
@@ -582,6 +623,7 @@ pub struct Composer {
 }
 
 impl Composer {
+    /// Create a new [`Composer`] with the given content and updater.
     pub fn new(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
         let updater = Rc::new(updater);
         Self {
@@ -593,6 +635,7 @@ impl Composer {
         }
     }
 
+    /// Compose the content of this composer.
     pub fn compose(&mut self) {
         self.rt.enter();
 
@@ -629,7 +672,7 @@ mod tests {
     impl Updater for U {
         fn update(&self, mut update: crate::Update) {
             unsafe {
-                update.run();
+                update.apply();
             }
         }
     }
