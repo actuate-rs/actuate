@@ -316,14 +316,11 @@ pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> M
 /// # Panics
 /// Panics if the context value is not found.
 pub fn use_context<T: 'static>(cx: &ScopeState) -> Rc<T> {
-    cx.contexts
-        .borrow()
-        .values
-        .get(&TypeId::of::<T>())
-        .unwrap()
-        .clone()
-        .downcast()
-        .unwrap()
+    let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
+        panic!("Context value not found for type: {}", std::any::type_name::<T>());
+    };
+
+    any.downcast().unwrap()
 }
 
 /// Provide a context value of type `T`.
