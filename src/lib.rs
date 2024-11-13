@@ -6,11 +6,8 @@ use std::{
 };
 use taffy::{prelude::TaffyMaxContent, NodeId, Size, Style, TaffyTree};
 use vello::{
-    kurbo::{Affine, Vec2},
-    peniko::Color,
-    util::RenderContext,
-    wgpu::PresentMode,
-    AaConfig, RenderParams, Renderer, RendererOptions, Scene,
+    peniko::Color, util::RenderContext, wgpu::PresentMode, AaConfig, RenderParams, Renderer,
+    RendererOptions, Scene,
 };
 use winit::{
     event::{Event, WindowEvent},
@@ -19,11 +16,16 @@ use winit::{
 
 pub use actuate_core as core;
 
+mod canvas;
+pub use self::canvas::Canvas;
+
 pub mod prelude {
     pub use crate::core::prelude::*;
 
     pub use crate::Window;
     pub use winit::window::WindowAttributes;
+
+    pub use crate::Canvas;
 }
 
 pub struct RendererContext {
@@ -119,67 +121,6 @@ impl<C: Compose> Compose for Window<C> {
             },
             Ref::map(cx.me(), |me| &me.content),
         )
-    }
-}
-
-pub struct Canvas<'a> {
-    style: Style,
-    f: Box<dyn Fn(&mut Scene) + 'a>,
-}
-
-impl<'a> Canvas<'a> {
-    pub fn new(style: Style, draw_fn: impl Fn(&mut Scene) + 'a) -> Self {
-        Self {
-            style,
-            f: Box::new(draw_fn),
-        }
-    }
-}
-
-unsafe impl Data for Canvas<'_> {
-    type Id = Canvas<'static>;
-}
-
-impl Compose for Canvas<'_> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        let renderer_cx = use_context::<RendererContext>(&cx);
-
-        let key = use_ref(&cx, || {
-            let key = renderer_cx
-                .taffy
-                .borrow_mut()
-                .new_leaf(cx.me().style.clone())
-                .unwrap();
-            renderer_cx
-                .taffy
-                .borrow_mut()
-                .add_child(*renderer_cx.parent_key.borrow(), key)
-                .unwrap();
-            key
-        });
-
-        let scene = use_ref(&cx, || RefCell::new(Scene::new()));
-
-        let layout = *renderer_cx.taffy.borrow().layout(*key).unwrap();
-        let mut parent_scene = renderer_cx.scene.borrow_mut();
-
-        let last_layout = use_mut(&cx, || layout);
-
-        if layout != *last_layout {
-            last_layout.with(move |dst| *dst = layout);
-
-            (cx.me().f)(&mut scene.borrow_mut());
-
-            parent_scene.append(
-                &scene.borrow(),
-                Some(Affine::translate(Vec2::new(
-                    layout.location.x as _,
-                    layout.location.y as _,
-                ))),
-            );
-
-            renderer_cx.is_changed.set(true);
-        }
     }
 }
 

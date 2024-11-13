@@ -19,7 +19,7 @@ impl Compose for Circle {
                 size: Size::from_lengths(100., 100.),
                 ..Default::default()
             },
-            move |scene| {
+            move |_layout, scene| {
                 scene.fill(
                     Fill::NonZero,
                     Affine::IDENTITY,
