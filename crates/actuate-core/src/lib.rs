@@ -311,13 +311,39 @@ pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> M
     }
 }
 
+pub fn use_callback<'a, T, R>(
+    cx: &'a ScopeState,
+    f: impl FnMut(T) -> R + 'a,
+) -> &'a Rc<dyn Fn(T) -> R + 'a>
+where
+    T: 'static,
+    R: 'static,
+{
+    let f_cell: Option<Box<dyn FnMut(T) -> R + 'a>> = Some(Box::new(f));
+    let mut f_cell: Option<Box<dyn FnMut(T) -> R>> = unsafe { mem::transmute(f_cell) };
+
+    let callback = use_ref(cx, || Rc::new(RefCell::new(f_cell.take().unwrap()))).clone();
+
+    if let Some(f) = f_cell {
+        *callback.borrow_mut() = f;
+    }
+
+    use_ref(cx, move || {
+        let f = callback.clone();
+        Rc::new(move |input| f.borrow_mut()(input)) as Rc<dyn Fn(T) -> R>
+    })
+}
+
 /// Use a context value of type `T`.
 ///
 /// # Panics
 /// Panics if the context value is not found.
 pub fn use_context<T: 'static>(cx: &ScopeState) -> Rc<T> {
     let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
-        panic!("Context value not found for type: {}", std::any::type_name::<T>());
+        panic!(
+            "Context value not found for type: {}",
+            std::any::type_name::<T>()
+        );
     };
 
     any.downcast().unwrap()

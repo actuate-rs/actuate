@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, use_drop, Composer, ScopeState, Update, Updater};
+use actuate_core::{prelude::*, use_callback, use_drop, Composer, ScopeState, Update, Updater};
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
 use winit::{
     application::ApplicationHandler,
@@ -107,7 +107,7 @@ pub fn run(content: impl Compose + 'static) {
 
 #[derive(Default)]
 struct Inner {
-    handler_fns: HashMap<WindowId, Box<dyn FnMut(WindowEvent)>>,
+    handler_fns: HashMap<WindowId, Rc<dyn Fn(WindowEvent)>>,
     event_loop: Option<&'static ActiveEventLoop>,
 }
 
@@ -119,7 +119,7 @@ pub struct EventLoopContext {
 pub fn use_window<'a>(
     cx: &'a ScopeState,
     window_attributes: WindowAttributes,
-    f: impl FnMut(WindowEvent) + 'a,
+    on_event: impl FnMut(WindowEvent) + 'a,
 ) -> &'a Window {
     let event_loop_cx = use_context::<EventLoopContext>(cx);
     let mut inner = event_loop_cx.inner.borrow_mut();
@@ -143,9 +143,11 @@ pub fn use_window<'a>(
         inner.handler_fns.remove(&window.id());
     });
 
-    let f: Box<dyn FnMut(WindowEvent)> = Box::new(f);
-    let f = unsafe { mem::transmute(f) };
-    inner.handler_fns.insert(window.id(), f);
+    let f = use_callback(cx, on_event);
+
+    inner
+        .handler_fns
+        .insert(window.id(), unsafe { mem::transmute(f.clone()) });
 
     window
 }
