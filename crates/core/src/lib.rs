@@ -442,20 +442,15 @@ impl<C: Compose> Compose for Map<'_, C> {
     }
 }
 
-enum DynComposeInner<'a> {
-    Boxed(Box<dyn AnyCompose + 'a>),
-    Ptr(*const dyn AnyCompose),
-}
-
 /// Dynamically-typed composable.
 pub struct DynCompose<'a> {
-    compose: UnsafeCell<Option<DynComposeInner<'a>>>,
+    compose: UnsafeCell<Option<Box<dyn AnyCompose + 'a>>>,
 }
 
 impl<'a> DynCompose<'a> {
     pub fn new(content: impl Compose + 'a) -> Self {
         Self {
-            compose: UnsafeCell::new(Some(DynComposeInner::Boxed(Box::new(content)))),
+            compose: UnsafeCell::new(Some(Box::new(content))),
         }
     }
 }
@@ -470,50 +465,40 @@ impl<'a> Compose for DynCompose<'a> {
         let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
-        let inner = unsafe { &mut *cx.me().compose.get() }.take().unwrap();
+        let inner = unsafe { &mut *cx.me().compose.get() };
 
         let child_state = use_ref(&cx, || ScopeState {
             contexts: cx.state.contexts.clone(),
             ..Default::default()
         });
 
-        match inner {
-            DynComposeInner::Boxed(any_compose) => {
-                let mut compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
+        *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+        child_state
+            .is_parent_changed
+            .set(cx.is_parent_changed.get());
 
-                let ptr = if let Some(state) = cell {
-                    if state.data_id != compose.data_id() {
-                        todo!()
-                    }
+        if let Some(any_compose) = inner.take() {
+            let mut compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
 
-                    let ptr = (*state.compose).as_ptr_mut();
+            if let Some(state) = cell {
+                if state.data_id != compose.data_id() {
+                    todo!()
+                }
 
-                    unsafe {
-                        compose.reborrow(ptr);
-                    }
+                let ptr = (*state.compose).as_ptr_mut();
 
-                    ptr
-                } else {
-                    let ptr = (*compose).as_ptr_mut();
-                    *cell = Some(DynComposeState {
-                        data_id: compose.data_id(),
-                        compose,
-                    });
-                    ptr
-                };
-
-                cell.as_mut().unwrap().compose.any_compose(child_state);
-
-                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
-
-                *unsafe { &mut *cx.me().compose.get() } = Some(DynComposeInner::Ptr(ptr));
-            }
-            DynComposeInner::Ptr(ptr) => {
-                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
-
-                unsafe { &*ptr }.any_compose(child_state);
+                unsafe {
+                    compose.reborrow(ptr);
+                }
+            } else {
+                *cell = Some(DynComposeState {
+                    data_id: compose.data_id(),
+                    compose,
+                })
             }
         }
+
+        cell.as_mut().unwrap().compose.any_compose(child_state);
     }
 }
 
@@ -585,9 +570,11 @@ where
         });
 
         if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
+            dbg!("compose");
             let child = C::compose(cx);
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+            child_state.is_parent_changed.set(true);
 
             unsafe {
                 if let Some(ref mut content) = cell {
@@ -599,11 +586,10 @@ where
             }
 
             if cx.state.is_empty.take() {
-                cx.state.is_empty.set(false);
                 return;
             }
-
-            child_state.is_parent_changed.set(true);
+        } else {
+            dbg!("nah");
         }
 
         let child = cell.as_mut().unwrap();
@@ -662,6 +648,7 @@ mod tests {
 
     impl Compose for Counter {
         fn compose(cx: crate::Scope<Self>) -> impl Compose {
+            dbg!("run");
             cx.me().x.set(cx.me().x.get() + 1);
 
             cx.set_changed();
@@ -724,8 +711,7 @@ mod tests {
         composer.compose();
         assert_eq!(x.get(), 1);
 
-        // TODO
-        // composer.compose();
-        // assert_eq!(x.get(), 2);
+        composer.compose();
+        assert_eq!(x.get(), 2);
     }
 }
