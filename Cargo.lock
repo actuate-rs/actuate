@@ -20,7 +20,7 @@ checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 
 [[package]]
 name = "actuate"
-version = "0.4.0-alpha.4"
+version = "0.4.0-alpha.5"
 dependencies = [
  "actuate-core",
  "actuate-winit",
@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "actuate-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "actuate-macros",
  "tracing",
@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "actuate-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "quote",
  "syn 2.0.87",
@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "actuate-winit"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actuate-core",
  "tracing",

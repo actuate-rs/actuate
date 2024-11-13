@@ -7,17 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0](https://github.com/actuate-rs/actuate/compare/actuate-core-v0.1.1...actuate-core-v0.2.0) - 2024-11-13
+## [0.1.1](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.0...actuate-winit-v0.1.1) - 2024-11-13
 
 ### Other
 
+- Create Canvas composable
+- Create vello-backed Window
 - Create Window composable
 - Create use_callback hook
+- Export use_window and refactor
+- Create use_window hook
 - Create Handler struct
-- Create actuate-winit crate and refactor
-
-## [0.1.1](https://github.com/actuate-rs/actuate/compare/actuate-core-v0.1.0...actuate-core-v0.1.1) - 2024-11-12
-
-### Other
-
-- updated the following local packages: actuate-macros
