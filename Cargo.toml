@@ -14,10 +14,4 @@ members = [
 ]
 
 [dependencies]
-accesskit = "0.14.0"
 actuate-core = { version = "0.1.1", path = "crates/core" }
-masonry = { git = "https://github.com/linebender/xilem" }
-smallvec = "1.13.2"
-tokio = { version = "1.41.1", features = ["full"] }
-vello = "0.3.0"
-winit = "0.30.5"

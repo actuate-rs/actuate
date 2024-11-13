@@ -590,7 +590,6 @@ where
         let child_state = use_ref(&cx, ScopeState::default);
 
         if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
-            dbg!("compose");
             let child = C::compose(cx);
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
@@ -608,8 +607,6 @@ where
             if cx.state.is_empty.take() {
                 return;
             }
-        } else {
-            dbg!("nah");
         }
 
         let child = cell.as_mut().unwrap();
