@@ -28,11 +28,13 @@ This crate provides a generic library that lets you define UI using declarative,
 use actuate::prelude::*;
 
 #[derive(Data)]
-struct Counter;
+struct Counter {
+    start: i32,
+}
 
 impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let count = use_mut(&cx, || 0);
+        let count = use_mut(&cx, || cx.me().start);
 
         Flex::column((
             Text::new(format!("High five count: {}", *count)),
@@ -43,7 +45,7 @@ impl Compose for Counter {
 }
 
 fn main() {
-    actuate::run(Counter);
+    actuate::run(Counter { start: 0 });
 }
 ```
 
