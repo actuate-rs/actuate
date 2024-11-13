@@ -1,13 +1,17 @@
 use actuate_core::prelude::*;
-use tracing::{info, level_filters::LevelFilter};
+use actuate_winit::use_window;
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;
+use winit::window::WindowAttributes;
 
 #[derive(Data)]
 struct App;
 
 impl Compose for App {
-    fn compose(_cx: Scope<Self>) -> impl Compose {
-        info!("run!");
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        use_window(&cx, WindowAttributes::default(), |event| {
+            dbg!(event);
+        });
     }
 }
 
