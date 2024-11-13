@@ -27,7 +27,8 @@ pub fn data(input: TokenStream) -> TokenStream {
     let gen = quote! {
         #(#checks)*
 
-        struct #data_ident;
+        #[doc(hidden)]
+        pub struct #data_ident;
 
         unsafe impl #generics Data for #ident #generics {
             type Id = #data_ident;

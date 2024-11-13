@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, Composer};
+use actuate_core::prelude::*;
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::FmtSubscriber;
 
@@ -19,7 +19,5 @@ fn main() {
     )
     .unwrap();
 
-    let mut composer = Composer::new(App);
-    composer.compose();
-    composer.compose();
+    actuate_winit::run(App);
 }

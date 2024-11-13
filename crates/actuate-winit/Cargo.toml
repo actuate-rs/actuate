@@ -6,4 +6,14 @@ description = "Winit window bindings for Actuate"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/actuate-rs/actuate"
 
+[features]
+tracing = ["dep:tracing"]
+default = ["tracing"]
+
 [dependencies]
+actuate-core = { version = "0.1.1", path = "../actuate-core" }
+tracing = { version = "0.1.40", optional = true }
+winit = "0.30.5"
+
+[dev-dependencies]
+tracing-subscriber = "0.3.18"
