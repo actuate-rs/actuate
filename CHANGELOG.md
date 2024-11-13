@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0-alpha.5](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0-alpha.4...actuate-v0.4.0-alpha.5) - 2024-11-13
+
+### Other
+
+- Update canvas example
+- Temp fix for CI
+- Redraw from reactions
+- Create Canvas composable
+- Create vello-backed Window
+- Create Window composable
+- Export use_window and refactor
+- Create Handler struct
+- Create actuate-winit crate and refactor
+
 ## [0.4.0-alpha.4](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0-alpha.3...actuate-v0.4.0-alpha.4) - 2024-11-12
 
 ### Other
