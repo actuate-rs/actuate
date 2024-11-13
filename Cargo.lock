@@ -23,6 +23,7 @@ name = "actuate"
 version = "0.4.0-alpha.4"
 dependencies = [
  "actuate-core",
+ "actuate-winit",
 ]
 
 [[package]]

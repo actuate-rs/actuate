@@ -6,9 +6,13 @@ license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
 repository = "https://github.com/actuate-rs/actuate"
 
+[features]
+winit = ["dep:actuate-winit"]
+default = ["winit"]
+
 [workspace]
 members = [
-    ".", "crates/actuate-winit",
+    ".",
     "crates/actuate-core",
     "crates/actuate-macros",
     "crates/actuate-winit"
@@ -16,3 +20,4 @@ members = [
 
 [dependencies]
 actuate-core = { version = "0.1.1", path = "crates/actuate-core" }
+actuate-winit = { version = "0.1.0", path = "crates/actuate-winit", optional = true }

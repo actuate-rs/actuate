@@ -1,11 +1,10 @@
-use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
-
 use actuate_core::{prelude::*, use_drop, Composer, ScopeState, Update, Updater};
+use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
-    window::{WindowAttributes, WindowId},
+    window::{Window, WindowAttributes, WindowId},
 };
 
 struct EventLoopUpdater {
@@ -121,7 +120,7 @@ pub fn use_window<'a>(
     cx: &'a ScopeState,
     window_attributes: WindowAttributes,
     f: impl FnMut(WindowEvent) + 'a,
-) {
+) -> &'a Window {
     let event_loop_cx = use_context::<EventLoopContext>(cx);
     let mut inner = event_loop_cx.inner.borrow_mut();
 
@@ -130,9 +129,15 @@ pub fn use_window<'a>(
             .event_loop
             .as_ref()
             .unwrap()
-            .create_window(window_attributes)
+            .create_window(window_attributes.clone())
             .unwrap()
     });
+
+    use_memo(cx, &window_attributes.title, || {
+        window.set_title(&window_attributes.title);
+    });
+
+    // TODO react to more attributes
 
     use_drop(cx, || {
         inner.handler_fns.remove(&window.id());
@@ -141,4 +146,6 @@ pub fn use_window<'a>(
     let f: Box<dyn FnMut(WindowEvent)> = Box::new(f);
     let f = unsafe { mem::transmute(f) };
     inner.handler_fns.insert(window.id(), f);
+
+    window
 }
