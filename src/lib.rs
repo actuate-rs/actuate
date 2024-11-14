@@ -1,18 +1,15 @@
 use actuate_core::prelude::*;
 use masonry::{
-    parley::{fontique::Weight, FontContext},
-    text2::TextLayout,
     vello::{
         self,
         peniko::{Color, Fill},
         util::RenderContext,
         AaConfig, RenderParams, Renderer, RendererOptions, Scene,
     },
-    Affine, Point, Rect,
+    Affine, Rect,
 };
 use std::{
     cell::{Cell, RefCell},
-    fmt,
     num::NonZeroUsize,
     rc::Rc,
 };
@@ -27,6 +24,9 @@ pub use actuate_core as core;
 
 mod canvas;
 pub use self::canvas::Canvas;
+
+mod text;
+pub use self::text::Text;
 
 pub mod prelude {
     pub use crate::core::prelude::*;
@@ -63,15 +63,12 @@ impl<C: Compose> Compose for Window<C> {
         actuate_winit::Window::new(
             WindowAttributes::default(),
             move |window, event| {
-                #[cfg(feature = "tracing")]
-                tracing::error!("Redraw");
-
                 match event {
                     Event::Resumed => {}
                     Event::WindowEvent { event, .. } => match event {
                         WindowEvent::RedrawRequested => {
                             #[cfg(feature = "tracing")]
-                            tracing::error!("Redraw");
+                            tracing::trace!("Redraw");
 
                             // TODO
                             renderer_cx
@@ -133,45 +130,6 @@ impl<C: Compose> Compose for Window<C> {
                 }
             },
             Ref::map(cx.me(), |me| &me.content),
-        )
-    }
-}
-
-pub struct Text<T>(pub T);
-
-unsafe impl<T: Data> Data for Text<T> {
-    type Id = Text<T::Id>;
-}
-
-impl<T> Compose for Text<T>
-where
-    T: Data + fmt::Display,
-{
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        Canvas::new(
-            Style {
-                size: Size::from_lengths(500., 200.),
-                ..Default::default()
-            },
-            move |_layout, scene| {
-                let mut font_cx = FontContext::default();
-                font_cx
-                    .collection
-                    .register_fonts(include_bytes!("../assets/FiraMono-Medium.ttf").to_vec());
-
-                let mut text_layout = TextLayout::new(format!("{}", cx.me().0), 50.);
-
-                text_layout.set_font(masonry::parley::style::FontStack::Single(
-                    masonry::parley::style::FontFamily::Named("Fira Mono"),
-                ));
-                text_layout.set_brush(Color::RED);
-                text_layout.set_weight(Weight::MEDIUM);
-                text_layout.rebuild(&mut font_cx);
-
-                text_layout.draw(scene, Point::new(50., 50.));
-
-                tracing::error!("TEXT");
-            },
         )
     }
 }
