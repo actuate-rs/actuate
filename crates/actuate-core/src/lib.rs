@@ -613,7 +613,18 @@ where
 
         if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
             #[cfg(feature = "tracing")]
-            let span = tracing::span!(tracing::Level::INFO, "Composer", composable = %std::any::type_name::<C>());
+            let span = {
+                let type_name = std::any::type_name::<C>();
+                let name = type_name
+                    .split('<')
+                    .next()
+                    .unwrap_or(type_name)
+                    .split("::")
+                    .last()
+                    .unwrap_or(type_name);
+                tracing::span!(tracing::Level::INFO, "Composer", composable = %name)
+            };
+
             #[cfg(feature = "tracing")]
             let _guard = span.enter();
 
