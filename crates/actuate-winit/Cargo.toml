@@ -1,6 +1,6 @@
 [package]
 name = "actuate-winit"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Winit window bindings for Actuate"
 license = "MIT OR Apache-2.0"
@@ -11,7 +11,7 @@ tracing = ["dep:tracing"]
 default = ["tracing"]
 
 [dependencies]
-actuate-core = { version = "0.2.0", path = "../actuate-core" }
+actuate-core = { version = "0.2.1", path = "../actuate-core" }
 tracing = { version = "0.1.40", optional = true }
 winit = "0.30.5"
 
