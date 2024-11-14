@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "actuate-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "actuate-macros",
  "tracing",
@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "actuate-winit"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actuate-core",
  "tracing",
