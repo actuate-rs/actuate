@@ -1,26 +1,28 @@
+use crate::RendererContext;
 use actuate_core::prelude::*;
-use masonry::vello::{
-        self,
-        peniko::Color,
-        AaConfig, RenderParams, Renderer, RendererOptions,
-    };
-use std::num::NonZeroUsize;
+use masonry::{
+    vello::{self, peniko::Color, AaConfig, RenderParams, Renderer, RendererOptions},
+    Vec2,
+};
+use std::{cell::RefCell, num::NonZeroUsize};
 use taffy::{prelude::TaffyMaxContent, Size};
 use wgpu::PresentMode;
 use winit::{
     event::{Event, WindowEvent},
     window::WindowAttributes,
 };
-use crate::RendererContext;
 
 pub struct Window<C> {
     pub attributes: WindowAttributes,
     pub content: C,
 }
 
-impl<C> Window<C > {
-    pub fn new(content:C) -> Self {
-        Self { attributes: WindowAttributes::default(), content }
+impl<C> Window<C> {
+    pub fn new(content: C) -> Self {
+        Self {
+            attributes: WindowAttributes::default(),
+            content,
+        }
     }
 }
 
@@ -32,12 +34,65 @@ impl<C: Compose> Compose for Window<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let renderer_cx = use_context::<RendererContext>(&cx);
 
+        let cursor_pos = use_ref(&cx, RefCell::default);
+
         actuate_winit::Window::new(
             WindowAttributes::default(),
             move |window, event| {
                 match event {
                     Event::Resumed => {}
                     Event::WindowEvent { event, .. } => match event {
+                        WindowEvent::CursorMoved {
+                            device_id,
+                            position,
+                        } => {
+                            *cursor_pos.borrow_mut() = Vec2::new(position.x, position.y);
+                        }
+                        WindowEvent::MouseInput {
+                            device_id,
+                            state,
+                            button,
+                        } => {
+                            let pos = *cursor_pos.borrow();
+                            let taffy = renderer_cx.taffy.borrow();
+
+                            let mut keys =
+                                vec![(Vec2::default(), *renderer_cx.parent_key.borrow())];
+
+                            let mut target = None;
+
+                            while let Some((parent_pos, key)) = keys.pop() {
+                                let layout = taffy.layout(key).unwrap();
+                                if pos.x >= parent_pos.x + layout.location.x as f64
+                                    && pos.y >= parent_pos.y + layout.location.y as f64
+                                    && pos.x
+                                        <= parent_pos.x
+                                            + layout.location.x as f64
+                                            + layout.size.width as f64
+                                    && pos.y
+                                        <= parent_pos.y
+                                            + layout.location.y as f64
+                                            + layout.size.height as f64
+                                {
+                                    target = Some(key);
+
+                                    keys.extend(taffy.children(key).unwrap().into_iter().map(
+                                        |key| {
+                                            (
+                                                parent_pos
+                                                    + Vec2::new(
+                                                        layout.location.x as _,
+                                                        layout.location.y as _,
+                                                    ),
+                                                key,
+                                            )
+                                        },
+                                    ));
+                                }
+                            }
+
+                            tracing::error!("{:?}", target);
+                        }
                         WindowEvent::RedrawRequested => {
                             #[cfg(feature = "tracing")]
                             tracing::trace!("Redraw");

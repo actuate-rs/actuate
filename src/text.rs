@@ -79,19 +79,30 @@ where
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let font_cx = use_context::<FontContext>(&cx);
+
+        let text_layout = use_ref(&cx, || {
+            let mut text_layout = TextLayout::new(format!("{}", cx.me().content), 50.);
+            text_layout.rebuild(&mut font_cx.inner.borrow_mut());
+
+            RefCell::new(text_layout)
+        });
+
         Canvas::new(
             Style {
-                size: Size::from_lengths(500., 200.),
+                size: Size::from_lengths(
+                    text_layout.borrow().full_size().width as _,
+                    text_layout.borrow().full_size().height as _,
+                ),
                 ..Default::default()
             },
             move |_layout, scene| {
-                let mut text_layout = TextLayout::new(format!("{}", cx.me().content), 50.);
+                let mut text_layout = text_layout.borrow_mut();
 
                 text_layout.set_font(cx.me().font_stack);
                 text_layout.set_brush(Color::WHITE);
-                text_layout.rebuild(&mut font_cx.inner.borrow_mut());
 
-                text_layout.draw(scene, Point::new(50., 50.));
+                text_layout.rebuild(&mut font_cx.inner.borrow_mut());
+                text_layout.draw(scene, Point::default());
             },
         )
     }
