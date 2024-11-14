@@ -190,17 +190,11 @@ impl<C: Compose> Compose for Window<C> {
                 }
 
                 if renderer_cx.is_layout_changed.take() {
-                    // TODO
                     renderer_cx
                         .taffy
                         .borrow_mut()
                         .compute_layout(*renderer_cx.parent_key.borrow(), Size::MAX_CONTENT)
                         .unwrap();
-                    window.request_redraw();
-
-                    for f in &*renderer_cx.canvas_update_fns.borrow() {
-                        f()
-                    }
                 }
             },
             unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) },

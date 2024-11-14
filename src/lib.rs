@@ -34,7 +34,7 @@ pub use self::window::Window;
 pub mod prelude {
     pub use crate::core::prelude::*;
 
-    pub use crate::{use_font, Canvas, Flex, Text, Window};
+    pub use crate::{use_font, Canvas, Flex, Text, View, Window};
 
     pub use winit::window::WindowAttributes;
 }
