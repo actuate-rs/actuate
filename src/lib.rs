@@ -44,6 +44,7 @@ pub struct RendererContext {
     taffy: RefCell<TaffyTree>,
     parent_key: RefCell<NodeId>,
     is_changed: Cell<bool>,
+    canvas_update_fns: RefCell<Vec<Box<dyn Fn()>>>,
 }
 
 struct RenderRoot<C> {
@@ -80,6 +81,7 @@ impl<C: Compose> Compose for RenderRoot<C> {
                 taffy: RefCell::new(taffy),
                 parent_key: RefCell::new(root_key),
                 is_changed: Cell::new(false),
+                canvas_update_fns: RefCell::new(Vec::new()),
             }
         });
 

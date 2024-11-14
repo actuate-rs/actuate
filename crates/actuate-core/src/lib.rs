@@ -654,7 +654,7 @@ where
 
         if cell.is_none()
             || cx.is_changed.take()
-            || cx.is_parent_changed.get()
+            || cx.is_parent_changed.take()
             || cx.is_container.get()
         {
             #[cfg(feature = "tracing")]

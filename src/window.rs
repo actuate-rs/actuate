@@ -168,6 +168,10 @@ impl<C: Compose> Compose for Window<C> {
 
                 if renderer_cx.is_changed.take() {
                     window.request_redraw();
+
+                    for f in &*renderer_cx.canvas_update_fns.borrow() {
+                        f()
+                    }
                 }
             },
             unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) },

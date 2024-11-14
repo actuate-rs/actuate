@@ -3,7 +3,7 @@ use masonry::vello::{
     kurbo::{Affine, Vec2},
     Scene,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, mem};
 use taffy::{Layout, Style};
 
 pub struct Canvas<'a> {
@@ -39,6 +39,15 @@ impl Compose for Canvas<'_> {
                 .borrow_mut()
                 .add_child(*renderer_cx.parent_key.borrow(), key)
                 .unwrap();
+
+            let f: Box<dyn Fn()> = Box::new(move || {
+                cx.set_changed();
+            });
+            let f = unsafe { mem::transmute(f) };
+
+            // TODO remove on drop (unsound).
+            renderer_cx.canvas_update_fns.borrow_mut().push(f);
+
             key
         });
 
@@ -46,26 +55,24 @@ impl Compose for Canvas<'_> {
 
         let layout = *renderer_cx.taffy.borrow().layout(*key).unwrap();
         let mut parent_scene = renderer_cx.scene.borrow_mut();
-        cx.set_changed();
 
         let last_layout = use_mut(&cx, || None);
 
         if Some(layout) != *last_layout {
             last_layout.with(move |dst| *dst = Some(layout));
 
+            scene.borrow_mut().reset();
             (cx.me().f)(layout, &mut scene.borrow_mut());
 
-            parent_scene.append(
-                &scene.borrow(),
-                Some(Affine::translate(Vec2::new(
-                    layout.location.x as _,
-                    layout.location.y as _,
-                ))),
-            );
-            scene.borrow_mut().reset();
-
             renderer_cx.is_changed.set(true);
-            cx.set_changed();
         }
+
+        parent_scene.append(
+            &scene.borrow(),
+            Some(Affine::translate(Vec2::new(
+                layout.location.x as _,
+                layout.location.y as _,
+            ))),
+        );
     }
 }
