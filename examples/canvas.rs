@@ -3,9 +3,34 @@ use taffy::{Size, Style};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;
 use vello::{
-    kurbo::{Affine, Circle},
+    kurbo::{self, Affine},
     peniko::{Color, Fill},
 };
+
+#[derive(Data)]
+struct Circle {
+    color: Color,
+}
+
+impl Compose for Circle {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        Canvas::new(
+            Style {
+                size: Size::from_lengths(100., 100.),
+                ..Default::default()
+            },
+            move |scene| {
+                scene.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    cx.me().color,
+                    None,
+                    &kurbo::Circle::new((50.0, 50.0), 50.0),
+                );
+            },
+        )
+    }
+}
 
 #[derive(Data)]
 struct App;
@@ -15,51 +40,11 @@ impl Compose for App {
         Window {
             attributes: WindowAttributes::default(),
             content: (
-                Canvas::new(
-                    Style {
-                        size: Size::from_lengths(100., 100.),
-                        ..Default::default()
-                    },
-                    |scene| {
-                        scene.fill(
-                            Fill::NonZero,
-                            Affine::IDENTITY,
-                            Color::RED,
-                            None,
-                            &Circle::new((50.0, 50.0), 50.0),
-                        );
-                    },
-                ),
-                Canvas::new(
-                    Style {
-                        size: Size::from_lengths(100., 100.),
-                        ..Default::default()
-                    },
-                    |scene| {
-                        scene.fill(
-                            Fill::NonZero,
-                            Affine::IDENTITY,
-                            Color::BLUE,
-                            None,
-                            &Circle::new((50.0, 50.0), 50.0),
-                        );
-                    },
-                ),
-                Canvas::new(
-                    Style {
-                        size: Size::from_lengths(100., 100.),
-                        ..Default::default()
-                    },
-                    |scene| {
-                        scene.fill(
-                            Fill::NonZero,
-                            Affine::IDENTITY,
-                            Color::YELLOW,
-                            None,
-                            &Circle::new((50.0, 50.0), 50.0),
-                        );
-                    },
-                ),
+                Circle { color: Color::RED },
+                Circle { color: Color::BLUE },
+                Circle {
+                    color: Color::YELLOW,
+                },
             ),
         }
     }
