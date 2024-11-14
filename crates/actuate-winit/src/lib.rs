@@ -57,6 +57,10 @@ impl ApplicationHandler<Update> for Handler {
         tracing::trace!("Resumed");
 
         self.compose(event_loop);
+
+        for f in self.cx.inner.borrow_mut().handler_fns.values_mut() {
+            f(&Event::Resumed)
+        }
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: Update) {

@@ -78,7 +78,6 @@ where
     T: Data + fmt::Display,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        tracing::error!("text");
         let font_cx = use_context::<FontContext>(&cx);
         let renderer_cx = use_context::<RendererContext>(&cx);
 

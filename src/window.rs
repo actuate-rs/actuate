@@ -4,17 +4,23 @@ use masonry::{
     vello::{
         self,
         peniko::{Color, Fill},
+        util::RenderSurface,
         AaConfig, RenderParams, Renderer, RendererOptions,
     },
     Affine, Rect, Vec2,
 };
-use std::{cell::RefCell, num::NonZeroUsize};
+use std::{cell::RefCell, mem, num::NonZeroUsize};
 use taffy::{prelude::TaffyMaxContent, Size};
 use wgpu::PresentMode;
 use winit::{
     event::{Event, WindowEvent},
     window::WindowAttributes,
 };
+
+struct State {
+    renderer: Renderer,
+    render_surface: RenderSurface<'static>,
+}
 
 pub struct Window<C> {
     pub attributes: WindowAttributes,
@@ -40,11 +46,38 @@ impl<C: Compose> Compose for Window<C> {
 
         let cursor_pos = use_ref(&cx, RefCell::default);
 
+        let state = use_ref(&cx, || RefCell::new(None));
+
         actuate_winit::Window::new(
             WindowAttributes::default(),
             move |window, event| {
                 match event {
-                    Event::Resumed => {}
+                    Event::Resumed => {
+                        let surface =
+                            pollster::block_on(renderer_cx.cx.borrow_mut().create_surface(
+                                window,
+                                window.inner_size().width,
+                                window.inner_size().height,
+                                PresentMode::AutoVsync,
+                            ))
+                            .unwrap();
+
+                        let renderer = Renderer::new(
+                            &renderer_cx.cx.borrow().devices[surface.dev_id].device,
+                            RendererOptions {
+                                surface_format: Some(surface.format),
+                                use_cpu: false,
+                                antialiasing_support: vello::AaSupport::all(),
+                                num_init_threads: NonZeroUsize::new(1),
+                            },
+                        )
+                        .unwrap();
+
+                        *state.borrow_mut() = Some(State {
+                            render_surface: unsafe { mem::transmute(surface) },
+                            renderer,
+                        })
+                    }
                     Event::WindowEvent { event, .. } => match event {
                         WindowEvent::CursorMoved { position, .. } => {
                             *cursor_pos.borrow_mut() = Vec2::new(position.x, position.y);
@@ -107,33 +140,18 @@ impl<C: Compose> Compose for Window<C> {
                                 .compute_layout(*renderer_cx.parent_key.borrow(), Size::MAX_CONTENT)
                                 .unwrap();
 
-                            let surface =
-                                pollster::block_on(renderer_cx.cx.borrow_mut().create_surface(
-                                    window,
-                                    window.inner_size().width,
-                                    window.inner_size().height,
-                                    PresentMode::AutoVsync,
-                                ))
-                                .unwrap();
+                            let Some(state) = &mut *state.borrow_mut() else {
+                                return;
+                            };
 
-                            let mut renderer = Renderer::new(
-                                &renderer_cx.cx.borrow().devices[surface.dev_id].device,
-                                RendererOptions {
-                                    surface_format: Some(surface.format),
-                                    use_cpu: false,
-                                    antialiasing_support: vello::AaSupport::all(),
-                                    num_init_threads: NonZeroUsize::new(1),
-                                },
-                            )
-                            .unwrap();
-
-                            let texture = surface.surface.get_current_texture().unwrap();
-
+                            let texture =
+                                state.render_surface.surface.get_current_texture().unwrap();
                             let mut scene = renderer_cx.scene.borrow_mut();
+                            let device_handle =
+                                &renderer_cx.cx.borrow().devices[state.render_surface.dev_id];
 
-                            let device_handle = &renderer_cx.cx.borrow().devices[surface.dev_id];
-
-                            renderer
+                            state
+                                .renderer
                                 .render_to_surface(
                                     &device_handle.device,
                                     &device_handle.queue,
@@ -149,7 +167,6 @@ impl<C: Compose> Compose for Window<C> {
                                 .unwrap();
 
                             texture.present();
-
                             device_handle.device.poll(wgpu::Maintain::Poll);
 
                             scene.reset();
