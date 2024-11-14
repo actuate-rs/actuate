@@ -1,11 +1,11 @@
 use actuate::{prelude::*, Canvas};
-use taffy::{Size, Style};
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::FmtSubscriber;
-use vello::{
+use masonry::vello::{
     kurbo::{self, Affine},
     peniko::{Color, Fill},
 };
+use taffy::{Size, Style};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::FmtSubscriber;
 
 #[derive(Data)]
 struct Circle {

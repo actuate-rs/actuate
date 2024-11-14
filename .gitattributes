@@ -1,0 +1,9 @@
+* text=auto
+
+*.rs text eol=lf
+*.toml text eol=lf
+*.wgsl text eol=lf
+*.txt text eol=lf
+
+*.png binary
+*.ttf binary

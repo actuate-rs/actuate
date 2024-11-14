@@ -1,14 +1,23 @@
 use actuate_core::prelude::*;
+use masonry::{
+    parley::{fontique::Weight, FontContext},
+    text2::TextLayout,
+    vello::{
+        self,
+        peniko::{Color, Fill},
+        util::RenderContext,
+        AaConfig, RenderParams, Renderer, RendererOptions, Scene,
+    },
+    Affine, Point, Rect,
+};
 use std::{
     cell::{Cell, RefCell},
+    fmt,
     num::NonZeroUsize,
     rc::Rc,
 };
 use taffy::{prelude::TaffyMaxContent, NodeId, Size, Style, TaffyTree};
-use vello::{
-    peniko::Color, util::RenderContext, wgpu::PresentMode, AaConfig, RenderParams, Renderer,
-    RendererOptions, Scene,
-};
+use wgpu::PresentMode;
 use winit::{
     event::{Event, WindowEvent},
     window::WindowAttributes,
@@ -54,12 +63,15 @@ impl<C: Compose> Compose for Window<C> {
         actuate_winit::Window::new(
             WindowAttributes::default(),
             move |window, event| {
+                #[cfg(feature = "tracing")]
+                tracing::error!("Redraw");
+
                 match event {
                     Event::Resumed => {}
                     Event::WindowEvent { event, .. } => match event {
                         WindowEvent::RedrawRequested => {
                             #[cfg(feature = "tracing")]
-                            tracing::info!("Redraw");
+                            tracing::error!("Redraw");
 
                             // TODO
                             renderer_cx
@@ -91,6 +103,7 @@ impl<C: Compose> Compose for Window<C> {
                             let texture = surface.surface.get_current_texture().unwrap();
 
                             let scene = renderer_cx.scene.borrow_mut();
+
                             let device = &renderer_cx.cx.borrow().devices[surface.dev_id];
 
                             renderer
@@ -124,6 +137,45 @@ impl<C: Compose> Compose for Window<C> {
     }
 }
 
+pub struct Text<T>(pub T);
+
+unsafe impl<T: Data> Data for Text<T> {
+    type Id = Text<T::Id>;
+}
+
+impl<T> Compose for Text<T>
+where
+    T: Data + fmt::Display,
+{
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        Canvas::new(
+            Style {
+                size: Size::from_lengths(500., 200.),
+                ..Default::default()
+            },
+            move |_layout, scene| {
+                let mut font_cx = FontContext::default();
+                font_cx
+                    .collection
+                    .register_fonts(include_bytes!("../assets/FiraMono-Medium.ttf").to_vec());
+
+                let mut text_layout = TextLayout::new(format!("{}", cx.me().0), 50.);
+
+                text_layout.set_font(masonry::parley::style::FontStack::Single(
+                    masonry::parley::style::FontFamily::Named("Fira Mono"),
+                ));
+                text_layout.set_brush(Color::RED);
+                text_layout.set_weight(Weight::MEDIUM);
+                text_layout.rebuild(&mut font_cx);
+
+                text_layout.draw(scene, Point::new(50., 50.));
+
+                tracing::error!("TEXT");
+            },
+        )
+    }
+}
+
 struct RenderRoot<C> {
     content: C,
 }
@@ -138,9 +190,18 @@ impl<C: Compose> Compose for RenderRoot<C> {
             let mut taffy = TaffyTree::new();
             let root_key = taffy.new_leaf(Style::default()).unwrap();
 
+            let mut scene = Scene::new();
+            scene.fill(
+                Fill::NonZero,
+                Affine::default(),
+                Color::BLACK,
+                None,
+                &Rect::new(0., 0., 500., 500.),
+            );
+
             RendererContext {
-                cx: Rc::new(RefCell::new(RenderContext::new())),
-                scene: RefCell::new(Scene::new()),
+                cx: Rc::new(RefCell::new(RenderContext::new().unwrap())),
+                scene: RefCell::new(scene),
                 taffy: RefCell::new(taffy),
                 parent_key: RefCell::new(root_key),
                 is_changed: Cell::new(false),

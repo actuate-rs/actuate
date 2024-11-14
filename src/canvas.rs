@@ -1,10 +1,10 @@
 use crate::{prelude::*, RendererContext};
-use std::cell::RefCell;
-use taffy::{Layout, Style};
-use vello::{
+use masonry::vello::{
     kurbo::{Affine, Vec2},
     Scene,
 };
+use std::cell::RefCell;
+use taffy::{Layout, Style};
 
 pub struct Canvas<'a> {
     style: Style,
