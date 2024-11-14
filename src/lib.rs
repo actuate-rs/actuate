@@ -1,4 +1,4 @@
-use actuate_core::prelude::*;
+use actuate_core::{prelude::*, MapCompose};
 use masonry::{
     vello::{
         peniko::{Color, Fill},
@@ -85,7 +85,7 @@ impl<C: Compose> Compose for RenderRoot<C> {
 
         use_provider(&cx, FontContext::default);
 
-        Ref::map(cx.me(), |me| &me.content)
+        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
 }
 

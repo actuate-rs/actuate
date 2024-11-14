@@ -1,8 +1,12 @@
 use crate::RendererContext;
-use actuate_core::prelude::*;
+use actuate_core::{prelude::*, MapCompose};
 use masonry::{
-    vello::{self, peniko::Color, AaConfig, RenderParams, Renderer, RendererOptions},
-    Vec2,
+    vello::{
+        self,
+        peniko::{Color, Fill},
+        AaConfig, RenderParams, Renderer, RendererOptions,
+    },
+    Affine, Rect, Vec2,
 };
 use std::{cell::RefCell, num::NonZeroUsize};
 use taffy::{prelude::TaffyMaxContent, Size};
@@ -120,7 +124,7 @@ impl<C: Compose> Compose for Window<C> {
 
                             let texture = surface.surface.get_current_texture().unwrap();
 
-                            let scene = renderer_cx.scene.borrow_mut();
+                            let mut scene = renderer_cx.scene.borrow_mut();
 
                             let device_handle = &renderer_cx.cx.borrow().devices[surface.dev_id];
 
@@ -142,6 +146,20 @@ impl<C: Compose> Compose for Window<C> {
                             texture.present();
 
                             device_handle.device.poll(wgpu::Maintain::Poll);
+
+                            scene.reset();
+                            scene.fill(
+                                Fill::NonZero,
+                                Affine::default(),
+                                Color::BLACK,
+                                None,
+                                &Rect::new(
+                                    0.,
+                                    0.,
+                                    window.inner_size().width as _,
+                                    window.inner_size().height as _,
+                                ),
+                            );
                         }
                         _ => {}
                     },
@@ -152,7 +170,7 @@ impl<C: Compose> Compose for Window<C> {
                     window.request_redraw();
                 }
             },
-            Ref::map(cx.me(), |me| &me.content),
+            unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) },
         )
     }
 }

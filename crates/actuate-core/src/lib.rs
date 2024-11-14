@@ -58,9 +58,9 @@ pub struct Ref<'a, T: ?Sized> {
 
 impl<'a, T> Ref<'a, T> {
     /// Map this reference to a value of type `U`.
-    pub fn map<U: ?Sized>(self, f: fn(&T) -> &U) -> Map<'a, U> {
+    pub fn map<U: ?Sized>(me: Self, f: fn(&T) -> &U) -> Map<'a, U> {
         Map {
-            ptr: self.value as *const _ as _,
+            ptr: me.value as *const _ as _,
             map_fn: f as _,
             deref_fn: |ptr, g| unsafe {
                 let g: fn(&T) -> &U = mem::transmute(g);
@@ -490,7 +490,29 @@ impl<C: Compose> Compose for &C {
     }
 }
 
-impl<C: Compose> Compose for Map<'_, C> {
+pub struct MapCompose<'a, T> {
+    map: Map<'a, T>,
+}
+
+impl<'a, T> MapCompose<'a, T> {
+    pub unsafe fn new(map: Map<'a, T>) -> Self {
+        Self { map }
+    }
+}
+
+impl<T> Deref for MapCompose<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.map
+    }
+}
+
+unsafe impl<T: Data> Data for MapCompose<'_, T> {
+    type Id = MapCompose<'static, T::Id>;
+}
+
+impl<C: Compose> Compose for MapCompose<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         (**cx.me()).any_compose(&cx);
     }

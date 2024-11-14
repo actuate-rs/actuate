@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, use_drop, Composer, Update, Updater};
+use actuate_core::{prelude::*, use_drop, Composer, MapCompose, Update, Updater};
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
 use winit::{
     application::ApplicationHandler,
@@ -20,7 +20,7 @@ impl Updater for EventLoopUpdater {
 }
 
 struct HandlerRoot<C> {
-    compose: C,
+    content: C,
     event_loop_cx: EventLoopContext,
 }
 
@@ -32,7 +32,7 @@ impl<C: Compose> Compose for HandlerRoot<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         use_provider(&cx, || cx.me().event_loop_cx.clone());
 
-        cx.me().map(|me| &me.compose)
+        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
 }
 
@@ -94,7 +94,7 @@ pub fn run(content: impl Compose + 'static) {
     let mut handler = Handler {
         composer: Composer::with_updater(
             HandlerRoot {
-                compose: content,
+                content,
                 event_loop_cx: cx.clone(),
             },
             EventLoopUpdater { proxy },
@@ -173,6 +173,7 @@ impl<C: Compose> Compose for Window<'_, C> {
 
         inner.handler_fns.insert(id, on_event);
 
-        Ref::map(cx.me(), |me| &me.content)
+        // Safety: The pointer to `me.content` is guranteed to remain constant.
+        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
 }

@@ -1,4 +1,5 @@
 use crate::{prelude::*, RendererContext};
+use actuate_core::MapCompose;
 use taffy::{FlexDirection, Style};
 
 pub struct Flex<C> {
@@ -53,6 +54,6 @@ impl<C: Compose> Compose for Flex<C> {
             *renderer_cx.parent_key.borrow_mut() = id;
         });
 
-        Ref::map(cx.me(), |me| &me.content)
+        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
 }

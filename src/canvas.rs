@@ -62,6 +62,7 @@ impl Compose for Canvas<'_> {
                     layout.location.y as _,
                 ))),
             );
+            scene.borrow_mut().reset();
 
             renderer_cx.is_changed.set(true);
             cx.set_changed();
