@@ -5,7 +5,7 @@ use masonry::{
         util::RenderContext,
         Scene,
     },
-    Affine, Rect,
+    Affine, Rect, Vec2,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -15,6 +15,7 @@ use std::{
 };
 use taffy::{FlexDirection, NodeId, Style, TaffyTree};
 use text::FontContext;
+use winit::event::{ElementState, MouseButton};
 
 pub use actuate_core as core;
 
@@ -48,8 +49,8 @@ pub struct RendererContext {
     is_changed: Cell<bool>,
     is_layout_changed: Cell<bool>,
     canvas_update_fns: RefCell<Vec<Box<dyn Fn()>>>,
-    listeners: Rc<RefCell<HashMap<NodeId, Vec<Rc<dyn Fn()>>>>>,
-    pending_listeners: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    listeners: Rc<RefCell<HashMap<NodeId, Vec<Rc<dyn Fn(MouseButton, ElementState, Vec2)>>>>>,
+    pending_listeners: Rc<RefCell<Vec<Rc<dyn Fn(MouseButton, ElementState, Vec2)>>>>,
 }
 
 struct RenderRoot<C> {
@@ -137,10 +138,21 @@ impl<C: Compose> Compose for Clickable<'_, C> {
 
         // TODO remove on drop (unsound).
         use_ref(&cx, || {
-            renderer_cx
-                .pending_listeners
-                .borrow_mut()
-                .push(unsafe { mem::transmute(cx.me().on_click.clone()) });
+            let is_pressed = Cell::new(false);
+            let f: Rc<dyn Fn() + 'static> = unsafe { mem::transmute(cx.me().on_click.clone()) };
+            let f = Rc::new(move |button, state, _| {
+                if button != MouseButton::Left {
+                    return;
+                }
+
+                if state == ElementState::Pressed {
+                    is_pressed.set(true)
+                } else if is_pressed.get() && state == ElementState::Released {
+                    f()
+                }
+            });
+
+            renderer_cx.pending_listeners.borrow_mut().push(f);
         });
 
         unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }

@@ -82,7 +82,7 @@ impl<C: Compose> Compose for Window<C> {
                         WindowEvent::CursorMoved { position, .. } => {
                             *cursor_pos.borrow_mut() = Vec2::new(position.x, position.y);
                         }
-                        WindowEvent::MouseInput { .. } => {
+                        WindowEvent::MouseInput { button, state, .. } => {
                             let pos = *cursor_pos.borrow();
                             let taffy = renderer_cx.taffy.borrow();
 
@@ -124,7 +124,7 @@ impl<C: Compose> Compose for Window<C> {
                             if let Some(key) = target {
                                 if let Some(listeners) = renderer_cx.listeners.borrow().get(&key) {
                                     for f in listeners {
-                                        f()
+                                        f(*button, *state, *cursor_pos.borrow())
                                     }
                                 }
                             }
