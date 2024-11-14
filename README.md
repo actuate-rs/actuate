@@ -1,6 +1,6 @@
 <div align="center">
- <h1>Actuate</h1>
- <a href="https://crates.io/crates/actuate">
+  <h1>Actuate</h1>
+  <a href="https://crates.io/crates/actuate">
     <img src="https://img.shields.io/crates/v/actuate?style=flat-square"
     alt="Crates.io version" />
   </a>
@@ -12,6 +12,8 @@
     <img src="https://github.com/actuate-rs/actuate/actions/workflows/ci.yml/badge.svg"
       alt="CI status" />
   </a>
+  <a href="https://discord.gg/AbyAdew3">
+    <img src="https://img.shields.io/discord/1306713440873877576.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2" />
 </div>
 
 <div align="center">
