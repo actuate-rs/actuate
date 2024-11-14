@@ -70,6 +70,10 @@ impl ApplicationHandler<Update> for Handler {
         unsafe { event.apply() };
 
         self.compose(event_loop);
+
+        for f in self.cx.inner.borrow_mut().handler_fns.values_mut() {
+            f(&Event::UserEvent(()))
+        }
     }
 
     fn window_event(
@@ -78,14 +82,14 @@ impl ApplicationHandler<Update> for Handler {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        self.compose(event_loop);
+
         self.cx
             .inner
             .borrow_mut()
             .handler_fns
             .get_mut(&window_id)
             .unwrap()(&Event::WindowEvent { window_id, event });
-
-        self.compose(event_loop);
     }
 }
 

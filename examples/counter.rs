@@ -13,11 +13,8 @@ impl Compose for App {
 
         Window::new((
             Text::new(format!("High five count: {}", *count)),
-            Text::new("Up high!").on_click(move || {
-                dbg!("click!");
-                count.update(|x| *x += 1);
-            }),
-            Text::new("Down low!"),
+            Text::new("Up high!").on_click(move || count.update(|x| *x += 1)),
+            Text::new("Down low!").on_click(move || count.update(|x| *x -= 1)),
         ))
     }
 }
@@ -25,7 +22,7 @@ impl Compose for App {
 fn main() {
     tracing::subscriber::set_global_default(
         FmtSubscriber::builder()
-            .with_max_level(LevelFilter::TRACE)
+            .with_max_level(LevelFilter::INFO)
             .finish(),
     )
     .unwrap();

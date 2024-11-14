@@ -40,6 +40,8 @@ impl Compose for Canvas<'_> {
                 .add_child(*renderer_cx.parent_key.borrow(), key)
                 .unwrap();
 
+            renderer_cx.is_layout_changed.set(true);
+
             let listeners = mem::take(&mut *renderer_cx.pending_listeners.borrow_mut());
             renderer_cx.listeners.borrow_mut().insert(key, listeners);
 
@@ -54,6 +56,16 @@ impl Compose for Canvas<'_> {
             key
         });
 
+        let last_style = use_ref(&cx, || cx.me().style.clone());
+        if cx.me().style != *last_style {
+            renderer_cx.is_layout_changed.set(true);
+            renderer_cx
+                .taffy
+                .borrow_mut()
+                .set_style(*key, cx.me().style.clone())
+                .unwrap();
+        }
+
         let scene = use_ref(&cx, || RefCell::new(Scene::new()));
 
         let layout = *renderer_cx.taffy.borrow().layout(*key).unwrap();
@@ -61,9 +73,16 @@ impl Compose for Canvas<'_> {
 
         let last_layout = use_mut(&cx, || None);
 
+        if last_layout.is_none() {
+            last_layout.with(move |dst| *dst = Some(layout));
+            renderer_cx.is_changed.set(true);
+            return;
+        }
+
         if Some(layout) != *last_layout {
             last_layout.with(move |dst| *dst = Some(layout));
             renderer_cx.is_changed.set(true);
+            cx.set_changed();
         }
 
         scene.borrow_mut().reset();
