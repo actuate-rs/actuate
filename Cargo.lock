@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "actuate"
-version = "0.0.0"
+version = "0.4.0-alpha.5"
 dependencies = [
  "actuate-core",
  "actuate-winit",
