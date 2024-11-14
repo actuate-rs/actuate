@@ -26,16 +26,18 @@ pub use actuate_core as core;
 mod canvas;
 pub use self::canvas::Canvas;
 
+mod flex;
+pub use self::flex::Flex;
+
 mod text;
 pub use self::text::{use_font, Text};
 
 pub mod prelude {
     pub use crate::core::prelude::*;
 
-    pub use crate::{use_font, Text, Window};
-    pub use winit::window::WindowAttributes;
+    pub use crate::{use_font, Canvas, Flex, Text, Window};
 
-    pub use crate::Canvas;
+    pub use winit::window::WindowAttributes;
 }
 
 pub struct RendererContext {

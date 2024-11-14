@@ -1,4 +1,5 @@
-use actuate::{prelude::*, Text};
+use actuate::prelude::*;
+use taffy::{FlexDirection, Style};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;
 
@@ -11,10 +12,16 @@ impl Compose for App {
 
         Window {
             attributes: WindowAttributes::default(),
-            content: (
-                Text::new(format!("High five count: {}", *count)),
-                Text::new("Up high!"),
-                Text::new("Down low!"),
+            content: Flex::new(
+                Style {
+                    flex_direction: FlexDirection::Column,
+                    ..Default::default()
+                },
+                (
+                    Text::new(format!("High five count: {}", *count)),
+                    Text::new("Up high!"),
+                    Text::new("Down low!"),
+                ),
             ),
         }
     }
