@@ -1,5 +1,5 @@
 use crate::{prelude::*, RendererContext};
-use taffy::Style;
+use taffy::{FlexDirection, Style};
 
 pub struct Flex<C> {
     style: Style,
@@ -9,6 +9,26 @@ pub struct Flex<C> {
 impl<C> Flex<C> {
     pub fn new(style: Style, content: C) -> Self {
         Self { style, content }
+    }
+
+    pub fn column(content: C) -> Self {
+        Self::new(
+            Style {
+                flex_direction: FlexDirection::Column,
+                ..Default::default()
+            },
+            content,
+        )
+    }
+
+    pub fn row(content: C) -> Self {
+        Self::new(
+            Style {
+                flex_direction: FlexDirection::Row,
+                ..Default::default()
+            },
+            content,
+        )
     }
 }
 
