@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0-alpha.6](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0-alpha.5...actuate-v0.4.0-alpha.6) - 2024-11-14
+
+### Other
+
+- Update README.md
+- Update README.md
+- Change logo
+- Better click handling
+- Fix initial layout pass
+- Cache renderer
+- Refactor and impl better tracing
+- Clean up
+- Trigger paints
+- Create unsafe MapCompose struct to fix Map soundness
+- Better names in tracing
+- Impl basic click handling and fix text sizing
+- Refactor Window
+- Update README.md
+- Update README.md
+- Add logo
+- Add Flex::row and Flex::column constructors
+- Create Flex composable
+- Setup default fonts
+- Clean up
+- Render basic text
+- Refactor Canvas and add Layout to fn args
+
 ## [0.4.0-alpha.5](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0-alpha.4...actuate-v0.4.0-alpha.5) - 2024-11-13
 
 ### Other
