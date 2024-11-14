@@ -9,14 +9,11 @@ impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let count = use_mut(&cx, || 0);
 
-        Window {
-            attributes: WindowAttributes::default(),
-            content: Flex::column((
-                Text::new(format!("High five count: {}", *count)),
-                Text::new("Up high!"),
-                Text::new("Down low!"),
-            )),
-        }
+        Window::new((
+            Text::new(format!("High five count: {}", *count)),
+            Text::new("Up high!"),
+            Text::new("Down low!"),
+        ))
     }
 }
 

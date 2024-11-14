@@ -3,7 +3,6 @@ use actuate_core::{prelude::*, ScopeState};
 use masonry::{
     parley::{
         self,
-        fontique::Weight,
         style::{FontFamily, FontStack},
     },
     text2::TextLayout,
@@ -89,8 +88,7 @@ where
                 let mut text_layout = TextLayout::new(format!("{}", cx.me().content), 50.);
 
                 text_layout.set_font(cx.me().font_stack);
-                text_layout.set_brush(Color::RED);
-                text_layout.set_weight(Weight::MEDIUM);
+                text_layout.set_brush(Color::WHITE);
                 text_layout.rebuild(&mut font_cx.inner.borrow_mut());
 
                 text_layout.draw(scene, Point::new(50., 50.));
