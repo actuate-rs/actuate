@@ -56,6 +56,7 @@ impl<C: Compose> Compose for Window<C> {
                     Event::Resumed => {}
                     Event::WindowEvent { event, .. } => match event {
                         WindowEvent::RedrawRequested => {
+                            #[cfg(feature = "tracing")]
                             tracing::info!("Redraw");
 
                             // TODO
