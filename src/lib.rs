@@ -1,5 +1,9 @@
 use actuate_core::prelude::*;
-use std::{cell::RefCell, num::NonZeroUsize, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    num::NonZeroUsize,
+    rc::Rc,
+};
 use taffy::{prelude::TaffyMaxContent, NodeId, Size, Style, TaffyTree};
 use vello::{
     kurbo::{Affine, Vec2},
@@ -29,6 +33,7 @@ pub struct RendererContext {
     scene: RefCell<Scene>,
     taffy: RefCell<TaffyTree>,
     parent_key: RefCell<NodeId>,
+    is_changed: Cell<bool>,
 }
 
 pub struct Window<C> {
@@ -46,66 +51,70 @@ impl<C: Compose> Compose for Window<C> {
 
         actuate_winit::Window::new(
             WindowAttributes::default(),
-            move |window, event| match event {
-                Event::Resumed => {}
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::RedrawRequested => {
-                        window.request_redraw();
+            move |window, event| {
+                match event {
+                    Event::Resumed => {}
+                    Event::WindowEvent { event, .. } => match event {
+                        WindowEvent::RedrawRequested => {
+                            tracing::info!("Redraw");
 
-                        tracing::error!("REDRAW");
+                            // TODO
+                            renderer_cx
+                                .taffy
+                                .borrow_mut()
+                                .compute_layout(*renderer_cx.parent_key.borrow(), Size::MAX_CONTENT)
+                                .unwrap();
 
-                        // TODO
-                        renderer_cx
-                            .taffy
-                            .borrow_mut()
-                            .compute_layout(*renderer_cx.parent_key.borrow(), Size::MAX_CONTENT)
-                            .unwrap();
+                            let surface =
+                                pollster::block_on(renderer_cx.cx.borrow_mut().create_surface(
+                                    window,
+                                    window.inner_size().width,
+                                    window.inner_size().height,
+                                    PresentMode::AutoVsync,
+                                ))
+                                .unwrap();
 
-                        let surface =
-                            pollster::block_on(renderer_cx.cx.borrow_mut().create_surface(
-                                window,
-                                window.inner_size().width,
-                                window.inner_size().height,
-                                PresentMode::AutoVsync,
-                            ))
-                            .unwrap();
-
-                        let mut renderer = Renderer::new(
-                            &renderer_cx.cx.borrow().devices[surface.dev_id].device,
-                            RendererOptions {
-                                surface_format: Some(surface.format),
-                                use_cpu: false,
-                                antialiasing_support: vello::AaSupport::all(),
-                                num_init_threads: NonZeroUsize::new(1),
-                            },
-                        )
-                        .unwrap();
-
-                        let texture = surface.surface.get_current_texture().unwrap();
-
-                        let scene = renderer_cx.scene.borrow_mut();
-                        let device = &renderer_cx.cx.borrow().devices[surface.dev_id];
-
-                        renderer
-                            .render_to_surface(
-                                &device.device,
-                                &device.queue,
-                                &scene,
-                                &texture,
-                                &RenderParams {
-                                    base_color: Color::BLACK,
-                                    width: window.inner_size().width,
-                                    height: window.inner_size().height,
-                                    antialiasing_method: AaConfig::Msaa16,
+                            let mut renderer = Renderer::new(
+                                &renderer_cx.cx.borrow().devices[surface.dev_id].device,
+                                RendererOptions {
+                                    surface_format: Some(surface.format),
+                                    use_cpu: false,
+                                    antialiasing_support: vello::AaSupport::all(),
+                                    num_init_threads: NonZeroUsize::new(1),
                                 },
                             )
                             .unwrap();
 
-                        texture.present();
-                    }
+                            let texture = surface.surface.get_current_texture().unwrap();
+
+                            let scene = renderer_cx.scene.borrow_mut();
+                            let device = &renderer_cx.cx.borrow().devices[surface.dev_id];
+
+                            renderer
+                                .render_to_surface(
+                                    &device.device,
+                                    &device.queue,
+                                    &scene,
+                                    &texture,
+                                    &RenderParams {
+                                        base_color: Color::BLACK,
+                                        width: window.inner_size().width,
+                                        height: window.inner_size().height,
+                                        antialiasing_method: AaConfig::Msaa16,
+                                    },
+                                )
+                                .unwrap();
+
+                            texture.present();
+                        }
+                        _ => {}
+                    },
                     _ => {}
-                },
-                _ => {}
+                }
+
+                if renderer_cx.is_changed.take() {
+                    window.request_redraw();
+                }
             },
             Ref::map(cx.me(), |me| &me.content),
         )
@@ -153,15 +162,23 @@ impl Compose for Canvas<'_> {
         let layout = *renderer_cx.taffy.borrow().layout(*key).unwrap();
         let mut parent_scene = renderer_cx.scene.borrow_mut();
 
-        (cx.me().f)(&mut scene.borrow_mut());
+        let last_layout = use_mut(&cx, || layout);
 
-        parent_scene.append(
-            &scene.borrow(),
-            Some(Affine::translate(Vec2::new(
-                layout.location.x as _,
-                layout.location.y as _,
-            ))),
-        );
+        if layout != *last_layout {
+            last_layout.with(move |dst| *dst = layout);
+
+            (cx.me().f)(&mut scene.borrow_mut());
+
+            parent_scene.append(
+                &scene.borrow(),
+                Some(Affine::translate(Vec2::new(
+                    layout.location.x as _,
+                    layout.location.y as _,
+                ))),
+            );
+
+            renderer_cx.is_changed.set(true);
+        }
     }
 }
 
@@ -184,6 +201,7 @@ impl<C: Compose> Compose for RenderRoot<C> {
                 scene: RefCell::new(Scene::new()),
                 taffy: RefCell::new(taffy),
                 parent_key: RefCell::new(root_key),
+                is_changed: Cell::new(false),
             }
         });
 
