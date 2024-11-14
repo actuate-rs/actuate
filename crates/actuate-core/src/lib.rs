@@ -207,6 +207,7 @@ pub struct ScopeState {
     is_changed: Cell<bool>,
     is_parent_changed: Cell<bool>,
     is_empty: Cell<bool>,
+    is_container: Cell<bool>,
     contexts: RefCell<Contexts>,
     drops: RefCell<Vec<usize>>,
 }
@@ -565,6 +566,10 @@ macro_rules! impl_tuples {
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
+                use_ref(&cx, || {
+                    cx.is_container.set(true);
+                });
+
                 $(cx.me().$idx.any_compose(use_ref(&cx, || {
                     let mut state = ScopeState::default();
                     state.contexts=  cx.contexts.clone();
@@ -625,7 +630,11 @@ where
 
         let child_state = use_ref(&cx, ScopeState::default);
 
-        if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
+        if cell.is_none()
+            || cx.is_changed.take()
+            || cx.is_parent_changed.get()
+            || cx.is_container.get()
+        {
             #[cfg(feature = "tracing")]
             tracing::info!("Compose::compose: {}", self.name());
 
