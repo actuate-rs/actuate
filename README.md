@@ -1,5 +1,5 @@
 <div align="center">
- <img src="https://github.com/actuate-rs/actuate/blob/main/logo.png?raw=true" />
+ <img height=50 src="https://github.com/actuate-rs/actuate/blob/main/logo.png?raw=true" />
 
  <br />
 
