@@ -1,10 +1,10 @@
 use actuate_core::{prelude::*, use_callback, use_drop, Composer, ScopeState, Update, Updater};
-use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, marker::PhantomData, mem, rc::Rc};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
-    window::{Window, WindowAttributes, WindowId},
+    window::{Window as RawWindow, WindowAttributes, WindowId},
 };
 
 struct EventLoopUpdater {
@@ -116,38 +116,53 @@ pub struct EventLoopContext {
     inner: Rc<RefCell<Inner>>,
 }
 
-pub fn use_window<'a>(
-    cx: &'a ScopeState,
+pub struct Window<'a> {
     window_attributes: WindowAttributes,
-    on_event: impl FnMut(WindowEvent) + 'a,
-) -> &'a Window {
-    let event_loop_cx = use_context::<EventLoopContext>(cx);
-    let mut inner = event_loop_cx.inner.borrow_mut();
+    on_event: Rc<dyn Fn(&WindowEvent) + 'a>,
+}
 
-    let window = use_ref(cx, || {
+impl<'a> Window<'a> {
+    pub fn new(window_attributes: WindowAttributes, on_event: impl Fn(&WindowEvent) + 'a) -> Self {
+        Self {
+            window_attributes,
+            on_event: Rc::new(on_event),
+        }
+    }
+}
+
+// TODO
+unsafe impl Data for Window<'_> {
+    type Id = Window<'static>;
+}
+
+impl Compose for Window<'_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let event_loop_cx = use_context::<EventLoopContext>(&cx);
+        let mut inner = event_loop_cx.inner.borrow_mut();
+
+        let window = use_ref(&cx, || {
+            inner
+                .event_loop
+                .as_ref()
+                .unwrap()
+                .create_window(cx.me().window_attributes.clone())
+                .unwrap()
+        });
+
+        use_memo(&cx, &cx.me().window_attributes.title, || {
+            window.set_title(&cx.me().window_attributes.title);
+        });
+
+        // TODO react to more attributes
+
+        let drop_inner = event_loop_cx.inner.clone();
+        let id = window.id();
+        use_drop(&cx, move || {
+            drop_inner.borrow_mut().handler_fns.remove(&id);
+        });
+
         inner
-            .event_loop
-            .as_ref()
-            .unwrap()
-            .create_window(window_attributes.clone())
-            .unwrap()
-    });
-
-    use_memo(cx, &window_attributes.title, || {
-        window.set_title(&window_attributes.title);
-    });
-
-    // TODO react to more attributes
-
-    use_drop(cx, || {
-        inner.handler_fns.remove(&window.id());
-    });
-
-    let f = use_callback(cx, on_event);
-
-    inner
-        .handler_fns
-        .insert(window.id(), unsafe { mem::transmute(f.clone()) });
-
-    window
+            .handler_fns
+            .insert(id, unsafe { mem::transmute(cx.me().on_event.clone()) });
+    }
 }

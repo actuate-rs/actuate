@@ -1,5 +1,5 @@
 use actuate_core::prelude::*;
-use actuate_winit::use_window;
+use actuate_winit::Window;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;
 use winit::window::WindowAttributes;
@@ -9,9 +9,10 @@ struct App;
 
 impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        use_window(&cx, WindowAttributes::default(), |event| {
-            dbg!(event);
-        });
+        let x = use_ref(&cx, || 0);
+        Window::new(WindowAttributes::default(), move |event| {
+            dbg!(x);
+        })
     }
 }
 

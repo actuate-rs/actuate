@@ -394,15 +394,14 @@ where
     value_mut.as_ref()
 }
 
-pub fn use_drop<'a>(cx: &'a ScopeState, f: impl FnOnce() + 'a) {
+pub fn use_drop<'a>(cx: &'a ScopeState, f: impl FnOnce() + 'static) {
     let mut f_cell = Some(f);
 
     use_ref(cx, || {
         cx.drops.borrow_mut().push(cx.hook_idx.get());
-        let f = Box::new(|| {
+        let f = Box::new(move || {
             f_cell.take().unwrap()();
         }) as Box<dyn FnMut()>;
-        let f: Box<dyn FnMut()> = unsafe { mem::transmute(f) };
         f
     });
 }
