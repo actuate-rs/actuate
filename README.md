@@ -1,4 +1,5 @@
 <div align="center">
+ <h1>Actuate</h1>
  <a href="https://crates.io/crates/actuate">
     <img src="https://img.shields.io/crates/v/actuate?style=flat-square"
     alt="Crates.io version" />
