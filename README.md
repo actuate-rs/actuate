@@ -1,8 +1,4 @@
 <div align="center">
- <img height=50 src="https://github.com/actuate-rs/actuate/blob/main/logo.png?raw=true" />
-
- <br />
-
  <a href="https://crates.io/crates/actuate">
     <img src="https://img.shields.io/crates/v/actuate?style=flat-square"
     alt="Crates.io version" />
