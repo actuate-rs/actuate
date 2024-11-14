@@ -23,6 +23,7 @@ members = [
 actuate-core = { version = "0.1.1", path = "crates/actuate-core" }
 actuate-winit = { version = "0.1.0", path = "crates/actuate-winit", optional = true }
 pollster = "0.4.0"
+taffy = "0.6.1"
 tracing = { version = "0.1.40", optional = true }
 vello = "0.3.0"
 winit = "0.30.5"

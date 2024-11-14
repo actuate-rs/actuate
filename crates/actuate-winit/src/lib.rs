@@ -1,5 +1,5 @@
-use actuate_core::{prelude::*, use_callback, use_drop, Composer, ScopeState, Update, Updater};
-use std::{cell::RefCell, collections::HashMap, marker::PhantomData, mem, rc::Rc};
+use actuate_core::{prelude::*, use_drop, Composer, Update, Updater};
+use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
 use winit::{
     application::ApplicationHandler,
     event::{Event, WindowEvent},
@@ -116,29 +116,32 @@ pub struct EventLoopContext {
     inner: Rc<RefCell<Inner>>,
 }
 
-pub struct Window<'a> {
+pub struct Window<'a, C> {
     window_attributes: WindowAttributes,
     on_event: Rc<dyn Fn(&RawWindow, &Event<()>) + 'a>,
+    content: C,
 }
 
-impl<'a> Window<'a> {
+impl<'a, C> Window<'a, C> {
     pub fn new(
         window_attributes: WindowAttributes,
         on_event: impl Fn(&RawWindow, &Event<()>) + 'a,
+        content: C,
     ) -> Self {
         Self {
             window_attributes,
             on_event: Rc::new(on_event),
+            content,
         }
     }
 }
 
 // TODO
-unsafe impl Data for Window<'_> {
-    type Id = Window<'static>;
+unsafe impl<C: Data> Data for Window<'_, C> {
+    type Id = Window<'static, C::Id>;
 }
 
-impl Compose for Window<'_> {
+impl<C: Compose> Compose for Window<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let event_loop_cx = use_context::<EventLoopContext>(&cx);
         let mut inner = event_loop_cx.inner.borrow_mut();
@@ -169,5 +172,7 @@ impl Compose for Window<'_> {
         let on_event: Rc<dyn Fn(&Event<()>)> = unsafe { mem::transmute(on_event) };
 
         inner.handler_fns.insert(id, on_event);
+
+        Ref::map(cx.me(), |me| &me.content)
     }
 }
