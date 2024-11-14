@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.2...actuate-winit-v0.1.3) - 2024-11-14
+
+### Other
+
+- Fix initial layout pass
+- Cache renderer
+- Refactor and impl better tracing
+- Create unsafe MapCompose struct to fix Map soundness
+
 ## [0.1.2](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.1...actuate-winit-v0.1.2) - 2024-11-14
 
 ### Other
