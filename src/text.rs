@@ -1,5 +1,5 @@
-use crate::Canvas;
-use actuate_core::{prelude::*, ScopeState};
+use crate::{Canvas, RendererContext};
+use actuate_core::{prelude::*, Memo, ScopeState};
 use masonry::{
     parley::{
         self,
@@ -78,7 +78,9 @@ where
     T: Data + fmt::Display,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        tracing::error!("text");
         let font_cx = use_context::<FontContext>(&cx);
+        let renderer_cx = use_context::<RendererContext>(&cx);
 
         let text_layout = use_ref(&cx, || {
             let mut text_layout = TextLayout::new(format!("{}", cx.me().content), 50.);
@@ -87,23 +89,32 @@ where
             RefCell::new(text_layout)
         });
 
-        Canvas::new(
-            Style {
-                size: Size::from_lengths(
-                    text_layout.borrow().full_size().width as _,
-                    text_layout.borrow().full_size().height as _,
-                ),
-                ..Default::default()
-            },
-            move |_layout, scene| {
-                let mut text_layout = text_layout.borrow_mut();
+        let content = format!("{}", cx.me().content);
+        use_memo(&cx, &content, || {
+            renderer_cx.is_changed.set(true);
+        });
 
-                text_layout.set_font(cx.me().font_stack);
-                text_layout.set_brush(Color::WHITE);
+        Memo::new(
+            content.clone(),
+            Canvas::new(
+                Style {
+                    size: Size::from_lengths(
+                        text_layout.borrow().full_size().width as _,
+                        text_layout.borrow().full_size().height as _,
+                    ),
+                    ..Default::default()
+                },
+                move |_layout, scene| {
+                    let mut text_layout = text_layout.borrow_mut();
 
-                text_layout.rebuild(&mut font_cx.inner.borrow_mut());
-                text_layout.draw(scene, Point::default());
-            },
+                    text_layout.set_font(cx.me().font_stack);
+                    text_layout.set_brush(Color::WHITE);
+                    text_layout.set_text(content.clone());
+
+                    text_layout.rebuild(&mut font_cx.inner.borrow_mut());
+                    text_layout.draw(scene, Point::default());
+                },
+            ),
         )
     }
 }

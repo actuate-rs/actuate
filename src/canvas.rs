@@ -40,6 +40,9 @@ impl Compose for Canvas<'_> {
                 .add_child(*renderer_cx.parent_key.borrow(), key)
                 .unwrap();
 
+            let listeners = mem::take(&mut *renderer_cx.pending_listeners.borrow_mut());
+            renderer_cx.listeners.borrow_mut().insert(key, listeners);
+
             let f: Box<dyn Fn()> = Box::new(move || {
                 cx.set_changed();
             });
@@ -60,12 +63,11 @@ impl Compose for Canvas<'_> {
 
         if Some(layout) != *last_layout {
             last_layout.with(move |dst| *dst = Some(layout));
-
-            scene.borrow_mut().reset();
-            (cx.me().f)(layout, &mut scene.borrow_mut());
-
             renderer_cx.is_changed.set(true);
         }
+
+        scene.borrow_mut().reset();
+        (cx.me().f)(layout, &mut scene.borrow_mut());
 
         parent_scene.append(
             &scene.borrow(),

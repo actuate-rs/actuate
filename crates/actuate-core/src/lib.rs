@@ -473,8 +473,8 @@ pub trait Compose: Data {
 
     #[cfg(feature = "tracing")]
     #[doc(hidden)]
-    fn name() -> &'static str {
-        std::any::type_name::<Self>()
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::any::type_name::<Self>().into()
     }
 }
 
@@ -514,12 +514,60 @@ unsafe impl<T: Data> Data for MapCompose<'_, T> {
 
 impl<C: Compose> Compose for MapCompose<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        (**cx.me()).any_compose(&cx);
+        cx.is_container.set(true);
+
+        let state = use_ref(&cx, || ScopeState::default());
+        *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+        state.is_parent_changed.set(cx.is_parent_changed.get());
+
+        (**cx.me()).any_compose(state);
     }
 
     #[cfg(feature = "tracing")]
-    fn name() -> &'static str {
+    fn name() -> std::borrow::Cow<'static, str> {
         C::name()
+    }
+}
+
+pub struct Memo<C> {
+    hash: u64,
+    content: C,
+}
+
+impl<C> Memo<C> {
+    pub fn new(dependency: impl Hash, content: C) -> Self {
+        let mut hasher = DefaultHasher::new();
+        dependency.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        Self { hash, content }
+    }
+}
+
+unsafe impl<C: Data> Data for Memo<C> {
+    type Id = Memo<C::Id>;
+}
+
+impl<C: Compose> Compose for Memo<C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let hash = use_ref(&cx, RefCell::default);
+        let mut hash = hash.borrow_mut();
+        if let Some(last_hash) = &mut *hash {
+            if cx.me().hash != *last_hash {
+                *last_hash = cx.me().hash;
+                cx.is_parent_changed.set(true);
+            }
+        } else {
+            *hash = Some(cx.me().hash);
+            cx.is_parent_changed.set(true);
+        }
+
+        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+    }
+
+    #[cfg(feature = "tracing")]
+    fn name() -> std::borrow::Cow<'static, str> {
+        format!("Memo<{}>", C::name()).into()
     }
 }
 
@@ -588,19 +636,29 @@ macro_rules! impl_tuples {
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
-                use_ref(&cx, || {
-                    cx.is_container.set(true);
-                });
+                cx.is_container.set(true);
 
-                $(cx.me().$idx.any_compose(use_ref(&cx, || {
-                    let mut state = ScopeState::default();
-                    state.contexts=  cx.contexts.clone();
-                    state.is_parent_changed = cx.is_parent_changed.clone();
-                    state
-                }));)*
+                $(
+                    let state = use_ref(&cx, || {
+                        ScopeState::default()
+                    });
+
+                    *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                    state.is_parent_changed.set(cx.is_parent_changed.get());
+
+                    cx.me().$idx.any_compose(state);
+                )*
+            }
+
+            fn name() -> std::borrow::Cow<'static, str> {
+                let mut s = String::from('(');
+
+                $(s.push_str(&$t::name());)*
+
+                s.push(')');
+                s.into()
             }
         }
-
     };
 }
 
@@ -623,7 +681,7 @@ trait AnyCompose {
     fn any_compose<'a>(&'a self, state: &'a ScopeState);
 
     #[cfg(feature = "tracing")]
-    fn name(&self) -> &'static str;
+    fn name(&self) -> std::borrow::Cow<'static, str>;
 }
 
 impl<C> AnyCompose for C
@@ -658,7 +716,7 @@ where
             || cx.is_container.get()
         {
             #[cfg(feature = "tracing")]
-            tracing::info!("Compose::compose: {}", self.name());
+            tracing::trace!("Compose::compose: {}", self.name());
 
             let child = C::compose(cx);
 
@@ -687,7 +745,7 @@ where
             child_state.is_parent_changed.set(false);
 
             #[cfg(feature = "tracing")]
-            tracing::info!("Skip: {}", self.name());
+            tracing::trace!("Skip: {}", self.name());
         }
 
         let child = cell.as_mut().unwrap();
@@ -695,8 +753,8 @@ where
     }
 
     #[cfg(feature = "tracing")]
-    fn name(&self) -> &'static str {
-        C::name()
+    fn name(&self) -> std::borrow::Cow<'static, str> {
+        format!("Memo<{}>", C::name()).into()
     }
 }
 

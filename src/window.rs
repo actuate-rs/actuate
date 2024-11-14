@@ -88,8 +88,13 @@ impl<C: Compose> Compose for Window<C> {
                                 }
                             }
 
-                            #[cfg(feature = "tracing")]
-                            tracing::error!("{:?}", target);
+                            if let Some(key) = target {
+                                if let Some(listeners) = renderer_cx.listeners.borrow().get(&key) {
+                                    for f in listeners {
+                                        f()
+                                    }
+                                }
+                            }
                         }
                         WindowEvent::RedrawRequested => {
                             #[cfg(feature = "tracing")]

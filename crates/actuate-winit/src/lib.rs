@@ -54,14 +54,14 @@ impl Handler {
 impl ApplicationHandler<Update> for Handler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[cfg(feature = "tracing")]
-        tracing::info!("Resumed");
+        tracing::trace!("Resumed");
 
         self.compose(event_loop);
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: Update) {
         #[cfg(feature = "tracing")]
-        tracing::info!("Update");
+        tracing::trace!("Update");
 
         unsafe { event.apply() };
 
