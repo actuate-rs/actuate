@@ -42,17 +42,10 @@ impl<C: Compose> Compose for Window<C> {
                 match event {
                     Event::Resumed => {}
                     Event::WindowEvent { event, .. } => match event {
-                        WindowEvent::CursorMoved {
-                            device_id,
-                            position,
-                        } => {
+                        WindowEvent::CursorMoved { position, .. } => {
                             *cursor_pos.borrow_mut() = Vec2::new(position.x, position.y);
                         }
-                        WindowEvent::MouseInput {
-                            device_id,
-                            state,
-                            button,
-                        } => {
+                        WindowEvent::MouseInput { .. } => {
                             let pos = *cursor_pos.borrow();
                             let taffy = renderer_cx.taffy.borrow();
 
@@ -91,6 +84,7 @@ impl<C: Compose> Compose for Window<C> {
                                 }
                             }
 
+                            #[cfg(feature = "tracing")]
                             tracing::error!("{:?}", target);
                         }
                         WindowEvent::RedrawRequested => {
@@ -128,12 +122,12 @@ impl<C: Compose> Compose for Window<C> {
 
                             let scene = renderer_cx.scene.borrow_mut();
 
-                            let device = &renderer_cx.cx.borrow().devices[surface.dev_id];
+                            let device_handle = &renderer_cx.cx.borrow().devices[surface.dev_id];
 
                             renderer
                                 .render_to_surface(
-                                    &device.device,
-                                    &device.queue,
+                                    &device_handle.device,
+                                    &device_handle.queue,
                                     &scene,
                                     &texture,
                                     &RenderParams {
@@ -146,6 +140,8 @@ impl<C: Compose> Compose for Window<C> {
                                 .unwrap();
 
                             texture.present();
+
+                            device_handle.device.poll(wgpu::Maintain::Poll);
                         }
                         _ => {}
                     },

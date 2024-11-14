@@ -469,6 +469,12 @@ unsafe impl<T: Data> DataField for &&T {}
 /// A composable function.
 pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
+
+    #[cfg(feature = "tracing")]
+    #[doc(hidden)]
+    fn name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 impl Compose for () {
@@ -486,6 +492,11 @@ impl<C: Compose> Compose for &C {
 impl<C: Compose> Compose for Map<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         (**cx.me()).any_compose(&cx);
+    }
+
+    #[cfg(feature = "tracing")]
+    fn name() -> &'static str {
+        C::name()
     }
 }
 
@@ -583,6 +594,9 @@ trait AnyCompose {
     unsafe fn reborrow(&mut self, ptr: *mut ());
 
     fn any_compose<'a>(&'a self, state: &'a ScopeState);
+
+    #[cfg(feature = "tracing")]
+    fn name(&self) -> &'static str;
 }
 
 impl<C> AnyCompose for C
@@ -613,25 +627,13 @@ where
 
         if cell.is_none() || cx.is_changed.take() || cx.is_parent_changed.get() {
             #[cfg(feature = "tracing")]
-            let span = {
-                let type_name = std::any::type_name::<C>();
-                let name = type_name
-                    .split('<')
-                    .next()
-                    .unwrap_or(type_name)
-                    .split("::")
-                    .last()
-                    .unwrap_or(type_name);
-                tracing::span!(tracing::Level::INFO, "Composer", composable = %name)
-            };
-
-            #[cfg(feature = "tracing")]
-            let _guard = span.enter();
-
-            #[cfg(feature = "tracing")]
-            tracing::info!("Compose::compose");
+            tracing::info!("Compose::compose: {}", self.name());
 
             let child = C::compose(cx);
+
+            if cx.state.is_empty.take() {
+                return;
+            }
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
             child_state.is_parent_changed.set(true);
@@ -650,14 +652,20 @@ where
                     *cell = Some(mem::transmute(boxed));
                 }
             }
+        } else {
+            child_state.is_parent_changed.set(false);
 
-            if cx.state.is_empty.take() {
-                return;
-            }
+            #[cfg(feature = "tracing")]
+            tracing::info!("Skip: {}", self.name());
         }
 
         let child = cell.as_mut().unwrap();
-        (**child).any_compose(child_state);
+        (*child).any_compose(child_state);
+    }
+
+    #[cfg(feature = "tracing")]
+    fn name(&self) -> &'static str {
+        C::name()
     }
 }
 
