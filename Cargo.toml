@@ -8,8 +8,7 @@ repository = "https://github.com/actuate-rs/actuate"
 
 [features]
 tracing = ["dep:tracing"]
-winit = ["dep:actuate-winit"]
-default = ["tracing", "winit"]
+default = ["tracing"]
 
 [workspace]
 members = [
@@ -21,7 +20,7 @@ members = [
 
 [dependencies]
 actuate-core = { version = "0.1.1", path = "crates/actuate-core" }
-actuate-winit = { version = "0.1.0", path = "crates/actuate-winit", optional = true }
+actuate-winit = { version = "0.1.0", path = "crates/actuate-winit" }
 pollster = "0.4.0"
 taffy = "0.6.1"
 tracing = { version = "0.1.40", optional = true }
