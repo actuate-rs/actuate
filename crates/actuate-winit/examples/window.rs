@@ -10,7 +10,7 @@ struct App;
 impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let x = use_ref(&cx, || 0);
-        Window::new(WindowAttributes::default(), move |event| {
+        Window::new(WindowAttributes::default(), move |_window, event| {
             dbg!(x);
         })
     }

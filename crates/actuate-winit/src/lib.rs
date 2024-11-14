@@ -2,7 +2,7 @@ use actuate_core::{prelude::*, use_callback, use_drop, Composer, ScopeState, Upd
 use std::{cell::RefCell, collections::HashMap, marker::PhantomData, mem, rc::Rc};
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{Event, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::{Window as RawWindow, WindowAttributes, WindowId},
 };
@@ -79,7 +79,7 @@ impl ApplicationHandler<Update> for Handler {
             .borrow_mut()
             .handler_fns
             .get_mut(&window_id)
-            .unwrap()(event);
+            .unwrap()(&Event::WindowEvent { window_id, event });
 
         self.compose(event_loop);
     }
@@ -107,7 +107,7 @@ pub fn run(content: impl Compose + 'static) {
 
 #[derive(Default)]
 struct Inner {
-    handler_fns: HashMap<WindowId, Rc<dyn Fn(WindowEvent)>>,
+    handler_fns: HashMap<WindowId, Rc<dyn Fn(&Event<()>)>>,
     event_loop: Option<&'static ActiveEventLoop>,
 }
 
@@ -118,11 +118,14 @@ pub struct EventLoopContext {
 
 pub struct Window<'a> {
     window_attributes: WindowAttributes,
-    on_event: Rc<dyn Fn(&WindowEvent) + 'a>,
+    on_event: Rc<dyn Fn(&RawWindow, &Event<()>) + 'a>,
 }
 
 impl<'a> Window<'a> {
-    pub fn new(window_attributes: WindowAttributes, on_event: impl Fn(&WindowEvent) + 'a) -> Self {
+    pub fn new(
+        window_attributes: WindowAttributes,
+        on_event: impl Fn(&RawWindow, &Event<()>) + 'a,
+    ) -> Self {
         Self {
             window_attributes,
             on_event: Rc::new(on_event),
@@ -161,8 +164,10 @@ impl Compose for Window<'_> {
             drop_inner.borrow_mut().handler_fns.remove(&id);
         });
 
-        inner
-            .handler_fns
-            .insert(id, unsafe { mem::transmute(cx.me().on_event.clone()) });
+        let on_event = cx.me().on_event.clone();
+        let on_event: Rc<dyn Fn(&Event<()>)> = Rc::new(move |event| on_event(window, event));
+        let on_event: Rc<dyn Fn(&Event<()>)> = unsafe { mem::transmute(on_event) };
+
+        inner.handler_fns.insert(id, on_event);
     }
 }

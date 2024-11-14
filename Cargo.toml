@@ -7,8 +7,9 @@ description = "A reactive user-interface framework"
 repository = "https://github.com/actuate-rs/actuate"
 
 [features]
+tracing = ["dep:tracing"]
 winit = ["dep:actuate-winit"]
-default = ["winit"]
+default = ["tracing", "winit"]
 
 [workspace]
 members = [
@@ -21,3 +22,10 @@ members = [
 [dependencies]
 actuate-core = { version = "0.1.1", path = "crates/actuate-core" }
 actuate-winit = { version = "0.1.0", path = "crates/actuate-winit", optional = true }
+pollster = "0.4.0"
+tracing = { version = "0.1.40", optional = true }
+vello = "0.3.0"
+winit = "0.30.5"
+
+[dev-dependencies]
+tracing-subscriber = "0.3.18"
