@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.1...actuate-winit-v0.1.2) - 2024-11-14
+
+### Other
+
+- updated the following local packages: actuate-core
+
 ## [0.1.1](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.0...actuate-winit-v0.1.1) - 2024-11-13
 
 ### Other

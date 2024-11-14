@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/actuate-rs/actuate/compare/actuate-core-v0.2.0...actuate-core-v0.2.1) - 2024-11-14
+
+### Other
+
+- Better names in tracing
+- Use shorter type name in tracing
+
 ## [0.2.0](https://github.com/actuate-rs/actuate/compare/actuate-core-v0.1.1...actuate-core-v0.2.0) - 2024-11-13
 
 ### Other
