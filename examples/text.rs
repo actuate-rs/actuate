@@ -6,10 +6,16 @@ use tracing_subscriber::FmtSubscriber;
 struct App;
 
 impl Compose for App {
-    fn compose(_cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let count = use_mut(&cx, || 0);
+
         Window {
             attributes: WindowAttributes::default(),
-            content: Text("Hello, World!"),
+            content: (
+                Text::new(format!("High five count: {}", *count)),
+                Text::new("Up high!"),
+                Text::new("Down low!"),
+            ),
         }
     }
 }

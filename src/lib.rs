@@ -14,6 +14,7 @@ use std::{
     rc::Rc,
 };
 use taffy::{prelude::TaffyMaxContent, NodeId, Size, Style, TaffyTree};
+use text::FontContext;
 use wgpu::PresentMode;
 use winit::{
     event::{Event, WindowEvent},
@@ -26,12 +27,12 @@ mod canvas;
 pub use self::canvas::Canvas;
 
 mod text;
-pub use self::text::Text;
+pub use self::text::{use_font, Text};
 
 pub mod prelude {
     pub use crate::core::prelude::*;
 
-    pub use crate::Window;
+    pub use crate::{use_font, Text, Window};
     pub use winit::window::WindowAttributes;
 
     pub use crate::Canvas;
@@ -165,6 +166,8 @@ impl<C: Compose> Compose for RenderRoot<C> {
                 is_changed: Cell::new(false),
             }
         });
+
+        use_provider(&cx, FontContext::default);
 
         Ref::map(cx.me(), |me| &me.content)
     }
