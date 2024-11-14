@@ -1,5 +1,7 @@
 <div align="center">
-  <h1>Actuate</h1>
+ <img src="https://github.com/actuate-rs/actuate/blob/main/logo.png?raw=true" />
+
+ <br />
 
  <a href="https://crates.io/crates/actuate">
     <img src="https://img.shields.io/crates/v/actuate?style=flat-square"
