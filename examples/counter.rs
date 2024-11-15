@@ -1,5 +1,4 @@
 use actuate::prelude::*;
-use masonry::Color;
 
 #[derive(Data)]
 struct App;

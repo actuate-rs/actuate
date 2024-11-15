@@ -458,16 +458,26 @@ unsafe impl<T: ?Sized + Data> Data for &T {
     type Id = PhantomData<&'static T::Id>;
 }
 
-// TODO macro
-// TODO do bounds need to be `Data`?
-unsafe impl<T1, T2, R> Data for &Box<dyn Fn(T1, T2) -> R + '_>
-where
-    T1: Data,
-    T2: Data,
-    R: Data,
-{
-    type Id = PhantomData<Box<dyn Fn(T1::Id, T2::Id) -> R::Id>>;
+macro_rules! impl_data_for_fns {
+    ($($t:tt),*) => {
+        unsafe impl<$($t,)* R> Data for &dyn Fn($($t),*) -> R {
+            type Id = PhantomData<&'static dyn Fn()>;
+        }
+
+        unsafe impl<$($t,)* R> Data for Box<dyn Fn($($t),*) -> R + '_>{
+            type Id = PhantomData<Box<dyn Fn()>>;
+        }
+    }
 }
+
+impl_data_for_fns!(T1);
+impl_data_for_fns!(T1, T2);
+impl_data_for_fns!(T1, T2, T3);
+impl_data_for_fns!(T10, T2, T3, T4);
+impl_data_for_fns!(T1, T2, T3, T4, T5);
+impl_data_for_fns!(T1, T2, T3, T4, T5, T6);
+impl_data_for_fns!(T1, T2, T3, T4, T5, T6, T7);
+impl_data_for_fns!(T1, T2, T3, T4, T5, T6, T7, T8);
 
 unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
     type Id = PhantomData<Ref<'static, T::Id>>;

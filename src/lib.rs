@@ -38,6 +38,10 @@ pub mod prelude {
     pub use crate::{use_font, Canvas, Flex, Text, View, Window};
 
     pub use winit::window::WindowAttributes;
+
+    pub use masonry::Color;
+
+    pub use taffy::prelude::*;
 }
 
 pub struct RendererContext {
