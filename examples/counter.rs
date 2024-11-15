@@ -1,4 +1,5 @@
 use actuate::prelude::*;
+use masonry::Color;
 
 #[derive(Data)]
 struct App;
@@ -12,8 +13,12 @@ impl Compose for App {
         Window::new((
             Text::new(format!("High five count: {}", *count)).font_size(100.),
             (
-                Text::new("Up high!").on_click(move || count.update(|x| *x += 1)),
-                Text::new("Down low!").on_click(move || count.update(|x| *x -= 1)),
+                Text::new("Up high!")
+                    .on_click(move || count.update(|x| *x += 1))
+                    .background_color(Color::BLUE),
+                Text::new("Down low!")
+                    .on_click(move || count.update(|x| *x -= 1))
+                    .background_color(Color::RED),
             )
                 .font_size(50.),
         ))

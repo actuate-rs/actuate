@@ -3,8 +3,13 @@ use masonry::vello::{
     kurbo::{Affine, Vec2},
     Scene,
 };
-use std::{cell::RefCell, mem};
+use std::{cell::RefCell, mem, rc::Rc};
 use taffy::{Layout, Style};
+
+#[derive(Clone, Default)]
+pub(crate) struct CanvasContext {
+    pub(crate) draw_fns: RefCell<Vec<Rc<dyn Fn(&Layout, &mut Scene)>>>,
+}
 
 pub struct Canvas<'a> {
     style: Style,
@@ -26,6 +31,7 @@ unsafe impl Data for Canvas<'_> {
 
 impl Compose for Canvas<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        let canvas_cx = use_context::<CanvasContext>(&cx);
         let renderer_cx = use_context::<RendererContext>(&cx);
 
         let key = use_ref(&cx, || {
@@ -72,13 +78,11 @@ impl Compose for Canvas<'_> {
         let mut parent_scene = renderer_cx.scene.borrow_mut();
 
         let last_layout = use_mut(&cx, || None);
-
         if last_layout.is_none() {
             last_layout.with(move |dst| *dst = Some(layout));
             renderer_cx.is_changed.set(true);
             return;
         }
-
         if Some(layout) != *last_layout {
             last_layout.with(move |dst| *dst = Some(layout));
             renderer_cx.is_changed.set(true);
@@ -86,6 +90,10 @@ impl Compose for Canvas<'_> {
         }
 
         scene.borrow_mut().reset();
+        for f in &*canvas_cx.draw_fns.borrow() {
+            f(&layout, &mut scene.borrow_mut());
+        }
+
         (cx.me().f)(layout, &mut scene.borrow_mut());
 
         parent_scene.append(

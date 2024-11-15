@@ -1,4 +1,5 @@
 use actuate_core::{prelude::*, MapCompose, ScopeState};
+use canvas::CanvasContext;
 use masonry::{
     vello::{
         peniko::{Color, Fill},
@@ -96,6 +97,8 @@ impl<C: Compose> Compose for RenderRoot<C> {
             }
         });
 
+        use_provider(&cx, CanvasContext::default);
+
         use_provider(&cx, FontContext::default);
         use_provider(&cx, TextContext::default);
 
@@ -111,6 +114,8 @@ pub trait View: Compose {
     fn on_click<'a>(self, on_click: impl Fn() + 'a) -> WithState<Clickable<'a>, Self>;
 
     fn font_size(self, font_size: f32) -> WithState<FontSize, Self>;
+
+    fn background_color(self, color: Color) -> WithState<BackgroundColor, Self>;
 }
 
 impl<C: Compose> View for C {
@@ -127,10 +132,17 @@ impl<C: Compose> View for C {
             content: self,
         }
     }
+
+    fn background_color(self, color: Color) -> WithState<BackgroundColor, Self> {
+        WithState {
+            state: BackgroundColor { color },
+            content: self,
+        }
+    }
 }
 
 pub trait State {
-    fn use_state(&self, cx: &ScopeState);
+    unsafe fn use_state(&self, cx: &ScopeState);
 }
 
 pub struct WithState<T, C> {
@@ -144,7 +156,7 @@ unsafe impl<T: Data, C: Data> Data for WithState<T, C> {
 
 impl<T: State + Data, C: Compose> Compose for WithState<T, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.me().state.use_state(&cx);
+        unsafe { cx.me().state.use_state(&cx) }
 
         unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
@@ -167,7 +179,7 @@ unsafe impl Data for Clickable<'_> {
 }
 
 impl State for Clickable<'_> {
-    fn use_state(&self, cx: &ScopeState) {
+    unsafe fn use_state(&self, cx: &ScopeState) {
         let renderer_cx = use_context::<RendererContext>(&cx);
 
         // TODO remove on drop (unsound).
@@ -197,12 +209,44 @@ pub struct FontSize {
 }
 
 impl State for FontSize {
-    fn use_state(&self, cx: &ScopeState) {
+    unsafe fn use_state(&self, cx: &ScopeState) {
         let text_cx = use_context::<TextContext>(&cx);
 
         use_provider(&cx, || TextContext {
             color: text_cx.color,
             font_size: self.font_size,
+        });
+    }
+}
+
+#[derive(Data)]
+pub struct BackgroundColor {
+    pub color: Color,
+}
+
+impl State for BackgroundColor {
+    unsafe fn use_state(&self, cx: &ScopeState) {
+        let canvas_cx = use_context::<CanvasContext>(&cx);
+
+        let color = use_ref(cx, || Rc::new(Cell::new(self.color)));
+        color.set(self.color);
+
+        let color = color.clone();
+        use_provider(cx, || {
+            let canvas_cx = (*canvas_cx).clone();
+            canvas_cx
+                .draw_fns
+                .borrow_mut()
+                .push(Rc::new(move |layout, scene| {
+                    scene.fill(
+                        Fill::NonZero,
+                        Affine::default(),
+                        color.get(),
+                        None,
+                        &Rect::new(0., 0., layout.size.width as _, layout.size.height as _),
+                    );
+                }));
+            canvas_cx
         });
     }
 }
