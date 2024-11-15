@@ -1,5 +1,5 @@
 use crate::{Canvas, RendererContext};
-use actuate_core::{prelude::*, Memo, ScopeState};
+use actuate_core::{prelude::*, ScopeState};
 use masonry::{
     parley::{
         self,

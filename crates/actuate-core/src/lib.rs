@@ -14,7 +14,7 @@ pub use actuate_macros::Data;
 pub mod prelude {
     pub use crate::{
         use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
-        DynCompose, FieldWrap, Map, Mut, Ref, Scope, StateField, StaticField,
+        DynCompose, FieldWrap, Map, Memo, Mut, Ref, Scope, StateField, StaticField,
     };
 }
 
@@ -458,6 +458,8 @@ unsafe impl<T: ?Sized + Data> Data for &T {
     type Id = PhantomData<&'static T::Id>;
 }
 
+// TODO macro
+// TODO do bounds need to be `Data`?
 unsafe impl<T1, T2, R> Data for &Box<dyn Fn(T1, T2) -> R + '_>
 where
     T1: Data,
