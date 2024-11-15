@@ -1,13 +1,6 @@
 use actuate_core::{prelude::*, ScopeState};
 use canvas::CanvasContext;
-use masonry::{
-    vello::{
-        peniko::{Color, Fill},
-        util::RenderContext,
-        Scene,
-    },
-    Affine, Rect, Vec2,
-};
+use parley::Rect;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -16,6 +9,12 @@ use std::{
 };
 use taffy::{FlexDirection, Layout, NodeId, Style, TaffyTree};
 use text::{FontContext, TextContext};
+use vello::{
+    kurbo::{Affine, Vec2},
+    peniko::{Color, Fill},
+    util::RenderContext,
+    Scene,
+};
 use winit::event::{ElementState, MouseButton};
 
 pub use actuate_core as core;
@@ -39,7 +38,7 @@ pub mod prelude {
 
     pub use winit::window::WindowAttributes;
 
-    pub use masonry::Color;
+    pub use vello::peniko::Color;
 
     pub use taffy::prelude::*;
 }
@@ -88,7 +87,7 @@ impl<C: Compose> Compose for RenderRoot<C> {
             );
 
             RendererContext {
-                cx: Rc::new(RefCell::new(RenderContext::new().unwrap())),
+                cx: Rc::new(RefCell::new(RenderContext::new())),
                 scene: RefCell::new(scene),
                 taffy: RefCell::new(taffy),
                 parent_key: RefCell::new(root_key),

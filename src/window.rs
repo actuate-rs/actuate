@@ -1,20 +1,19 @@
 use crate::RendererContext;
 use actuate_core::prelude::*;
-use masonry::{
-    vello::{
-        self,
-        peniko::{Color, Fill},
-        util::RenderSurface,
-        AaConfig, RenderParams, Renderer, RendererOptions,
-    },
-    Affine, Rect, Vec2,
-};
+use parley::Rect;
 use std::{
     cell::{Cell, RefCell},
     mem,
     num::NonZeroUsize,
 };
 use taffy::{prelude::TaffyMaxContent, Size};
+use vello::{
+    self,
+    kurbo::{Affine, Vec2},
+    peniko::{Color, Fill},
+    util::RenderSurface,
+    wgpu, AaConfig, RenderParams, Renderer, RendererOptions,
+};
 use wgpu::PresentMode;
 use winit::{
     event::{Event, WindowEvent},

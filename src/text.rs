@@ -1,16 +1,17 @@
 use crate::Canvas;
 use actuate_core::{prelude::*, ScopeState};
-use masonry::{
-    parley::{
-        self,
-        style::{FontFamily, FontStack},
-    },
-    text2::TextLayout,
-    vello::peniko::Color,
-    Point,
+use parley::{
+    Alignment, FontFamily, FontStack, GenericFamily, LayoutContext, PositionedLayoutItem,
+    StyleProperty,
 };
 use std::{cell::RefCell, fmt};
 use taffy::{Size, Style};
+use vello::{
+    self,
+    kurbo::Affine,
+    peniko::{Color, Fill},
+    Glyph,
+};
 
 #[derive(Default)]
 pub struct FontContext {
@@ -44,7 +45,7 @@ impl<'a> IntoFontStack<'a> for FontStack<'a> {
 
 impl<'a> IntoFontStack<'a> for &'a str {
     fn into_font_stack(self) -> FontStack<'a> {
-        FontStack::Single(FontFamily::Named(self))
+        FontStack::Single(FontFamily::Named(self.into()))
     }
 }
 
@@ -91,36 +92,75 @@ where
     fn compose(cx: Scope<Self>) -> impl Compose {
         let font_cx = use_context::<FontContext>(&cx);
         let text_cx = use_context::<TextContext>(&cx);
+        let content = format!("{}", cx.me().content);
 
-        let text_layout = use_ref(&cx, || {
-            let mut text_layout =
-                TextLayout::new(format!("{}", cx.me().content), text_cx.font_size);
-            text_layout.rebuild(&mut font_cx.inner.borrow_mut());
+        // TODO font_size
+        let text_layout = use_memo(&cx, (&content, text_cx.color), || {
+            let mut font_cx = font_cx.inner.borrow_mut();
 
-            RefCell::new(text_layout)
+            let mut layout_cx = LayoutContext::<Color>::new();
+            let mut text_layout = layout_cx.ranged_builder(&mut font_cx, &content, 1.);
+            text_layout.push_default(StyleProperty::Brush(text_cx.color));
+            text_layout.push_default(StyleProperty::FontSize(text_cx.font_size));
+            text_layout.push_default(GenericFamily::Cursive);
+
+            let mut layout = text_layout.build(&content);
+            layout.break_all_lines(Some(500.));
+            layout.align(None, Alignment::Start);
+            layout
         });
 
-        let content = format!("{}", cx.me().content);
         Memo::new(
             content.clone(),
             Canvas::new(
                 Style {
-                    size: Size::from_lengths(
-                        text_layout.borrow().full_size().width as _,
-                        text_layout.borrow().full_size().height as _,
-                    ),
+                    size: Size::from_lengths(text_layout.full_width(), text_layout.height()),
                     ..Default::default()
                 },
                 move |_layout, scene| {
-                    let mut text_layout = text_layout.borrow_mut();
-
-                    text_layout.set_font(cx.me().font_stack);
-                    text_layout.set_brush(text_cx.color);
-                    text_layout.set_text(content.clone());
-                    text_layout.set_text_size(text_cx.font_size);
-
-                    text_layout.rebuild(&mut font_cx.inner.borrow_mut());
-                    text_layout.draw(scene, Point::default());
+                    for line in text_layout.lines() {
+                        for item in line.items() {
+                            let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
+                                continue;
+                            };
+                            let mut x = glyph_run.offset();
+                            let y = glyph_run.baseline();
+                            let run = glyph_run.run();
+                            let font = run.font();
+                            let font_size = run.font_size();
+                            let synthesis = run.synthesis();
+                            let glyph_xform = synthesis
+                                .skew()
+                                .map(|angle| Affine::skew(angle.to_radians().tan() as f64, 0.0));
+                            let coords = run
+                                .normalized_coords()
+                                .iter()
+                                .map(|coord| {
+                                    vello::skrifa::instance::NormalizedCoord::from_bits(*coord)
+                                })
+                                .collect::<Vec<_>>();
+                            scene
+                                .draw_glyphs(font)
+                                .brush(Color::BLACK)
+                                .hint(true)
+                                .glyph_transform(glyph_xform)
+                                .font_size(font_size)
+                                .normalized_coords(&coords)
+                                .draw(
+                                    Fill::NonZero,
+                                    glyph_run.glyphs().map(|glyph| {
+                                        let gx = x + glyph.x;
+                                        let gy = y - glyph.y;
+                                        x += glyph.advance;
+                                        Glyph {
+                                            id: glyph.id as _,
+                                            x: gx,
+                                            y: gy,
+                                        }
+                                    }),
+                                );
+                        }
+                    }
                 },
             ),
         )

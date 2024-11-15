@@ -21,11 +21,12 @@ members = [
 [dependencies]
 actuate-core = { version = "0.2.2", path = "crates/actuate-core" }
 actuate-winit = { version = "0.1.3", path = "crates/actuate-winit" }
-masonry = "0.2.0"
+parley = "0.2.0"
+peniko = "0.2.0"
 pollster = "0.4.0"
 taffy = "0.6.1"
 tracing = { version = "0.1.40", optional = true }
-wgpu = "0.19.4"
+vello = "0.3.0"
 winit = "0.30.5"
 
 [dev-dependencies]
