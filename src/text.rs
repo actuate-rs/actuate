@@ -49,9 +49,16 @@ impl<'a> IntoFontStack<'a> for &'a str {
     }
 }
 
+impl<'a> IntoFontStack<'a> for GenericFamily {
+    fn into_font_stack(self) -> FontStack<'a> {
+        FontStack::Single(FontFamily::Generic(self))
+    }
+}
+
 pub struct TextContext {
     pub color: Color,
     pub font_size: f32,
+    pub font_stack: FontStack<'static>,
 }
 
 impl Default for TextContext {
@@ -59,6 +66,9 @@ impl Default for TextContext {
         Self {
             color: Color::BLACK,
             font_size: 18.,
+            font_stack: FontStack::Single(FontFamily::Generic(
+                parley::style::GenericFamily::SansSerif,
+            )),
         }
     }
 }
@@ -66,22 +76,11 @@ impl Default for TextContext {
 #[derive(Data)]
 pub struct Text<T> {
     content: T,
-    font_stack: FontStack<'static>,
 }
 
 impl<T> Text<T> {
     pub fn new(content: T) -> Self {
-        Self {
-            content,
-            font_stack: FontStack::Single(FontFamily::Generic(
-                parley::style::GenericFamily::SansSerif,
-            )),
-        }
-    }
-
-    pub fn with_font(mut self, font_stack: impl IntoFontStack<'static>) -> Self {
-        self.font_stack = font_stack.into_font_stack();
-        self
+        Self { content }
     }
 }
 
@@ -102,10 +101,10 @@ where
             let mut text_layout = layout_cx.ranged_builder(&mut font_cx, &content, 1.);
             text_layout.push_default(StyleProperty::Brush(text_cx.color));
             text_layout.push_default(StyleProperty::FontSize(text_cx.font_size));
-            text_layout.push_default(GenericFamily::Cursive);
+            text_layout.push_default(text_cx.font_stack.clone());
 
             let mut layout = text_layout.build(&content);
-            layout.break_all_lines(Some(500.));
+            layout.break_all_lines(None);
             layout.align(None, Alignment::Start);
             layout
         });

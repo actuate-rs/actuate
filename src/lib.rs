@@ -1,6 +1,6 @@
 use actuate_core::{prelude::*, ScopeState};
 use canvas::CanvasContext;
-use parley::Rect;
+use parley::{FontStack, Rect};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -8,7 +8,7 @@ use std::{
     rc::Rc,
 };
 use taffy::{FlexDirection, Layout, NodeId, Style, TaffyTree};
-use text::{FontContext, TextContext};
+use text::{FontContext, IntoFontStack, TextContext};
 use vello::{
     kurbo::{Affine, Vec2},
     peniko::{Color, Fill},
@@ -36,11 +36,13 @@ pub mod prelude {
 
     pub use crate::{use_font, Canvas, Flex, Text, View, Window};
 
-    pub use winit::window::WindowAttributes;
+    pub use parley::GenericFamily;
+
+    pub use taffy::prelude::*;
 
     pub use vello::peniko::Color;
 
-    pub use taffy::prelude::*;
+    pub use winit::window::WindowAttributes;
 }
 
 pub struct RendererContext {
@@ -121,12 +123,18 @@ pub trait View: Compose {
         }
     }
 
-    fn font_size(self, font_size: f32) -> WithState<FontSize, Self> {
-        self.with_state(FontSize { font_size })
-    }
-
     fn with_state<T: State>(self, state: T) -> WithState<T, Self> {
         WithState::new(state, self)
+    }
+
+    fn font(self, font_stack: impl IntoFontStack<'static>) -> WithState<FontStackState, Self> {
+        self.with_state(FontStackState {
+            font_stack: font_stack.into_font_stack(),
+        })
+    }
+
+    fn font_size(self, font_size: f32) -> WithState<FontSize, Self> {
+        self.with_state(FontSize { font_size })
     }
 
     fn draw<D: Draw + 'static>(self, draw: D) -> WithState<DrawState<D>, Self> {
@@ -220,6 +228,24 @@ impl State for FontSize {
         use_provider(&cx, || TextContext {
             color: text_cx.color,
             font_size: self.font_size,
+            font_stack: text_cx.font_stack.clone(),
+        });
+    }
+}
+
+#[derive(Data)]
+pub struct FontStackState {
+    pub font_stack: FontStack<'static>,
+}
+
+impl State for FontStackState {
+    unsafe fn use_state(&self, cx: &ScopeState) {
+        let text_cx = use_context::<TextContext>(&cx);
+
+        use_provider(&cx, || TextContext {
+            color: text_cx.color,
+            font_size: text_cx.font_size,
+            font_stack: self.font_stack.clone(),
         });
     }
 }
