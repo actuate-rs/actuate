@@ -658,6 +658,8 @@ struct DynComposeState {
 
 impl<'a> Compose for DynCompose<'a> {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.is_container.set(true);
+
         let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
@@ -922,7 +924,6 @@ mod tests {
         assert_eq!(x.get(), 2);
     }
 
-    /* TODO
     #[test]
     fn it_composes_any_compose() {
         #[derive(Data)]
@@ -947,7 +948,6 @@ mod tests {
         composer.compose();
         assert_eq!(x.get(), 2);
     }
-    */
 
     #[test]
     fn it_memoizes_composables() {
