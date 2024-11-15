@@ -52,6 +52,7 @@ impl<T: Hash + ?Sized> Hash for Map<'_, T> {
 }
 
 /// Immutable reference to a value of type `T`.
+#[derive(Hash)]
 pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
 }
@@ -79,11 +80,11 @@ impl<T: ?Sized> Deref for Ref<'_, T> {
 }
 
 /// Mutable reference to a value of type `T`.
-#[derive(Hash)]
 pub struct Mut<'a, T> {
     ptr: *mut T,
     value: &'a T,
-    is_changed: *const Cell<bool>,
+    scope_is_changed: *const Cell<bool>,
+    generation: *const Cell<u64>,
 }
 
 impl<'a, T: 'static> Mut<'a, T> {
@@ -91,7 +92,8 @@ impl<'a, T: 'static> Mut<'a, T> {
     pub fn update(self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
         let ptr = self.ptr;
-        let is_changed = self.is_changed;
+        let is_changed = self.scope_is_changed;
+        let generation = self.generation;
 
         Runtime::current().update(move || {
             let value = unsafe { &mut *ptr };
@@ -99,6 +101,9 @@ impl<'a, T: 'static> Mut<'a, T> {
 
             unsafe {
                 (*is_changed).set(true);
+
+                let g = &*generation;
+                g.set(g.get() + 1)
             }
         });
     }
@@ -125,18 +130,26 @@ impl<T> Clone for Mut<'_, T> {
         Self {
             ptr: self.ptr,
             value: self.value,
-            is_changed: self.is_changed,
+            scope_is_changed: self.scope_is_changed,
+            generation: self.generation,
         }
     }
 }
 
 impl<T> Copy for Mut<'_, T> {}
 
-impl<'a, T> Deref for Mut<'a, T> {
+impl<T> Deref for Mut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.value
+    }
+}
+
+impl<T> Hash for Mut<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.ptr.hash(state);
+        self.generation.hash(state);
     }
 }
 
@@ -288,6 +301,11 @@ pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &
     (**any).downcast_ref().unwrap()
 }
 
+struct MutState<T> {
+    value: T,
+    generation: Cell<u64>,
+}
+
 /// Use a mutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
@@ -298,17 +316,22 @@ pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> M
     cx.hook_idx.set(idx + 1);
 
     let any = if idx >= hooks.len() {
-        hooks.push(Box::new(make_value()));
+        let state = MutState {
+            value: make_value(),
+            generation: Cell::new(0),
+        };
+        hooks.push(Box::new(state));
         hooks.last_mut().unwrap()
     } else {
         hooks.get_mut(idx).unwrap()
     };
-    let value = any.downcast_mut().unwrap();
+    let state: &mut MutState<T> = any.downcast_mut().unwrap();
 
     Mut {
-        ptr: value as *mut T,
-        value,
-        is_changed: &cx.is_changed,
+        ptr: &mut state.value as *mut T,
+        value: &state.value,
+        scope_is_changed: &cx.is_changed,
+        generation: &state.generation,
     }
 }
 
