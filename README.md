@@ -61,3 +61,5 @@ fn main() {
 This crate is inspired by [Xilem](https://github.com/linebender/xilem) and uses a similar approach to type-safe reactivity. The main difference with this crate is the concept of scopes, components store their state in their own scope and updates to that scope re-render the component.
 
 State management is inspired by React and [Dioxus](https://github.com/DioxusLabs/dioxus).
+
+Previous implementations were in [Concoct](https://github.com/concoct-rs/concoct) but were never very compatible with lifetimes.
