@@ -18,6 +18,120 @@ pub mod prelude {
     };
 }
 
+/// Clone-on-write value.
+///
+/// This represents either a borrowed or owned value.
+/// A borrowed value is stored as a [`RefMap`], which can be either a reference or a mapped reference.
+pub enum Cow<'a, T> {
+    Borrowed(RefMap<'a, T>),
+    Owned(T),
+}
+
+impl<'a, T> Cow<'a, T> {
+    pub fn into_owned(self) -> T
+    where
+        T: Clone,
+    {
+        match self {
+            Cow::Borrowed(value) => (*value).clone(),
+            Cow::Owned(value) => value,
+        }
+    }
+}
+
+impl<T> Deref for Cow<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Cow::Borrowed(ref_map) => &*ref_map,
+            Cow::Owned(value) => &value,
+        }
+    }
+}
+
+impl<'a, T> From<RefMap<'a, T>> for Cow<'a, T> {
+    fn from(value: RefMap<'a, T>) -> Self {
+        Cow::Borrowed(value)
+    }
+}
+
+impl<'a, T> From<Ref<'a, T>> for Cow<'a, T> {
+    fn from(value: Ref<'a, T>) -> Self {
+        RefMap::from(value).into()
+    }
+}
+
+impl<'a, T> From<Map<'a, T>> for Cow<'a, T> {
+    fn from(value: Map<'a, T>) -> Self {
+        RefMap::from(value).into()
+    }
+}
+
+/// Immutable reference or mapped reference to a value.
+pub enum RefMap<'a, T: ?Sized> {
+    Ref(Ref<'a, T>),
+    Map(Map<'a, T>),
+}
+
+impl<T: ?Sized> Clone for RefMap<'_, T> {
+    fn clone(&self) -> Self {
+        match self {
+            RefMap::Ref(r) => RefMap::Ref(r.clone()),
+            RefMap::Map(map) => RefMap::Map(map.clone()),
+        }
+    }
+}
+
+impl<T: ?Sized> Deref for RefMap<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            RefMap::Ref(r) => &*r,
+            RefMap::Map(map) => &*map,
+        }
+    }
+}
+
+impl<T: Hash + ?Sized> Hash for RefMap<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+}
+
+impl<'a, T: ?Sized> From<Ref<'a, T>> for RefMap<'a, T> {
+    fn from(value: Ref<'a, T>) -> Self {
+        RefMap::Ref(value)
+    }
+}
+
+impl<'a, T: ?Sized> From<Map<'a, T>> for RefMap<'a, T> {
+    fn from(value: Map<'a, T>) -> Self {
+        RefMap::Map(value)
+    }
+}
+
+unsafe impl<T: Data> Data for RefMap<'_, T> {
+    type Id = RefMap<'static, T::Id>;
+}
+
+impl<C: Compose> Compose for RefMap<'_, C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.is_container.set(true);
+
+        let state = use_ref(&cx, || {
+            let mut state = ScopeState::default();
+            state.contexts = cx.contexts.clone();
+            state
+        });
+
+        state.is_parent_changed.set(cx.is_parent_changed.get());
+
+        (**cx.me()).any_compose(state);
+    }
+}
+
 /// Mapped immutable reference to a value of type `T`.
 pub struct Map<'a, T: ?Sized> {
     ptr: *const (),
@@ -93,6 +207,14 @@ impl<'a, T> Ref<'a, T> {
         }
     }
 }
+
+impl<T: ?Sized> Clone for Ref<'_, T> {
+    fn clone(&self) -> Self {
+        Self { value: self.value }
+    }
+}
+
+impl<T: ?Sized> Copy for Ref<'_, T> {}
 
 impl<T: ?Sized> Deref for Ref<'_, T> {
     type Target = T;
