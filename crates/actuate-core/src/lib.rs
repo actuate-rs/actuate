@@ -18,6 +18,52 @@ pub mod prelude {
     };
 }
 
+pub enum Cow<'a, T> {
+    Borrowed(RefMap<'a, T>),
+    Owned(T),
+}
+
+impl<'a, T> Cow<'a, T> {
+    pub fn into_owned(self) -> T
+    where
+        T: Clone,
+    {
+        match self {
+            Cow::Borrowed(value) => (*value).clone(),
+            Cow::Owned(value) => value,
+        }
+    }
+}
+
+impl<T> Deref for Cow<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Cow::Borrowed(ref_map) => &*ref_map,
+            Cow::Owned(value) => &value,
+        }
+    }
+}
+
+impl<'a, T> From<RefMap<'a, T>> for Cow<'a, T> {
+    fn from(value: RefMap<'a, T>) -> Self {
+        Cow::Borrowed(value)
+    }
+}
+
+impl<'a, T> From<Ref<'a, T>> for Cow<'a, T> {
+    fn from(value: Ref<'a, T>) -> Self {
+        RefMap::from(value).into()
+    }
+}
+
+impl<'a, T> From<Map<'a, T>> for Cow<'a, T> {
+    fn from(value: Map<'a, T>) -> Self {
+        RefMap::from(value).into()
+    }
+}
+
 pub enum RefMap<'a, T: ?Sized> {
     Ref(Ref<'a, T>),
     Map(Map<'a, T>),
