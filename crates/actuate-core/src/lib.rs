@@ -18,6 +18,10 @@ pub mod prelude {
     };
 }
 
+/// Clone-on-write value.
+///
+/// This represents either a borrowed or owned value.
+/// A borrowed value is stored as a [`RefMap`], which can be either a reference or a mapped reference.
 pub enum Cow<'a, T> {
     Borrowed(RefMap<'a, T>),
     Owned(T),
@@ -64,6 +68,7 @@ impl<'a, T> From<Map<'a, T>> for Cow<'a, T> {
     }
 }
 
+/// Immutable reference or mapped reference to a value.
 pub enum RefMap<'a, T: ?Sized> {
     Ref(Ref<'a, T>),
     Map(Map<'a, T>),
