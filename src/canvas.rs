@@ -1,4 +1,4 @@
-use crate::{prelude::*, RendererContext};
+use crate::{prelude::*, Draw, RendererContext};
 use masonry::vello::{
     kurbo::{Affine, Vec2},
     Scene,
@@ -8,7 +8,7 @@ use taffy::{Layout, Style};
 
 #[derive(Clone, Default)]
 pub(crate) struct CanvasContext {
-    pub(crate) draw_fns: RefCell<Vec<Rc<dyn Fn(&Layout, &mut Scene)>>>,
+    pub(crate) draws: RefCell<Vec<Rc<dyn Draw>>>,
 }
 
 pub struct Canvas<'a> {
@@ -90,11 +90,15 @@ impl Compose for Canvas<'_> {
         }
 
         scene.borrow_mut().reset();
-        for f in &*canvas_cx.draw_fns.borrow() {
-            f(&layout, &mut scene.borrow_mut());
+        for draw in &*canvas_cx.draws.borrow() {
+            draw.pre_process(&layout, &mut scene.borrow_mut());
         }
 
         (cx.me().f)(layout, &mut scene.borrow_mut());
+
+        for draw in &*canvas_cx.draws.borrow() {
+            draw.post_process(&layout, &mut scene.borrow_mut());
+        }
 
         parent_scene.append(
             &scene.borrow(),

@@ -14,7 +14,7 @@ use std::{
     mem,
     rc::Rc,
 };
-use taffy::{FlexDirection, NodeId, Style, TaffyTree};
+use taffy::{FlexDirection, Layout, NodeId, Style, TaffyTree};
 use text::{FontContext, TextContext};
 use winit::event::{ElementState, MouseButton};
 
@@ -115,7 +115,7 @@ pub trait View: Compose {
 
     fn font_size(self, font_size: f32) -> WithState<FontSize, Self>;
 
-    fn background_color(self, color: Color) -> WithState<BackgroundColor, Self>;
+    fn background_color(self, color: Color) -> WithState<DrawState<BackgroundColor>, Self>;
 }
 
 impl<C: Compose> View for C {
@@ -133,9 +133,11 @@ impl<C: Compose> View for C {
         }
     }
 
-    fn background_color(self, color: Color) -> WithState<BackgroundColor, Self> {
+    fn background_color(self, color: Color) -> WithState<DrawState<BackgroundColor>, Self> {
         WithState {
-            state: BackgroundColor { color },
+            state: DrawState {
+                draw: Rc::new(BackgroundColor { color }),
+            },
             content: self,
         }
     }
@@ -219,34 +221,52 @@ impl State for FontSize {
     }
 }
 
+pub trait Draw {
+    fn pre_process(&self, layout: &Layout, scene: &mut Scene) {
+        let _ = layout;
+        let _ = scene;
+    }
+
+    fn post_process(&self, layout: &Layout, scene: &mut Scene) {
+        let _ = layout;
+        let _ = scene;
+    }
+}
+
+pub struct DrawState<T> {
+    draw: Rc<T>,
+}
+
+unsafe impl<T: Data> Data for DrawState<T> {
+    type Id = DrawState<T::Id>;
+}
+
+impl<T: Draw + 'static> State for DrawState<T> {
+    unsafe fn use_state(&self, cx: &ScopeState) {
+        let canvas_cx = use_context::<CanvasContext>(&cx);
+
+        let draw = self.draw.clone();
+        use_provider(cx, move || {
+            let canvas_cx = (*canvas_cx).clone();
+            canvas_cx.draws.borrow_mut().push(draw.clone());
+            canvas_cx
+        });
+    }
+}
+
 #[derive(Data)]
 pub struct BackgroundColor {
     pub color: Color,
 }
 
-impl State for BackgroundColor {
-    unsafe fn use_state(&self, cx: &ScopeState) {
-        let canvas_cx = use_context::<CanvasContext>(&cx);
-
-        let color = use_ref(cx, || Rc::new(Cell::new(self.color)));
-        color.set(self.color);
-
-        let color = color.clone();
-        use_provider(cx, || {
-            let canvas_cx = (*canvas_cx).clone();
-            canvas_cx
-                .draw_fns
-                .borrow_mut()
-                .push(Rc::new(move |layout, scene| {
-                    scene.fill(
-                        Fill::NonZero,
-                        Affine::default(),
-                        color.get(),
-                        None,
-                        &Rect::new(0., 0., layout.size.width as _, layout.size.height as _),
-                    );
-                }));
-            canvas_cx
-        });
+impl Draw for BackgroundColor {
+    fn pre_process(&self, layout: &Layout, scene: &mut Scene) {
+        scene.fill(
+            Fill::NonZero,
+            Affine::default(),
+            self.color,
+            None,
+            &Rect::new(0., 0., layout.size.width as _, layout.size.height as _),
+        );
     }
 }
