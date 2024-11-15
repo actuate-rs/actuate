@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, MapCompose};
+use actuate_core::{prelude::*, MapCompose, ScopeState};
 use masonry::{
     vello::{
         peniko::{Color, Fill},
@@ -108,50 +108,72 @@ pub fn run(content: impl Compose + 'static) {
 }
 
 pub trait View: Compose {
-    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Clickable<'a, Self>;
+    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> WithState<Clickable<'a>, Self>;
 
-    fn font_size(self, font_size: f32) -> WithFontSize<Self>;
+    fn font_size(self, font_size: f32) -> WithState<FontSize, Self>;
 }
 
 impl<C: Compose> View for C {
-    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Clickable<'a, Self> {
-        Clickable::new(on_click, self)
+    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> WithState<Clickable<'a>, Self> {
+        WithState {
+            state: Clickable::new(on_click),
+            content: self,
+        }
     }
 
-    fn font_size(self, font_size: f32) -> WithFontSize<Self> {
-        WithFontSize {
-            font_size,
+    fn font_size(self, font_size: f32) -> WithState<FontSize, Self> {
+        WithState {
+            state: FontSize { font_size },
             content: self,
         }
     }
 }
 
-pub struct Clickable<'a, C> {
-    on_click: Rc<dyn Fn() + 'a>,
+pub trait State {
+    fn use_state(&self, cx: &ScopeState);
+}
+
+pub struct WithState<T, C> {
+    state: T,
     content: C,
 }
 
-impl<'a, C> Clickable<'a, C> {
-    pub fn new(on_click: impl Fn() + 'a, content: C) -> Self {
+unsafe impl<T: Data, C: Data> Data for WithState<T, C> {
+    type Id = WithState<T::Id, C::Id>;
+}
+
+impl<T: State + Data, C: Compose> Compose for WithState<T, C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.me().state.use_state(&cx);
+
+        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+    }
+}
+
+pub struct Clickable<'a> {
+    on_click: Rc<dyn Fn() + 'a>,
+}
+
+impl<'a> Clickable<'a> {
+    pub fn new(on_click: impl Fn() + 'a) -> Self {
         Self {
             on_click: Rc::new(on_click),
-            content,
         }
     }
 }
 
-unsafe impl<C: Data> Data for Clickable<'_, C> {
-    type Id = Clickable<'static, C::Id>;
+unsafe impl Data for Clickable<'_> {
+    type Id = Clickable<'static>;
 }
 
-impl<C: Compose> Compose for Clickable<'_, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+impl State for Clickable<'_> {
+    fn use_state(&self, cx: &ScopeState) {
         let renderer_cx = use_context::<RendererContext>(&cx);
 
         // TODO remove on drop (unsound).
         use_ref(&cx, || {
             let is_pressed = Cell::new(false);
-            let f: Rc<dyn Fn() + 'static> = unsafe { mem::transmute(cx.me().on_click.clone()) };
+            let f: Rc<dyn Fn() + 'static> = unsafe { mem::transmute(self.on_click.clone()) };
             let f = Rc::new(move |button, state, _| {
                 if button != MouseButton::Left {
                     return;
@@ -166,29 +188,21 @@ impl<C: Compose> Compose for Clickable<'_, C> {
 
             renderer_cx.pending_listeners.borrow_mut().push(f);
         });
-
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
 }
 
-pub struct WithFontSize<C> {
+#[derive(Data)]
+pub struct FontSize {
     pub font_size: f32,
-    pub content: C,
 }
 
-unsafe impl<C: Data> Data for WithFontSize<C> {
-    type Id = Clickable<'static, C::Id>;
-}
-
-impl<C: Compose> Compose for WithFontSize<C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+impl State for FontSize {
+    fn use_state(&self, cx: &ScopeState) {
         let text_cx = use_context::<TextContext>(&cx);
 
         use_provider(&cx, || TextContext {
             color: text_cx.color,
-            font_size: cx.me().font_size,
+            font_size: self.font_size,
         });
-
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
 }
