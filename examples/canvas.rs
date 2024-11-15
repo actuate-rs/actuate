@@ -46,6 +46,7 @@ impl Compose for App {
                     color: Color::YELLOW,
                 },
             ),
+            background_color: Color::BLACK,
         }
     }
 }

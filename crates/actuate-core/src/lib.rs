@@ -539,8 +539,12 @@ impl<C: Compose> Compose for MapCompose<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_container.set(true);
 
-        let state = use_ref(&cx, || ScopeState::default());
-        *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+        let state = use_ref(&cx, || {
+            let mut state = ScopeState::default();
+            state.contexts = cx.contexts.clone();
+            state
+        });
+
         state.is_parent_changed.set(cx.is_parent_changed.get());
 
         (**cx.me()).any_compose(state);

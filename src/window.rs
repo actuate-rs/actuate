@@ -9,7 +9,11 @@ use masonry::{
     },
     Affine, Rect, Vec2,
 };
-use std::{cell::RefCell, mem, num::NonZeroUsize};
+use std::{
+    cell::{Cell, RefCell},
+    mem,
+    num::NonZeroUsize,
+};
 use taffy::{prelude::TaffyMaxContent, Size};
 use wgpu::PresentMode;
 use winit::{
@@ -25,6 +29,7 @@ struct State {
 pub struct Window<C> {
     pub attributes: WindowAttributes,
     pub content: C,
+    pub background_color: Color,
 }
 
 impl<C> Window<C> {
@@ -32,6 +37,7 @@ impl<C> Window<C> {
         Self {
             attributes: WindowAttributes::default(),
             content,
+            background_color: Color::WHITE,
         }
     }
 }
@@ -48,9 +54,27 @@ impl<C: Compose> Compose for Window<C> {
 
         let state = use_ref(&cx, || RefCell::new(None));
 
+        let is_first = use_ref(&cx, || Cell::new(true));
+
         actuate_winit::Window::new(
             WindowAttributes::default(),
             move |window, event| {
+                if is_first.get() {
+                    renderer_cx.scene.borrow_mut().fill(
+                        Fill::NonZero,
+                        Affine::default(),
+                        renderer_cx.base_color.get(),
+                        None,
+                        &Rect::new(
+                            0.,
+                            0.,
+                            window.inner_size().width as _,
+                            window.inner_size().height as _,
+                        ),
+                    );
+                    is_first.set(false);
+                }
+
                 match event {
                     Event::Resumed => {
                         let surface =
@@ -166,7 +190,7 @@ impl<C: Compose> Compose for Window<C> {
                             scene.fill(
                                 Fill::NonZero,
                                 Affine::default(),
-                                Color::BLACK,
+                                renderer_cx.base_color.get(),
                                 None,
                                 &Rect::new(
                                     0.,

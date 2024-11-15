@@ -48,6 +48,20 @@ impl<'a> IntoFontStack<'a> for &'a str {
     }
 }
 
+pub struct TextContext {
+    pub color: Color,
+    pub font_size: f32,
+}
+
+impl Default for TextContext {
+    fn default() -> Self {
+        Self {
+            color: Color::BLACK,
+            font_size: 18.,
+        }
+    }
+}
+
 pub struct Text<T> {
     content: T,
     font_stack: FontStack<'static>,
@@ -80,9 +94,11 @@ where
     fn compose(cx: Scope<Self>) -> impl Compose {
         let font_cx = use_context::<FontContext>(&cx);
         let renderer_cx = use_context::<RendererContext>(&cx);
+        let text_cx = use_context::<TextContext>(&cx);
 
         let text_layout = use_ref(&cx, || {
-            let mut text_layout = TextLayout::new(format!("{}", cx.me().content), 50.);
+            let mut text_layout =
+                TextLayout::new(format!("{}", cx.me().content), text_cx.font_size);
             text_layout.rebuild(&mut font_cx.inner.borrow_mut());
 
             RefCell::new(text_layout)
@@ -107,8 +123,9 @@ where
                     let mut text_layout = text_layout.borrow_mut();
 
                     text_layout.set_font(cx.me().font_stack);
-                    text_layout.set_brush(Color::WHITE);
+                    text_layout.set_brush(text_cx.color);
                     text_layout.set_text(content.clone());
+                    text_layout.set_text_size(text_cx.font_size);
 
                     text_layout.rebuild(&mut font_cx.inner.borrow_mut());
                     text_layout.draw(scene, Point::default());

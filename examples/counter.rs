@@ -10,9 +10,12 @@ impl Compose for App {
         dbg!(*count);
 
         Window::new((
-            Text::new(format!("High five count: {}", *count)),
-            Text::new("Up high!").on_click(move || count.update(|x| *x += 1)),
-            Text::new("Down low!").on_click(move || count.update(|x| *x -= 1)),
+            Text::new(format!("High five count: {}", *count)).font_size(100.),
+            (
+                Text::new("Up high!").on_click(move || count.update(|x| *x += 1)),
+                Text::new("Down low!").on_click(move || count.update(|x| *x -= 1)),
+            )
+                .font_size(50.),
         ))
     }
 }

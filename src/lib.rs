@@ -14,7 +14,7 @@ use std::{
     rc::Rc,
 };
 use taffy::{FlexDirection, NodeId, Style, TaffyTree};
-use text::FontContext;
+use text::{FontContext, TextContext};
 use winit::event::{ElementState, MouseButton};
 
 pub use actuate_core as core;
@@ -51,6 +51,7 @@ pub struct RendererContext {
     canvas_update_fns: RefCell<Vec<Box<dyn Fn()>>>,
     listeners: Rc<RefCell<HashMap<NodeId, Vec<Rc<dyn Fn(MouseButton, ElementState, Vec2)>>>>>,
     pending_listeners: Rc<RefCell<Vec<Rc<dyn Fn(MouseButton, ElementState, Vec2)>>>>,
+    base_color: Cell<Color>,
 }
 
 struct RenderRoot<C> {
@@ -91,10 +92,12 @@ impl<C: Compose> Compose for RenderRoot<C> {
                 canvas_update_fns: RefCell::new(Vec::new()),
                 listeners: Rc::default(),
                 pending_listeners: Rc::default(),
+                base_color: Cell::new(Color::WHITE),
             }
         });
 
         use_provider(&cx, FontContext::default);
+        use_provider(&cx, TextContext::default);
 
         unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
     }
@@ -106,11 +109,20 @@ pub fn run(content: impl Compose + 'static) {
 
 pub trait View: Compose {
     fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Clickable<'a, Self>;
+
+    fn font_size(self, font_size: f32) -> WithFontSize<Self>;
 }
 
 impl<C: Compose> View for C {
     fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Clickable<'a, Self> {
         Clickable::new(on_click, self)
+    }
+
+    fn font_size(self, font_size: f32) -> WithFontSize<Self> {
+        WithFontSize {
+            font_size,
+            content: self,
+        }
     }
 }
 
@@ -153,6 +165,28 @@ impl<C: Compose> Compose for Clickable<'_, C> {
             });
 
             renderer_cx.pending_listeners.borrow_mut().push(f);
+        });
+
+        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+    }
+}
+
+pub struct WithFontSize<C> {
+    pub font_size: f32,
+    pub content: C,
+}
+
+unsafe impl<C: Data> Data for WithFontSize<C> {
+    type Id = Clickable<'static, C::Id>;
+}
+
+impl<C: Compose> Compose for WithFontSize<C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let text_cx = use_context::<TextContext>(&cx);
+
+        use_provider(&cx, || TextContext {
+            color: text_cx.color,
+            font_size: cx.me().font_size,
         });
 
         unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
