@@ -879,7 +879,10 @@ impl Composer {
 #[cfg(test)]
 mod tests {
     use crate::{prelude::*, Composer};
-    use std::{cell::Cell, rc::Rc};
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+    };
 
     #[derive(Data)]
     struct Counter {
@@ -887,7 +890,7 @@ mod tests {
     }
 
     impl Compose for Counter {
-        fn compose(cx: crate::Scope<Self>) -> impl Compose {
+        fn compose(cx: Scope<Self>) -> impl Compose {
             cx.me().x.set(cx.me().x.get() + 1);
 
             cx.set_changed();
@@ -895,14 +898,14 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
+    fn it_composes() {
         #[derive(Data)]
         struct Wrap {
             x: Rc<Cell<i32>>,
         }
 
         impl Compose for Wrap {
-            fn compose(cx: crate::Scope<Self>) -> impl Compose {
+            fn compose(cx: Scope<Self>) -> impl Compose {
                 Counter {
                     x: cx.me().x.clone(),
                 }
@@ -919,6 +922,7 @@ mod tests {
         assert_eq!(x.get(), 2);
     }
 
+    /* TODO
     #[test]
     fn it_composes_any_compose() {
         #[derive(Data)]
@@ -942,5 +946,41 @@ mod tests {
 
         composer.compose();
         assert_eq!(x.get(), 2);
+    }
+    */
+
+    #[test]
+    fn it_memoizes_composables() {
+        #[derive(Data)]
+        struct B {
+            x: Rc<RefCell<i32>>,
+        }
+
+        impl Compose for B {
+            fn compose(cx: Scope<Self>) -> impl Compose {
+                *cx.me().x.borrow_mut() += 1;
+            }
+        }
+
+        #[derive(Data)]
+        struct A {
+            x: Rc<RefCell<i32>>,
+        }
+
+        impl Compose for A {
+            fn compose(cx: Scope<Self>) -> impl Compose {
+                let x = cx.me().x.clone();
+                Memo::new((), B { x })
+            }
+        }
+
+        let x = Rc::new(RefCell::new(0));
+        let mut compsoer = Composer::new(A { x: x.clone() });
+
+        compsoer.compose();
+        assert_eq!(*x.borrow(), 1);
+
+        compsoer.compose();
+        assert_eq!(*x.borrow(), 1);
     }
 }

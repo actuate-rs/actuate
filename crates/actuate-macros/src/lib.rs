@@ -47,9 +47,10 @@ pub fn data(input: TokenStream) -> TokenStream {
 
     let checks = input_struct.fields.iter().map(|field| {
         let field_ident = field.ident.as_ref().unwrap();
-        let check_ident = format_ident!("__check_{}", field_ident);
+        let check_ident = format_ident!("__check_{}_{}", ident, field_ident);
         quote! {
            #[doc(hidden)]
+           #[allow(non_snake_case)]
            fn #check_ident <#generic_params> (t: #ident <#generic_ty_params>) {
                 (&&FieldWrap(t.#field_ident)).check()
            }
