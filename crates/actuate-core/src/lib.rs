@@ -455,17 +455,21 @@ unsafe impl Data for &str {
 }
 
 unsafe impl<T: ?Sized + Data> Data for &T {
-    type Id = PhantomData<&'static T::Id>;
+    type Id = &'static T::Id;
+}
+
+unsafe impl<T: Data> Data for Option<T> {
+    type Id = Option<T::Id>;
 }
 
 macro_rules! impl_data_for_fns {
     ($($t:tt),*) => {
         unsafe impl<$($t,)* R> Data for &dyn Fn($($t),*) -> R {
-            type Id = PhantomData<&'static dyn Fn()>;
+            type Id = &'static dyn Fn();
         }
 
         unsafe impl<$($t,)* R> Data for Box<dyn Fn($($t),*) -> R + '_>{
-            type Id = PhantomData<Box<dyn Fn()>>;
+            type Id = Box<dyn Fn()>;
         }
     }
 }
@@ -544,6 +548,28 @@ impl Compose for () {
 impl<C: Compose> Compose for &C {
     fn compose(cx: Scope<Self>) -> impl Compose {
         (**cx.me()).any_compose(&cx);
+    }
+}
+
+impl<C: Compose> Compose for Option<C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.is_container.set(true);
+
+        let state_cell: &RefCell<Option<ScopeState>> = use_ref(&cx, || RefCell::new(None));
+
+        if let Some(content) = &*cx.me() {
+            if let Some(state) = &*state_cell.borrow() {
+                state.is_parent_changed.set(cx.is_parent_changed.get());
+                content.any_compose(state);
+            } else {
+                let mut state = ScopeState::default();
+                state.contexts = cx.contexts.clone();
+                *state_cell.borrow_mut() = Some(state);
+                content.any_compose(&*state_cell.borrow().as_ref().unwrap());
+            }
+        } else {
+            *state_cell.borrow_mut() = None;
+        }
     }
 }
 
