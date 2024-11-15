@@ -25,6 +25,13 @@
 A high-performance reactive user-interface framework for Rust.
 This crate provides a generic library that lets you define UI using declarative, borrow-checker friendly syntax.
 
+## Features
+ - Efficient and borrow-checker friendly state management: Manage state with components and hooks, all using zero-cost smart pointers
+ - High-performance multi-platform rendering with [Vello](https://github.com/linebender/vello)
+ - CSS Block, Flex, and Grid layout support with [Taffy](https://github.com/DioxusLabs/taffy)
+ - Built-in accessibility via [Accesskit](https://github.com/AccessKit/accesskit)
+ - Generic core crate for custom use-cases
+
 ```rust
 use actuate::prelude::*;
 
