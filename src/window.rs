@@ -26,6 +26,7 @@ struct State {
     render_surface: RenderSurface<'static>,
 }
 
+#[derive(Data)]
 pub struct Window<C> {
     pub attributes: WindowAttributes,
     pub content: C,
@@ -40,10 +41,6 @@ impl<C> Window<C> {
             background_color: Color::WHITE,
         }
     }
-}
-
-unsafe impl<C: Data> Data for Window<C> {
-    type Id = Window<C::Id>;
 }
 
 impl<C: Compose> Compose for Window<C> {

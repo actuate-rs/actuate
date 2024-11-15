@@ -62,6 +62,7 @@ impl Default for TextContext {
     }
 }
 
+#[derive(Data)]
 pub struct Text<T> {
     content: T,
     font_stack: FontStack<'static>,
@@ -81,10 +82,6 @@ impl<T> Text<T> {
         self.font_stack = font_stack.into_font_stack();
         self
     }
-}
-
-unsafe impl<T: Data> Data for Text<T> {
-    type Id = Text<T::Id>;
 }
 
 impl<T> Compose for Text<T>

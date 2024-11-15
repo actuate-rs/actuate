@@ -52,7 +52,7 @@ pub fn data(input: TokenStream) -> TokenStream {
         quote! {
            #[doc(hidden)]
            fn #check_ident <#generic_params> (t: #ident <#generic_ty_params>) {
-                (&&t.#field_ident).check()
+                (&&FieldWrap(t.#field_ident)).check()
            }
         }
     });

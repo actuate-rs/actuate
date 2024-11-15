@@ -2,6 +2,7 @@ use crate::{prelude::*, RendererContext};
 use actuate_core::MapCompose;
 use taffy::{FlexDirection, Style};
 
+#[derive(Data)]
 pub struct Flex<C> {
     style: Style,
     content: C,
@@ -31,10 +32,6 @@ impl<C> Flex<C> {
             content,
         )
     }
-}
-
-unsafe impl<C: Data> Data for Flex<C> {
-    type Id = Flex<C::Id>;
 }
 
 impl<C: Compose> Compose for Flex<C> {

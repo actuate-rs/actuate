@@ -14,7 +14,7 @@ pub use actuate_macros::Data;
 pub mod prelude {
     pub use crate::{
         use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
-        DynCompose, Map, Mut, Ref, Scope, StateField,
+        DynCompose, FieldWrap, Map, Mut, Ref, Scope, StateField, StaticField,
     };
 }
 
@@ -458,8 +458,13 @@ unsafe impl<T: ?Sized + Data> Data for &T {
     type Id = PhantomData<&'static T::Id>;
 }
 
-unsafe impl<T1, T2, T: ?Sized + Data> Data for Box<dyn Fn(T1, T2) -> T + '_> {
-    type Id = PhantomData<&'static T::Id>;
+unsafe impl<T1, T2, R> Data for &Box<dyn Fn(T1, T2) -> R + '_>
+where
+    T1: Data,
+    T2: Data,
+    R: Data,
+{
+    type Id = PhantomData<Box<dyn Fn(T1::Id, T2::Id) -> R::Id>>;
 }
 
 unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
@@ -470,7 +475,6 @@ unsafe impl<T: Data + ?Sized> Data for Map<'_, T> {
     type Id = PhantomData<Map<'static, T::Id>>;
 }
 
-
 unsafe impl<T: Data> Data for Mut<'_, T> {
     type Id = PhantomData<Mut<'static, T::Id>>;
 }
@@ -479,6 +483,7 @@ unsafe impl Data for DynCompose<'_> {
     type Id = PhantomData<DynCompose<'static>>;
 }
 
+pub struct FieldWrap<T>(pub T);
 
 #[doc(hidden)]
 pub unsafe trait StateField {
@@ -487,9 +492,7 @@ pub unsafe trait StateField {
     }
 }
 
-unsafe impl<T: 'static> StateField for &T {}
-
-unsafe impl<T: 'static> StateField for Mut<'_, T> {}
+unsafe impl<T: 'static> StateField for FieldWrap<&T> {}
 
 #[doc(hidden)]
 pub unsafe trait DataField {
@@ -498,7 +501,16 @@ pub unsafe trait DataField {
     }
 }
 
-unsafe impl<T: Data> DataField for &&T {}
+unsafe impl<T: Data> DataField for &FieldWrap<T> {}
+
+#[doc(hidden)]
+pub unsafe trait StaticField {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+unsafe impl<T: 'static> StaticField for &&FieldWrap<T> {}
 
 /// A composable function.
 pub trait Compose: Data {
