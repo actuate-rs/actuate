@@ -458,6 +458,10 @@ unsafe impl<T: ?Sized + Data> Data for &T {
     type Id = PhantomData<&'static T::Id>;
 }
 
+unsafe impl<T1, T2, T: ?Sized + Data> Data for Box<dyn Fn(T1, T2) -> T + '_> {
+    type Id = PhantomData<&'static T::Id>;
+}
+
 unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
     type Id = PhantomData<Ref<'static, T::Id>>;
 }
@@ -466,9 +470,15 @@ unsafe impl<T: Data + ?Sized> Data for Map<'_, T> {
     type Id = PhantomData<Map<'static, T::Id>>;
 }
 
+
+unsafe impl<T: Data> Data for Mut<'_, T> {
+    type Id = PhantomData<Mut<'static, T::Id>>;
+}
+
 unsafe impl Data for DynCompose<'_> {
     type Id = PhantomData<DynCompose<'static>>;
 }
+
 
 #[doc(hidden)]
 pub unsafe trait StateField {
