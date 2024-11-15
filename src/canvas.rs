@@ -1,4 +1,5 @@
 use crate::{prelude::*, Draw, RendererContext};
+use actuate_core::use_drop;
 use masonry::vello::{
     kurbo::{Affine, Vec2},
     Scene,
@@ -34,7 +35,7 @@ impl Compose for Canvas<'_> {
         let canvas_cx = use_context::<CanvasContext>(&cx);
         let renderer_cx = use_context::<RendererContext>(&cx);
 
-        let key = use_ref(&cx, || {
+        let key = *use_ref(&cx, || {
             let key = renderer_cx
                 .taffy
                 .borrow_mut()
@@ -54,12 +55,22 @@ impl Compose for Canvas<'_> {
             let f: Box<dyn Fn()> = Box::new(move || {
                 cx.set_changed();
             });
+
+            // Safety: `f` is removed from `canvas_update_fns` on drop.
             let f = unsafe { mem::transmute(f) };
 
-            // TODO remove on drop (unsound).
-            renderer_cx.canvas_update_fns.borrow_mut().push(f);
+            renderer_cx.canvas_update_fns.borrow_mut().insert(key, f);
 
             key
+        });
+
+        // Safety: We must remove `f` here to make the above valid.
+        let renderer_cx_handle = renderer_cx.clone();
+        use_drop(&cx, move || {
+            renderer_cx_handle
+                .canvas_update_fns
+                .borrow_mut()
+                .remove(&key);
         });
 
         let last_style = use_ref(&cx, || cx.me().style.clone());
@@ -68,25 +79,24 @@ impl Compose for Canvas<'_> {
             renderer_cx
                 .taffy
                 .borrow_mut()
-                .set_style(*key, cx.me().style.clone())
+                .set_style(key, cx.me().style.clone())
                 .unwrap();
         }
 
         let scene = use_ref(&cx, || RefCell::new(Scene::new()));
 
-        let layout = *renderer_cx.taffy.borrow().layout(*key).unwrap();
+        let layout = *renderer_cx.taffy.borrow().layout(key).unwrap();
         let mut parent_scene = renderer_cx.scene.borrow_mut();
 
+        renderer_cx.is_changed.set(true);
+
         let last_layout = use_mut(&cx, || None);
-        if last_layout.is_none() {
-            last_layout.with(move |dst| *dst = Some(layout));
-            renderer_cx.is_changed.set(true);
-            return;
-        }
         if Some(layout) != *last_layout {
             last_layout.with(move |dst| *dst = Some(layout));
-            renderer_cx.is_changed.set(true);
-            cx.set_changed();
+
+            if last_layout.is_none() {
+                return;
+            }
         }
 
         scene.borrow_mut().reset();

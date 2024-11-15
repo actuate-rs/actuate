@@ -1,4 +1,4 @@
-use crate::{Canvas, RendererContext};
+use crate::Canvas;
 use actuate_core::{prelude::*, ScopeState};
 use masonry::{
     parley::{
@@ -90,7 +90,6 @@ where
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let font_cx = use_context::<FontContext>(&cx);
-        let renderer_cx = use_context::<RendererContext>(&cx);
         let text_cx = use_context::<TextContext>(&cx);
 
         let text_layout = use_ref(&cx, || {
@@ -102,10 +101,6 @@ where
         });
 
         let content = format!("{}", cx.me().content);
-        use_memo(&cx, &content, || {
-            renderer_cx.is_changed.set(true);
-        });
-
         Memo::new(
             content.clone(),
             Canvas::new(
