@@ -115,14 +115,6 @@ pub fn run(content: impl Compose + 'static) {
 }
 
 pub trait View: Compose {
-    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> WithState<Clickable<'a>, Self>;
-
-    fn font_size(self, font_size: f32) -> WithState<FontSize, Self>;
-
-    fn background_color(self, color: Color) -> WithState<DrawState<BackgroundColor>, Self>;
-}
-
-impl<C: Compose> View for C {
     fn on_click<'a>(self, on_click: impl Fn() + 'a) -> WithState<Clickable<'a>, Self> {
         WithState {
             state: Clickable::new(on_click),
@@ -131,21 +123,23 @@ impl<C: Compose> View for C {
     }
 
     fn font_size(self, font_size: f32) -> WithState<FontSize, Self> {
-        WithState {
-            state: FontSize { font_size },
-            content: self,
-        }
+        self.with_state(FontSize { font_size })
+    }
+
+    fn with_state<T: State>(self, state: T) -> WithState<T, Self> {
+        WithState::new(state, self)
+    }
+
+    fn draw<D: Draw + 'static>(self, draw: D) -> WithState<DrawState<D>, Self> {
+        self.with_state(DrawState::new(draw))
     }
 
     fn background_color(self, color: Color) -> WithState<DrawState<BackgroundColor>, Self> {
-        WithState {
-            state: DrawState {
-                draw: Rc::new(BackgroundColor { color }),
-            },
-            content: self,
-        }
+        self.draw(BackgroundColor { color })
     }
 }
+
+impl<C: Compose> View for C {}
 
 pub trait State {
     unsafe fn use_state(&self, cx: &ScopeState);
@@ -154,6 +148,12 @@ pub trait State {
 pub struct WithState<T, C> {
     state: T,
     content: C,
+}
+
+impl<T, C> WithState<T, C> {
+    pub fn new(state: T, content: C) -> Self {
+        Self { state, content }
+    }
 }
 
 unsafe impl<T: Data, C: Data> Data for WithState<T, C> {
@@ -239,6 +239,14 @@ pub trait Draw {
 
 pub struct DrawState<T> {
     draw: Rc<T>,
+}
+
+impl<T> DrawState<T> {
+    pub fn new(draw: T) -> Self {
+        Self {
+            draw: Rc::new(draw),
+        }
+    }
 }
 
 unsafe impl<T: Data> Data for DrawState<T> {
