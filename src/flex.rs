@@ -1,5 +1,4 @@
 use crate::{prelude::*, RendererContext};
-use actuate_core::MapCompose;
 use taffy::{FlexDirection, Style};
 
 #[derive(Data)]
@@ -51,6 +50,6 @@ impl<C: Compose> Compose for Flex<C> {
             *renderer_cx.parent_key.borrow_mut() = id;
         });
 
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+        Ref::map(cx.me(), |me| &me.content)
     }
 }

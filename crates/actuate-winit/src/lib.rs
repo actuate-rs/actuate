@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, use_drop, Composer, MapCompose, Update, Updater};
+use actuate_core::{prelude::*, use_drop, Composer, Update, Updater};
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
 use winit::{
     application::ApplicationHandler,
@@ -32,7 +32,7 @@ impl<C: Compose> Compose for HandlerRoot<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         use_provider(&cx, || cx.me().event_loop_cx.clone());
 
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+        Ref::map(cx.me(), |me| &me.content)
     }
 }
 
@@ -182,6 +182,6 @@ impl<C: Compose> Compose for Window<'_, C> {
         inner.handler_fns.insert(id, on_event);
 
         // Safety: The pointer to `me.content` is guranteed to remain constant.
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+        Ref::map(cx.me(), |me| &me.content)
     }
 }

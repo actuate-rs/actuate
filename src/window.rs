@@ -1,5 +1,5 @@
 use crate::RendererContext;
-use actuate_core::{prelude::*, MapCompose};
+use actuate_core::prelude::*;
 use masonry::{
     vello::{
         self,
@@ -218,7 +218,7 @@ impl<C: Compose> Compose for Window<C> {
                         .unwrap();
                 }
             },
-            unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) },
+            Ref::map(cx.me(), |me| &me.content),
         )
     }
 }

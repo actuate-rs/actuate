@@ -51,6 +51,29 @@ impl<T: Hash + ?Sized> Hash for Map<'_, T> {
     }
 }
 
+// Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
+// an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
+impl<C: Compose> Compose for Map<'_, C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.is_container.set(true);
+
+        let state = use_ref(&cx, || {
+            let mut state = ScopeState::default();
+            state.contexts = cx.contexts.clone();
+            state
+        });
+
+        state.is_parent_changed.set(cx.is_parent_changed.get());
+
+        (**cx.me()).any_compose(state);
+    }
+
+    #[cfg(feature = "tracing")]
+    fn name() -> std::borrow::Cow<'static, str> {
+        C::name()
+    }
+}
+
 /// Immutable reference to a value of type `T`.
 #[derive(Hash)]
 pub struct Ref<'a, T: ?Sized> {
@@ -573,49 +596,6 @@ impl<C: Compose> Compose for Option<C> {
     }
 }
 
-pub struct MapCompose<'a, T> {
-    map: Map<'a, T>,
-}
-
-impl<'a, T> MapCompose<'a, T> {
-    pub unsafe fn new(map: Map<'a, T>) -> Self {
-        Self { map }
-    }
-}
-
-impl<T> Deref for MapCompose<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.map
-    }
-}
-
-unsafe impl<T: Data> Data for MapCompose<'_, T> {
-    type Id = MapCompose<'static, T::Id>;
-}
-
-impl<C: Compose> Compose for MapCompose<'_, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
-        let state = use_ref(&cx, || {
-            let mut state = ScopeState::default();
-            state.contexts = cx.contexts.clone();
-            state
-        });
-
-        state.is_parent_changed.set(cx.is_parent_changed.get());
-
-        (**cx.me()).any_compose(state);
-    }
-
-    #[cfg(feature = "tracing")]
-    fn name() -> std::borrow::Cow<'static, str> {
-        C::name()
-    }
-}
-
 pub struct Memo<C> {
     hash: u64,
     content: C,
@@ -649,7 +629,7 @@ impl<C: Compose> Compose for Memo<C> {
             cx.is_parent_changed.set(true);
         }
 
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+        Ref::map(cx.me(), |me| &me.content)
     }
 
     #[cfg(feature = "tracing")]

@@ -1,6 +1,9 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use syn::{parse_macro_input, parse_quote, punctuated::Punctuated, token::Comma, Data, DeriveInput, GenericParam};
+use syn::{
+    parse_macro_input, parse_quote, punctuated::Punctuated, token::Comma, Data, DeriveInput,
+    GenericParam,
+};
 
 #[proc_macro_derive(Data)]
 pub fn data(input: TokenStream) -> TokenStream {
@@ -8,37 +11,33 @@ pub fn data(input: TokenStream) -> TokenStream {
     let ident = &input.ident;
 
     let generics = &input.generics;
-    
+
     let generic_params: Punctuated<_, Comma> = generics
         .params
         .iter()
-        .map(|param| {
-            match param {
-                GenericParam::Lifetime(lifetime_param) => lifetime_param.to_token_stream(),
-                GenericParam::Type(type_param) => {
-                    let ident = &type_param.ident;
-                    
-                    let mut bounds = type_param.bounds.clone();
-                    bounds.push(parse_quote!(Data));
+        .map(|param| match param {
+            GenericParam::Lifetime(lifetime_param) => lifetime_param.to_token_stream(),
+            GenericParam::Type(type_param) => {
+                let ident = &type_param.ident;
 
-                    quote! {
-                        #ident: #bounds
-                    }
-                },
-                GenericParam::Const(const_param) => const_param.to_token_stream(),
+                let mut bounds = type_param.bounds.clone();
+                bounds.push(parse_quote!(Data));
+
+                quote! {
+                    #ident: #bounds
+                }
             }
+            GenericParam::Const(const_param) => const_param.to_token_stream(),
         })
         .collect();
 
     let generic_ty_params: Punctuated<_, Comma> = generics
         .params
         .iter()
-        .map(|param| {
-            match param {
-                GenericParam::Lifetime(lifetime_param) => lifetime_param.to_token_stream(),
-                GenericParam::Type(type_param) => type_param.ident.to_token_stream(),
-                GenericParam::Const(const_param) => const_param.to_token_stream(),
-            }
+        .map(|param| match param {
+            GenericParam::Lifetime(lifetime_param) => lifetime_param.to_token_stream(),
+            GenericParam::Type(type_param) => type_param.ident.to_token_stream(),
+            GenericParam::Const(const_param) => const_param.to_token_stream(),
         })
         .collect();
 

@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, MapCompose, ScopeState};
+use actuate_core::{prelude::*, ScopeState};
 use canvas::CanvasContext;
 use masonry::{
     vello::{
@@ -106,7 +106,7 @@ impl<C: Compose> Compose for RenderRoot<C> {
         use_provider(&cx, FontContext::default);
         use_provider(&cx, TextContext::default);
 
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+        Ref::map(cx.me(), |me| &me.content)
     }
 }
 
@@ -164,7 +164,7 @@ impl<T: State + Data, C: Compose> Compose for WithState<T, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         unsafe { cx.me().state.use_state(&cx) }
 
-        unsafe { MapCompose::new(Ref::map(cx.me(), |me| &me.content)) }
+        Ref::map(cx.me(), |me| &me.content)
     }
 }
 
