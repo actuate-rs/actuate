@@ -35,7 +35,7 @@ impl<C> Flex<C> {
 
 impl<C: Compose> Compose for Flex<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let renderer_cx = use_context::<RendererContext>(&cx);
+        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
         use_ref(&cx, || {
             let id = renderer_cx
                 .taffy

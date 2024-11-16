@@ -12,6 +12,7 @@ default = ["tracing"]
 
 [dependencies]
 actuate-macros = { version = "0.1.2", path = "../actuate-macros" }
+thiserror = "2.0.3"
 tracing = { version = "0.1.40", optional = true }
 
 [dev-dependencies]

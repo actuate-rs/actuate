@@ -44,7 +44,7 @@ impl<C> Window<C> {
 
 impl<C: Compose> Compose for Window<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let renderer_cx = use_context::<RendererContext>(&cx);
+        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
 
         let cursor_pos = use_ref(&cx, RefCell::default);
 

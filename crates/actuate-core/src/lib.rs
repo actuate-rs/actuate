@@ -2,6 +2,7 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
     collections::HashMap,
+    fmt,
     hash::{DefaultHasher, Hash, Hasher},
     marker::PhantomData,
     mem,
@@ -10,6 +11,7 @@ use std::{
 };
 
 pub use actuate_macros::Data;
+use thiserror::Error;
 
 pub mod prelude {
     pub use crate::{
@@ -503,19 +505,40 @@ where
     })
 }
 
+#[derive(Error)]
+pub struct ContextError<T> {
+    _marker: PhantomData<T>,
+}
+
+impl<T> fmt::Debug for ContextError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ContextError")
+            .field(&std::any::type_name::<T>())
+            .finish()
+    }
+}
+
+impl<T> fmt::Display for ContextError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&format!(
+            "Context value not found for type: {}",
+            std::any::type_name::<T>()
+        ))
+    }
+}
+
 /// Use a context value of type `T`.
 ///
 /// # Panics
 /// Panics if the context value is not found.
-pub fn use_context<T: 'static>(cx: &ScopeState) -> Rc<T> {
+pub fn use_context<T: 'static>(cx: &ScopeState) -> Result<Rc<T>, ContextError<T>> {
     let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
-        panic!(
-            "Context value not found for type: {}",
-            std::any::type_name::<T>()
-        );
+        return Err(ContextError {
+            _marker: PhantomData,
+        });
     };
 
-    any.downcast().unwrap()
+    Ok(any.downcast().unwrap())
 }
 
 /// Provide a context value of type `T`.

@@ -193,7 +193,7 @@ unsafe impl Data for Clickable<'_> {
 
 impl State for Clickable<'_> {
     unsafe fn use_state(&self, cx: &ScopeState) {
-        let renderer_cx = use_context::<RendererContext>(&cx);
+        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
 
         // TODO remove on drop (unsound).
         use_ref(&cx, || {
@@ -223,7 +223,7 @@ pub struct FontSize {
 
 impl State for FontSize {
     unsafe fn use_state(&self, cx: &ScopeState) {
-        let text_cx = use_context::<TextContext>(&cx);
+        let text_cx = use_context::<TextContext>(&cx).unwrap();
 
         use_provider(&cx, || TextContext {
             color: text_cx.color,
@@ -240,7 +240,7 @@ pub struct FontStackState {
 
 impl State for FontStackState {
     unsafe fn use_state(&self, cx: &ScopeState) {
-        let text_cx = use_context::<TextContext>(&cx);
+        let text_cx = use_context::<TextContext>(&cx).unwrap();
 
         use_provider(&cx, || TextContext {
             color: text_cx.color,
@@ -280,7 +280,7 @@ unsafe impl<T: Data> Data for DrawState<T> {
 
 impl<T: Draw + 'static> State for DrawState<T> {
     unsafe fn use_state(&self, cx: &ScopeState) {
-        let canvas_cx = use_context::<CanvasContext>(&cx);
+        let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
 
         let draw = self.draw.clone();
         use_provider(cx, move || {

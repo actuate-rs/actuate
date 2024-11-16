@@ -22,7 +22,7 @@ pub fn use_font<R>(cx: &ScopeState, make_font: impl FnOnce() -> R)
 where
     R: Into<Vec<u8>>,
 {
-    let font_cx = use_context::<FontContext>(cx);
+    let font_cx = use_context::<FontContext>(cx).unwrap();
 
     use_ref(cx, || {
         font_cx
@@ -90,8 +90,8 @@ where
     T: Data + fmt::Display,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let font_cx = use_context::<FontContext>(&cx);
-        let text_cx = use_context::<TextContext>(&cx);
+        let font_cx = use_context::<FontContext>(&cx).unwrap();
+        let text_cx = use_context::<TextContext>(&cx).unwrap();
         let content = format!("{}", cx.me().content);
 
         let text_layout = use_memo(&cx, (content.clone(), text_cx.clone()), || {

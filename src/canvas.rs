@@ -32,8 +32,8 @@ unsafe impl Data for Canvas<'_> {
 
 impl Compose for Canvas<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let canvas_cx = use_context::<CanvasContext>(&cx);
-        let renderer_cx = use_context::<RendererContext>(&cx);
+        let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
+        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
 
         let key = *use_ref(&cx, || {
             let key = renderer_cx

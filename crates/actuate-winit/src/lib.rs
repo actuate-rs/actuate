@@ -151,7 +151,7 @@ unsafe impl<C: Data> Data for Window<'_, C> {
 
 impl<C: Compose> Compose for Window<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let event_loop_cx = use_context::<EventLoopContext>(&cx);
+        let event_loop_cx = use_context::<EventLoopContext>(&cx).unwrap();
         let mut inner = event_loop_cx.inner.borrow_mut();
 
         let window = use_ref(&cx, || {
