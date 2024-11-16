@@ -472,15 +472,15 @@ pub fn use_ref<'a, T: 'a>(cx: &'a ScopeState, make_value: impl FnOnce() -> T) ->
     unsafe { core::mem::transmute::<&(), &T>(b) }
 }
 
-struct MutState<T> {
-    value: T,
+struct MutState<T: ?Sized> {
     generation: Cell<u64>,
+    value: T,
 }
 
 /// Use a mutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
+pub fn use_mut<'a, T: 'a>(cx: &'a ScopeState, make_value: impl FnOnce() -> T) -> Mut<'a, T> {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -491,12 +491,14 @@ pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> M
             value: make_value(),
             generation: Cell::new(0),
         };
-        hooks.push(Box::new(state));
+        let b = Box::new(state);
+        hooks.push(unsafe { core::mem::transmute::<_, Box<MutState<()>>>(b) });
         hooks.last_mut().unwrap()
     } else {
         hooks.get_mut(idx).unwrap()
     };
-    let state: &mut MutState<T> = any.downcast_mut().unwrap();
+    let state: &mut MutState<()> = any.downcast_mut().unwrap();
+    let state = unsafe { core::mem::transmute::<_, &mut MutState<T>>(state) };
 
     Mut {
         ptr: &mut state.value as *mut T,
