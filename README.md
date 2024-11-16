@@ -34,8 +34,6 @@ This crate provides a generic library that lets you define UI using declarative,
 
 ```rust
 use actuate::prelude::*;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::FmtSubscriber;
 
 #[derive(Data)]
 struct Counter {
@@ -62,13 +60,6 @@ impl Compose for Counter {
 }
 
 fn main() {
-    tracing::subscriber::set_global_default(
-        FmtSubscriber::builder()
-            .with_max_level(LevelFilter::TRACE)
-            .finish(),
-    )
-    .unwrap();
-
     actuate::run(Counter { start: 0 })
 }
 ```
