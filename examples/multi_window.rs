@@ -32,8 +32,38 @@ struct App;
 impl Compose for App {
     fn compose(_cx: Scope<Self>) -> impl Compose {
         (
-            Window::new(Counter { start: 0 }),
-            Window::new(Counter { start: 50 }),
+            Window::new((
+                (
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                ),
+                (
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                ),
+            )),
+            Window::new((
+                (
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                ),
+                (
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                    Counter { start: 0 },
+                ),
+            )),
         )
     }
 }
