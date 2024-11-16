@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0-alpha.7](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0-alpha.6...actuate-v0.4.0-alpha.7) - 2024-11-16
+
+### Other
+
+- More efficient Canvas reactions
+- Update example and docs
+- Refactor macro for fns
+- Inherit TextContext in Window and update example
+- Create ContextError struct and return Result from use_context
+- Replace Hash with new Memoize trait in use_memo
+- Make font size contextual and update example
+- Render text directly with Vello and Parley
+- Update CI
+- Make the View trait more composable
+- Simplify re-render logic for Canvas
+- Update FUNDING.yml
+- Update README.md
+- Safely impl Compose for Map<C>
+- Update README.md
+- Add FUNDING.yml
+- Impl Data for fns
+- Clean up
+- Use Data macro in more places
+- Create Draw trait
+- Add background color modifier
+- Refactor
+- Add font size param
+- Clean up
+
 ## [0.4.0-alpha.6](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0-alpha.5...actuate-v0.4.0-alpha.6) - 2024-11-14
 
 ### Other

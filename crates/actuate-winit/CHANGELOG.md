@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.3...actuate-winit-v0.1.4) - 2024-11-16
+
+### Other
+
+- Refactor macro for fns
+- Create ContextError struct and return Result from use_context
+- Replace Hash with new Memoize trait in use_memo
+- Safely impl Compose for Map<C>
+
 ## [0.1.3](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.2...actuate-winit-v0.1.3) - 2024-11-14
 
 ### Other
