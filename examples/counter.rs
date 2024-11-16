@@ -1,4 +1,5 @@
 use actuate::prelude::*;
+use actuate_core::use_drop;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;
 
@@ -7,7 +8,9 @@ struct A;
 
 impl Compose for A {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        dbg!("A");
+        use_drop(&cx, || {
+            dbg!("Dropped");
+        });
     }
 }
 
@@ -31,10 +34,10 @@ impl Compose for Counter {
                 .on_click(move || count.update(|x| *x -= 1))
                 .background_color(Color::RED),
             if *count == 1 {
-                Some(A)
+                Some(Text::new("A"))
             } else {
                 None
-            }
+            },
         ))
         .font_size(40.)
     }

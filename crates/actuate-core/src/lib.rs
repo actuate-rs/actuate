@@ -405,11 +405,8 @@ impl Drop for ScopeData<'_> {
     fn drop(&mut self) {
         for idx in &*self.drops.borrow() {
             let hooks = unsafe { &mut *self.hooks.get() };
-            hooks
-                .get_mut(*idx)
-                .unwrap()
-                .downcast_mut::<Box<dyn FnMut()>>()
-                .unwrap()();
+            let any = hooks.get_mut(*idx).unwrap();
+            (**any).downcast_mut::<Box<dyn FnMut()>>().unwrap()();
         }
     }
 }
@@ -641,8 +638,9 @@ where
 pub fn use_drop<'a>(cx: ScopeState<'_>, f: impl FnOnce() + 'static) {
     let mut f_cell = Some(f);
 
+    let idx = cx.hook_idx.get();
     use_ref(cx, || {
-        cx.drops.borrow_mut().push(cx.hook_idx.get());
+        cx.drops.borrow_mut().push(idx);
         let f = Box::new(move || {
             f_cell.take().unwrap()();
         }) as Box<dyn FnMut()>;
