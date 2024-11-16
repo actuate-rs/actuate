@@ -7,12 +7,11 @@ use std::{
     mem,
     rc::Rc,
 };
-use taffy::{FlexDirection, Layout, NodeId, Style, TaffyTree};
+use taffy::{Layout, NodeId, TaffyTree};
 use text::{FontContext, IntoFontStack, TextContext};
 use vello::{
     kurbo::{Affine, Vec2},
     peniko::{Color, Fill},
-    util::RenderContext,
     Scene,
 };
 use winit::event::{ElementState, MouseButton};
@@ -45,10 +44,7 @@ pub mod prelude {
     pub use winit::window::WindowAttributes;
 }
 
-pub struct RendererContext {
-    cx: Rc<RefCell<RenderContext>>,
-
-    // TODO move this to window-specific context
+pub struct WindowContext {
     scene: RefCell<Scene>,
     taffy: RefCell<TaffyTree>,
     parent_key: RefCell<NodeId>,
@@ -70,38 +66,6 @@ unsafe impl<C: Data> Data for RenderRoot<C> {
 
 impl<C: Compose> Compose for RenderRoot<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        use_provider(&cx, || {
-            let mut taffy = TaffyTree::new();
-            let root_key = taffy
-                .new_leaf(Style {
-                    flex_direction: FlexDirection::Column,
-                    ..Default::default()
-                })
-                .unwrap();
-
-            let mut scene = Scene::new();
-            scene.fill(
-                Fill::NonZero,
-                Affine::default(),
-                Color::BLACK,
-                None,
-                &Rect::new(0., 0., 500., 500.),
-            );
-
-            RendererContext {
-                cx: Rc::new(RefCell::new(RenderContext::new())),
-                scene: RefCell::new(scene),
-                taffy: RefCell::new(taffy),
-                parent_key: RefCell::new(root_key),
-                is_changed: Cell::new(false),
-                is_layout_changed: Cell::new(false),
-                canvas_update_fns: RefCell::default(),
-                listeners: Rc::default(),
-                pending_listeners: Rc::default(),
-                base_color: Cell::new(Color::WHITE),
-            }
-        });
-
         use_provider(&cx, CanvasContext::default);
 
         use_provider(&cx, FontContext::default);
@@ -195,7 +159,7 @@ unsafe impl Data for Clickable<'_> {
 
 impl State for Clickable<'_> {
     unsafe fn use_state(&self, cx: &ScopeState) {
-        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
+        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
 
         use_ref(&cx, || {
             let is_pressed = Cell::new(false);

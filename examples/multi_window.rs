@@ -11,7 +11,7 @@ impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let count = use_mut(&cx, || cx.me().start);
 
-        Window::new((
+        (
             Text::new(format!("High five count: {}", *count))
                 .font(GenericFamily::Cursive)
                 .font_size(60.),
@@ -21,8 +21,20 @@ impl Compose for Counter {
             Text::new("Down low!")
                 .on_click(move || count.update(|x| *x -= 1))
                 .background_color(Color::RED),
-        ))
-        .font_size(40.)
+        )
+            .font_size(40.)
+    }
+}
+
+#[derive(Data)]
+struct App;
+
+impl Compose for App {
+    fn compose(_cx: Scope<Self>) -> impl Compose {
+        (
+            Window::new(Counter { start: 0 }),
+            Window::new(Counter { start: 50 }),
+        )
     }
 }
 
@@ -34,5 +46,5 @@ fn main() {
     )
     .unwrap();
 
-    actuate::run(Counter { start: 0 })
+    actuate::run(App)
 }
