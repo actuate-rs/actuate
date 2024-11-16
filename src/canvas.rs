@@ -1,4 +1,4 @@
-use crate::{prelude::*, Draw, WindowContext};
+use crate::{prelude::*, Draw, LayoutContext, WindowContext};
 use std::{cell::RefCell, mem, rc::Rc};
 use taffy::{Layout, Style};
 use vello::{
@@ -29,9 +29,10 @@ impl<'a> Canvas<'a> {
 impl Compose for Canvas<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
+        let layout_cx = use_context::<LayoutContext>(&cx).unwrap();
         let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
 
-        let parent_key = *renderer_cx.parent_key.borrow();
+        let parent_key = layout_cx.parent_id;
         let key = *use_ref(&cx, || {
             let key = renderer_cx
                 .taffy

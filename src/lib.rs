@@ -44,10 +44,13 @@ pub mod prelude {
     pub use winit::window::WindowAttributes;
 }
 
+pub struct LayoutContext {
+    parent_id: NodeId,
+}
+
 pub struct WindowContext {
     scene: RefCell<Scene>,
     taffy: RefCell<TaffyTree>,
-    parent_key: RefCell<NodeId>,
     is_changed: Cell<bool>,
     is_layout_changed: Cell<bool>,
     canvas_update_fns: RefCell<HashMap<NodeId, Box<dyn Fn()>>>,

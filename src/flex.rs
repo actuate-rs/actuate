@@ -1,4 +1,4 @@
-use crate::{prelude::*, WindowContext};
+use crate::{prelude::*, LayoutContext, WindowContext};
 use taffy::{FlexDirection, Style};
 
 #[derive(Data)]
@@ -35,8 +35,10 @@ impl<C> Flex<C> {
 
 impl<C: Compose> Compose for Flex<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        let layout_cx = use_context::<LayoutContext>(&cx).unwrap();
         let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
-        use_ref(&cx, || {
+
+        use_provider(&cx, || {
             let id = renderer_cx
                 .taffy
                 .borrow_mut()
@@ -45,9 +47,9 @@ impl<C: Compose> Compose for Flex<C> {
             renderer_cx
                 .taffy
                 .borrow_mut()
-                .add_child(*renderer_cx.parent_key.borrow(), id)
+                .add_child(layout_cx.parent_id, id)
                 .unwrap();
-            *renderer_cx.parent_key.borrow_mut() = id;
+            LayoutContext { parent_id: id }
         });
 
         Ref::map(cx.me(), |me| &me.content)

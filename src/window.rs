@@ -1,4 +1,4 @@
-use crate::WindowContext;
+use crate::{LayoutContext, WindowContext};
 use actuate_core::prelude::*;
 use parley::Rect;
 use std::{
@@ -45,6 +45,7 @@ impl<C> Window<C> {
 
 impl<C: Compose> Compose for Window<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        let mut root_key_cell = None;
         let window_cx = use_provider(&cx, || {
             let mut taffy = TaffyTree::new();
             let root_key = taffy
@@ -53,6 +54,7 @@ impl<C: Compose> Compose for Window<C> {
                     ..Default::default()
                 })
                 .unwrap();
+            root_key_cell = Some(root_key);
 
             let mut scene = Scene::new();
             scene.fill(
@@ -66,7 +68,6 @@ impl<C: Compose> Compose for Window<C> {
             WindowContext {
                 scene: RefCell::new(scene),
                 taffy: RefCell::new(taffy),
-                parent_key: RefCell::new(root_key),
                 is_changed: Cell::new(false),
                 is_layout_changed: Cell::new(false),
                 canvas_update_fns: RefCell::default(),
@@ -74,6 +75,10 @@ impl<C: Compose> Compose for Window<C> {
                 pending_listeners: Rc::default(),
                 base_color: Cell::new(Color::WHITE),
             }
+        });
+
+        let layout_cx = use_provider(&cx, || LayoutContext {
+            parent_id: root_key_cell.unwrap(),
         });
 
         let render_cx = use_ref(&cx, || RefCell::new(RenderContext::new()));
@@ -137,7 +142,7 @@ impl<C: Compose> Compose for Window<C> {
                             let pos = *cursor_pos.borrow();
                             let taffy = window_cx.taffy.borrow();
 
-                            let mut keys = vec![(Vec2::default(), *window_cx.parent_key.borrow())];
+                            let mut keys = vec![(Vec2::default(), layout_cx.parent_id)];
 
                             let mut target = None;
 
@@ -243,7 +248,7 @@ impl<C: Compose> Compose for Window<C> {
                     window_cx
                         .taffy
                         .borrow_mut()
-                        .compute_layout(*window_cx.parent_key.borrow(), Size::MAX_CONTENT)
+                        .compute_layout(layout_cx.parent_id, Size::MAX_CONTENT)
                         .unwrap();
                 }
             },
