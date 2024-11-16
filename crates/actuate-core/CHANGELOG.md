@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/actuate-rs/actuate/compare/actuate-core-v0.2.2...actuate-core-v0.3.0) - 2024-11-16
+
+### Other
+
+- More efficient Canvas reactions
+- Update example and docs
+- Refactor macro for fns
+- Create ContextError struct and return Result from use_context
+- Replace Hash with new Memoize trait in use_memo
+- Create `RefMap` enum ([#27](https://github.com/actuate-rs/actuate/pull/27))
+- Fix DynCompose test case
+- Test Memo composable
+- Safely impl Compose for Map<C>
+- Impl Compose for Option<C>
+- Impl Data for fns
+- Clean up
+- Use Data macro in more places
+- Refactor macro
+- Add font size param
+- Impl ptr-based change detection for Mut
+
 ## [0.2.2](https://github.com/actuate-rs/actuate/compare/actuate-core-v0.2.1...actuate-core-v0.2.2) - 2024-11-14
 
 ### Other
