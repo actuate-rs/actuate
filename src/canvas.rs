@@ -88,12 +88,15 @@ impl Compose for Canvas<'_> {
         let layout = *renderer_cx.taffy.borrow().layout(key).unwrap();
         let mut parent_scene = renderer_cx.scene.borrow_mut();
 
-        renderer_cx.is_changed.set(true);
+        if cx.is_parent_changed() {
+            renderer_cx.is_changed.set(true);
+            return;
+        }
 
         let last_layout = use_mut(&cx, || None);
         if Some(layout) != *last_layout {
             last_layout.with(move |dst| *dst = Some(layout));
-
+            renderer_cx.is_changed.set(true);
             if last_layout.is_none() {
                 return;
             }

@@ -376,6 +376,10 @@ impl ScopeState {
     pub fn set_changed(&self) {
         self.is_changed.set(true);
     }
+
+    pub fn is_parent_changed(&self) -> bool {
+        self.is_parent_changed.get()
+    }
 }
 
 impl Drop for ScopeState {
@@ -721,7 +725,7 @@ pub unsafe trait StaticField {
 unsafe impl<T: 'static> StaticField for &&FieldWrap<T> {}
 
 /// A composable function.
-/// 
+///
 /// For a dynamically-typed composable, see [`DynCompose`].
 pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
@@ -960,6 +964,7 @@ where
 
             let child = C::compose(cx);
 
+            cx.is_parent_changed.set(false);
             if cx.state.is_empty.take() {
                 return;
             }

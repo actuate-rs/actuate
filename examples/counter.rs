@@ -27,7 +27,7 @@ impl Compose for App {
 fn main() {
     tracing::subscriber::set_global_default(
         FmtSubscriber::builder()
-            .with_max_level(LevelFilter::TRACE)
+            .with_max_level(LevelFilter::ERROR)
             .finish(),
     )
     .unwrap();
