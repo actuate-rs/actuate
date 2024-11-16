@@ -26,11 +26,12 @@ A high-performance reactive user-interface framework for Rust.
 This crate provides a generic library that lets you define UI using declarative, borrow-checker friendly syntax.
 
 ## Features
- - Efficient and borrow-checker friendly state management: Manage state with components and hooks, all using zero-cost smart pointers
- - High-performance multi-platform rendering with [Vello](https://github.com/linebender/vello)
- - CSS Block, Flex, and Grid layout support with [Taffy](https://github.com/DioxusLabs/taffy)
- - Built-in accessibility via [Accesskit](https://github.com/AccessKit/accesskit)
- - Generic core crate for custom use-cases
+
+- Efficient and borrow-checker friendly state management: Manage state with components and hooks, all using zero-cost smart pointers
+- High-performance multi-platform rendering with [Vello](https://github.com/linebender/vello)
+- CSS Block, Flex, and Grid layout support with [Taffy](https://github.com/DioxusLabs/taffy)
+- Built-in accessibility via [Accesskit](https://github.com/AccessKit/accesskit)
+- Generic core crate for custom use-cases
 
 ```rust
 use actuate::prelude::*;
@@ -48,12 +49,17 @@ impl Compose for Counter {
             Text::new(format!("High five count: {}", *count))
                 .font(GenericFamily::Cursive)
                 .font_size(60.),
-            Text::new("Up high!")
+            Text::new("Up high")
                 .on_click(move || count.update(|x| *x += 1))
                 .background_color(Color::BLUE),
-            Text::new("Down low!")
+            Text::new("Down low")
                 .on_click(move || count.update(|x| *x -= 1))
                 .background_color(Color::RED),
+            if *count == 0 {
+                Some(Text::new("Gimme five!"))
+            } else {
+                None
+            },
         ))
         .font_size(40.)
     }
@@ -65,6 +71,7 @@ fn main() {
 ```
 
 ## Inspiration
+
 This crate is inspired by [Xilem](https://github.com/linebender/xilem) and uses a similar approach to type-safe reactivity. The main difference with this crate is the concept of scopes, components store their state in their own scope and updates to that scope re-render the component.
 
 State management is inspired by React and [Dioxus](https://github.com/DioxusLabs/dioxus).
