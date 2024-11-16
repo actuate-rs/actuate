@@ -197,9 +197,10 @@ impl State for Clickable<'_> {
     unsafe fn use_state(&self, cx: &ScopeState) {
         let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
 
-        // TODO remove on drop (unsound).
         use_ref(&cx, || {
             let is_pressed = Cell::new(false);
+
+            // Safety: `f` is removed from `canvas_update_fns` on drop.
             let f: Rc<dyn Fn() + 'static> = unsafe { mem::transmute(self.on_click.clone()) };
             let f = Rc::new(move |button, state, _| {
                 if button != MouseButton::Left {

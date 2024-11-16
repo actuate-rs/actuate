@@ -71,6 +71,8 @@ impl Compose for Canvas<'_> {
                 .canvas_update_fns
                 .borrow_mut()
                 .remove(&key);
+
+            renderer_cx_handle.listeners.borrow_mut().remove(&key);
         });
 
         let last_style = use_ref(&cx, || cx.me().style.clone());
