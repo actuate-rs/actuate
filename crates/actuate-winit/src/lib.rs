@@ -1,19 +1,23 @@
 use actuate_core::{prelude::*, use_drop, Composer, Update, Updater};
-use std::{cell::RefCell, collections::HashMap, mem, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::mpsc, thread};
 use winit::{
     application::ApplicationHandler,
     event::{Event, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    event_loop::{ActiveEventLoop, EventLoop},
     window::{Window as RawWindow, WindowAttributes, WindowId},
 };
 
+struct UnsafeUpdate(Update);
+
+unsafe impl Send for UnsafeUpdate {}
+
 struct EventLoopUpdater {
-    proxy: EventLoopProxy<Update>,
+    tx: mpsc::Sender<UnsafeUpdate>,
 }
 
 impl Updater for EventLoopUpdater {
     fn update(&self, update: Update) {
-        if self.proxy.send_event(update).is_err() {
+        if self.tx.send(UnsafeUpdate(update)).is_err() {
             panic!("Failed to send update to event loop.");
         }
     }
@@ -51,7 +55,7 @@ impl Handler {
     }
 }
 
-impl ApplicationHandler<Update> for Handler {
+impl ApplicationHandler<Vec<UnsafeUpdate>> for Handler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[cfg(feature = "tracing")]
         tracing::trace!("Resumed");
@@ -63,11 +67,13 @@ impl ApplicationHandler<Update> for Handler {
         }
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Update) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, events: Vec<UnsafeUpdate>) {
         #[cfg(feature = "tracing")]
         tracing::trace!("Update");
 
-        unsafe { event.apply() };
+        for event in events {
+            unsafe { event.0.apply() };
+        }
 
         self.compose(event_loop);
 
@@ -95,7 +101,21 @@ impl ApplicationHandler<Update> for Handler {
 
 pub fn run(content: impl Compose + 'static) {
     let event_loop = EventLoop::with_user_event().build().unwrap();
+
     let proxy = event_loop.create_proxy();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        while let Ok(update) = rx.recv() {
+            let mut updates = vec![update];
+            while let Ok(next_update) = rx.try_recv() {
+                updates.push(next_update);
+            }
+
+            if proxy.send_event(updates).is_err() {
+                panic!("Failed to send update to event loop.");
+            }
+        }
+    });
 
     let cx = EventLoopContext::default();
 
@@ -105,7 +125,7 @@ pub fn run(content: impl Compose + 'static) {
                 content,
                 event_loop_cx: cx.clone(),
             },
-            EventLoopUpdater { proxy },
+            EventLoopUpdater { tx },
         ),
         cx,
     };
