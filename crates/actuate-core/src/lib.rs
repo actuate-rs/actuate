@@ -16,7 +16,8 @@ use thiserror::Error;
 pub mod prelude {
     pub use crate::{
         use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
-        DynCompose, FieldWrap, FnField, Map, Memo, Mut, Ref, Scope, StateField, StaticField,
+        DynCompose, FieldWrap, FnField, Map, Memo, Mut, Ref, Scope, ScopeState, StateField,
+        StaticField,
     };
 }
 
@@ -123,7 +124,7 @@ impl<C: Compose> Compose for RefMap<'_, C> {
         cx.is_container.set(true);
 
         let state = use_ref(&cx, || {
-            let mut state = ScopeState::default();
+            let mut state = ScopeData::default();
             state.contexts = cx.contexts.clone();
             state
         });
@@ -174,7 +175,7 @@ impl<C: Compose> Compose for Map<'_, C> {
         cx.is_container.set(true);
 
         let state = use_ref(&cx, || {
-            let mut state = ScopeState::default();
+            let mut state = ScopeData::default();
             state.contexts = cx.contexts.clone();
             state
         });
@@ -373,9 +374,11 @@ struct Contexts {
     values: HashMap<TypeId, Rc<dyn Any>>,
 }
 
+pub type ScopeState<'a> = &'a ScopeData<'a>;
+
 /// State of a composable.
 #[derive(Default)]
-pub struct ScopeState {
+pub struct ScopeData<'a> {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
     is_changed: Cell<bool>,
@@ -385,9 +388,10 @@ pub struct ScopeState {
     contexts: RefCell<Contexts>,
     drops: RefCell<Vec<usize>>,
     generation: Cell<u64>,
+    _marker: PhantomData<&'a fn(ScopeData<'a>) -> ScopeData<'a>>,
 }
 
-impl ScopeState {
+impl ScopeData<'_> {
     pub fn set_changed(&self) {
         self.is_changed.set(true);
     }
@@ -397,7 +401,7 @@ impl ScopeState {
     }
 }
 
-impl Drop for ScopeState {
+impl Drop for ScopeData<'_> {
     fn drop(&mut self) {
         for idx in &*self.drops.borrow() {
             let hooks = unsafe { &mut *self.hooks.get() };
@@ -413,7 +417,7 @@ impl Drop for ScopeState {
 /// Composable scope.
 pub struct Scope<'a, C: ?Sized> {
     me: &'a C,
-    state: &'a ScopeState,
+    state: ScopeState<'a>,
 }
 
 impl<'a, C> Scope<'a, C> {
@@ -428,7 +432,7 @@ impl<'a, C> Scope<'a, C> {
         self.me
     }
 
-    pub fn state(&self) -> &'a ScopeState {
+    pub fn state(&self) -> &'a ScopeData {
         self.state
     }
 }
@@ -445,7 +449,7 @@ impl<C> Clone for Scope<'_, C> {
 impl<C> Copy for Scope<'_, C> {}
 
 impl<'a, C> Deref for Scope<'a, C> {
-    type Target = &'a ScopeState;
+    type Target = ScopeState<'a>;
 
     fn deref(&self) -> &Self::Target {
         &self.state
@@ -455,7 +459,7 @@ impl<'a, C> Deref for Scope<'a, C> {
 /// Use an immutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
+pub fn use_ref<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> &T {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -478,7 +482,7 @@ struct MutState<T> {
 /// Use a mutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
+pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Mut<'_, T> {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -505,7 +509,7 @@ pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> M
 }
 
 pub fn use_callback<'a, T, R>(
-    cx: &'a ScopeState,
+    cx: ScopeState<'a>,
     f: impl FnMut(T) -> R + 'a,
 ) -> &'a Rc<dyn Fn(T) -> R + 'a>
 where
@@ -553,7 +557,7 @@ impl<T> fmt::Display for ContextError<T> {
 ///
 /// # Panics
 /// Panics if the context value is not found.
-pub fn use_context<T: 'static>(cx: &ScopeState) -> Result<Rc<T>, ContextError<T>> {
+pub fn use_context<T: 'static>(cx: &ScopeData) -> Result<Rc<T>, ContextError<T>> {
     let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
         return Err(ContextError {
             _marker: PhantomData,
@@ -566,7 +570,7 @@ pub fn use_context<T: 'static>(cx: &ScopeState) -> Result<Rc<T>, ContextError<T>
 /// Provide a context value of type `T`.
 ///
 /// This value will be available to [`use_context`] to all children of this composable.
-pub fn use_provider<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> Rc<T> {
+pub fn use_provider<'a, T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> Rc<T> {
     // TODO
     let r = use_ref(cx, || {
         let value = Rc::new(make_value());
@@ -604,7 +608,11 @@ impl<T> Memoize for Mut<'_, T> {
 /// Use a memoized value of type `T` with a dependency of type `D`.
 ///
 /// `make_value` will update the returned value whenver `dependency` is changed.
-pub fn use_memo<D, T>(cx: &ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
+pub fn use_memo<'a, D, T>(
+    cx: ScopeState<'_>,
+    dependency: D,
+    make_value: impl FnOnce() -> T,
+) -> Ref<T>
 where
     D: Memoize,
     T: 'static,
@@ -630,7 +638,7 @@ where
     value_mut.as_ref()
 }
 
-pub fn use_drop<'a>(cx: &'a ScopeState, f: impl FnOnce() + 'static) {
+pub fn use_drop<'a>(cx: ScopeState<'_>, f: impl FnOnce() + 'static) {
     let mut f_cell = Some(f);
 
     use_ref(cx, || {
@@ -771,14 +779,14 @@ impl<C: Compose> Compose for Option<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_container.set(true);
 
-        let state_cell: &RefCell<Option<ScopeState>> = use_ref(&cx, || RefCell::new(None));
+        let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
 
         if let Some(content) = &*cx.me() {
             if let Some(state) = &*state_cell.borrow() {
                 state.is_parent_changed.set(cx.is_parent_changed.get());
                 content.any_compose(state);
             } else {
-                let mut state = ScopeState::default();
+                let mut state = ScopeData::default();
                 state.contexts = cx.contexts.clone();
                 *state_cell.borrow_mut() = Some(state);
                 content.any_compose(&*state_cell.borrow().as_ref().unwrap());
@@ -858,7 +866,7 @@ impl<'a> Compose for DynCompose<'a> {
 
         let inner = unsafe { &mut *cx.me().compose.get() };
 
-        let child_state = use_ref(&cx, ScopeState::default);
+        let child_state = use_ref(&cx, ScopeData::default);
 
         *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
         child_state
@@ -902,7 +910,7 @@ macro_rules! impl_tuples {
 
                 $(
                     let state = use_ref(&cx, || {
-                        ScopeState::default()
+                        ScopeData::default()
                     });
 
                     *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
@@ -940,7 +948,7 @@ trait AnyCompose {
 
     unsafe fn reborrow(&mut self, ptr: *mut ());
 
-    fn any_compose<'a>(&'a self, state: &'a ScopeState);
+    fn any_compose(&self, state: &ScopeData);
 
     #[cfg(feature = "tracing")]
     fn name(&self) -> std::borrow::Cow<'static, str>;
@@ -962,15 +970,20 @@ where
         std::ptr::swap(self, ptr as _);
     }
 
-    fn any_compose<'a>(&'a self, state: &'a ScopeState) {
+    fn any_compose(&self, state: &ScopeData) {
         state.hook_idx.set(0);
 
-        let cx = Scope { me: self, state };
+        // Transmute the lifetime of `&Self`, `&ScopeData`, and the `Scope` containing both to the same`'a`.
+        let cx: Scope<'_, C> = Scope {
+            me: unsafe { mem::transmute(self) },
+            state: unsafe { mem::transmute(state) },
+        };
+        let cx: Scope<'_, C> = unsafe { mem::transmute(cx) };
 
         let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
-        let child_state = use_ref(&cx, ScopeState::default);
+        let child_state = use_ref(&cx, ScopeData::default);
 
         if cell.is_none()
             || cx.is_changed.take()
@@ -1032,7 +1045,7 @@ impl Updater for DefaultUpdater {
 /// Composer for composable content.
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
-    scope_state: Box<ScopeState>,
+    scope_state: Box<ScopeData<'static>>,
     rt: Runtime,
 }
 
@@ -1047,7 +1060,7 @@ impl Composer {
         let updater = Rc::new(updater);
         Self {
             compose: Box::new(content),
-            scope_state: Box::new(ScopeState::default()),
+            scope_state: Box::new(ScopeData::default()),
             rt: Runtime {
                 updater: updater.clone(),
             },
@@ -1058,10 +1071,7 @@ impl Composer {
     pub fn compose(&mut self) {
         self.rt.enter();
 
-        self.compose.any_compose(&Scope {
-            me: &self.compose,
-            state: &self.scope_state,
-        });
+        self.compose.any_compose(&*self.scope_state);
     }
 }
 

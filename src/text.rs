@@ -1,5 +1,5 @@
 use crate::Canvas;
-use actuate_core::{prelude::*, ScopeState};
+use actuate_core::prelude::*;
 use parley::{
     Alignment, FontFamily, FontStack, GenericFamily, LayoutContext, PositionedLayoutItem,
     StyleProperty,
@@ -18,7 +18,7 @@ pub struct FontContext {
     inner: RefCell<parley::FontContext>,
 }
 
-pub fn use_font<R>(cx: &ScopeState, make_font: impl FnOnce() -> R)
+pub fn use_font<'a, R>(cx: ScopeState<'_>, make_font: impl FnOnce() -> R)
 where
     R: Into<Vec<u8>>,
 {

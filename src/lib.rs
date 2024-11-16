@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, ScopeState};
+use actuate_core::prelude::*;
 use canvas::CanvasContext;
 use parley::{FontStack, Rect};
 use std::{
@@ -115,7 +115,7 @@ pub trait View: Compose {
 impl<C: Compose> View for C {}
 
 pub trait State {
-    unsafe fn use_state(&self, cx: &ScopeState);
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>);
 }
 
 pub struct WithState<T, C> {
@@ -135,7 +135,7 @@ unsafe impl<T: Data, C: Data> Data for WithState<T, C> {
 
 impl<T: State + Data, C: Compose> Compose for WithState<T, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        unsafe { cx.me().state.use_state(&cx) }
+        unsafe { cx.me().state.use_state(mem::transmute(&**cx)) }
 
         Ref::map(cx.me(), |me| &me.content)
     }
@@ -158,10 +158,10 @@ unsafe impl Data for Clickable<'_> {
 }
 
 impl State for Clickable<'_> {
-    unsafe fn use_state(&self, cx: &ScopeState) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
 
-        use_ref(&cx, || {
+        use_ref(cx, || {
             let is_pressed = Cell::new(false);
 
             // Safety: `f` is removed from `canvas_update_fns` on drop.
@@ -189,7 +189,7 @@ pub struct FontSize {
 }
 
 impl State for FontSize {
-    unsafe fn use_state(&self, cx: &ScopeState) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let text_cx = use_context::<TextContext>(&cx).unwrap();
 
         use_provider(&cx, || TextContext {
@@ -206,10 +206,10 @@ pub struct FontStackState {
 }
 
 impl State for FontStackState {
-    unsafe fn use_state(&self, cx: &ScopeState) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let text_cx = use_context::<TextContext>(&cx).unwrap();
 
-        use_provider(&cx, || TextContext {
+        use_provider(cx, || TextContext {
             color: text_cx.color,
             font_size: text_cx.font_size,
             font_stack: self.font_stack.clone(),
@@ -246,7 +246,7 @@ unsafe impl<T: Data> Data for DrawState<T> {
 }
 
 impl<T: Draw + 'static> State for DrawState<T> {
-    unsafe fn use_state(&self, cx: &ScopeState) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
 
         let draw = self.draw.clone();
