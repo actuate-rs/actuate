@@ -105,7 +105,9 @@ impl<C: Compose> Compose for RenderRoot<C> {
         use_provider(&cx, CanvasContext::default);
 
         use_provider(&cx, FontContext::default);
-        use_provider(&cx, TextContext::default);
+
+        let text_context = use_context::<TextContext>(&cx).map(|rc| (*rc).clone());
+        use_provider(&cx, || text_context.unwrap_or_default());
 
         Ref::map(cx.me(), |me| &me.content)
     }
