@@ -15,7 +15,7 @@ use thiserror::Error;
 
 pub mod prelude {
     pub use crate::{
-        use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,use_drop,
+        use_context, use_drop, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
         DynCompose, FieldWrap, FnField, Map, Memo, Mut, Ref, Scope, ScopeState, StateField,
         StaticField,
     };
@@ -664,12 +664,21 @@ unsafe impl Data for () {
     type Id = ();
 }
 
+// TODO
+unsafe impl Data for i32 {
+    type Id = i32;
+}
+
 unsafe impl Data for String {
     type Id = Self;
 }
 
 unsafe impl Data for &str {
     type Id = &'static str;
+}
+
+unsafe impl<T: Data> Data for Vec<T> {
+    type Id = Vec<T::Id>;
 }
 
 unsafe impl<T: ?Sized + Data> Data for &T {
@@ -798,6 +807,64 @@ impl<C: Compose> Compose for Option<C> {
             }
         } else {
             *state_cell = None;
+        }
+    }
+}
+
+pub fn from_iter<'a, I, C>(iter: I, f: impl Fn(I::Item) -> C + 'a) -> FromIter<'a, I, I::Item, C>
+where
+    I: IntoIterator + Clone + Data,
+    I::Item: Clone + Data,
+    C: Compose,
+{
+    FromIter {
+        iter,
+        f: Box::new(f),
+    }
+}
+
+pub struct FromIter<'a, I, Item, C> {
+    iter: I,
+    f: Box<dyn Fn(Item) -> C + 'a>,
+}
+
+unsafe impl<I, Item, C> Data for FromIter<'_, I, Item, C>
+where
+    I: Data,
+    Item: Data,
+    C: Data,
+{
+    type Id = FromIter<'static, I::Id, Item::Id, C::Id>;
+}
+
+impl<I, Item, C> Compose for FromIter<'_, I, Item, C>
+where
+    I: IntoIterator<Item = Item> + Clone + Data,
+    Item: Clone + Data,
+    C: Compose,
+{
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        cx.is_container.set(true);
+
+        let states = use_ref(&cx, || RefCell::new(Vec::new()));
+        let mut states = states.borrow_mut();
+
+        let items: Vec<_> = cx.me().iter.clone().into_iter().collect();
+        if items.len() >= states.len() {
+            for _ in states.len()..items.len() {
+                states.push(ScopeData::default());
+            }
+        } else {
+            for _ in items.len()..states.len() {
+                states.pop();
+            }
+        }
+
+        for (item, state) in items.into_iter().zip(&*states) {
+            *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+            state.is_parent_changed.set(cx.is_parent_changed.get());
+
+            unsafe { (cx.me().f)(item).any_compose(state) }
         }
     }
 }

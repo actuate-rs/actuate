@@ -31,6 +31,7 @@ impl Compose for Canvas<'_> {
         let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
         let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
 
+        let parent_key = *renderer_cx.parent_key.borrow();
         let key = *use_ref(&cx, || {
             let key = renderer_cx
                 .taffy
@@ -40,7 +41,7 @@ impl Compose for Canvas<'_> {
             renderer_cx
                 .taffy
                 .borrow_mut()
-                .add_child(*renderer_cx.parent_key.borrow(), key)
+                .add_child(parent_key, key)
                 .unwrap();
 
             renderer_cx.is_layout_changed.set(true);
@@ -61,6 +62,7 @@ impl Compose for Canvas<'_> {
         });
 
         // Safety: We must remove `f` here to make the above valid.
+
         let renderer_cx_handle = renderer_cx.clone();
         use_drop(&cx, move || {
             renderer_cx_handle
@@ -68,6 +70,7 @@ impl Compose for Canvas<'_> {
                 .borrow_mut()
                 .remove(&key);
 
+            renderer_cx_handle.taffy.borrow_mut().remove(key).unwrap();
             renderer_cx_handle.listeners.borrow_mut().remove(&key);
         });
 
