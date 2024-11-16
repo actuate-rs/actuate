@@ -782,9 +782,10 @@ impl<C: Compose> Compose for Option<C> {
         cx.is_container.set(true);
 
         let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
+        let mut state_cell = state_cell.borrow_mut();
 
         if let Some(content) = &*cx.me() {
-            if let Some(state) = &*state_cell.borrow() {
+            if let Some(state) = &*state_cell {
                 state.is_parent_changed.set(cx.is_parent_changed.get());
                 unsafe {
                     content.any_compose(state);
@@ -792,13 +793,13 @@ impl<C: Compose> Compose for Option<C> {
             } else {
                 let mut state = ScopeData::default();
                 state.contexts = cx.contexts.clone();
-                *state_cell.borrow_mut() = Some(state);
+                *state_cell = Some(state);
                 unsafe {
-                    content.any_compose(&*state_cell.borrow().as_ref().unwrap());
+                    content.any_compose(&*state_cell.as_ref().unwrap());
                 }
             }
         } else {
-            *state_cell.borrow_mut() = None;
+            *state_cell = None;
         }
     }
 }

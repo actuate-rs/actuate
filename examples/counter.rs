@@ -3,6 +3,15 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Data)]
+struct A;
+
+impl Compose for A {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        dbg!("A");
+    }
+}
+
+#[derive(Data)]
 struct Counter {
     start: i32,
 }
@@ -21,18 +30,16 @@ impl Compose for Counter {
             Text::new("Down low!")
                 .on_click(move || count.update(|x| *x -= 1))
                 .background_color(Color::RED),
+            if *count == 1 {
+                Some(A)
+            } else {
+                None
+            }
         ))
         .font_size(40.)
     }
 }
 
 fn main() {
-    tracing::subscriber::set_global_default(
-        FmtSubscriber::builder()
-            .with_max_level(LevelFilter::TRACE)
-            .finish(),
-    )
-    .unwrap();
-
     actuate::run(Counter { start: 0 })
 }
