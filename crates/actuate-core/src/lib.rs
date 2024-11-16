@@ -222,11 +222,11 @@ impl<T: ?Sized> Clone for Ref<'_, T> {
 
 impl<T: ?Sized> Copy for Ref<'_, T> {}
 
-impl<T: ?Sized> Deref for Ref<'_, T> {
-    type Target = T;
+impl<'a, T: ?Sized> Deref for Ref<'a, T> {
+    type Target = &'a T;
 
     fn deref(&self) -> &Self::Target {
-        self.value
+        &self.value
     }
 }
 

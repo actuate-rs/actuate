@@ -50,6 +50,6 @@ impl<C: Compose> Compose for Flex<C> {
             *renderer_cx.parent_key.borrow_mut() = id;
         });
 
-        Ref::map(cx.me(), |me| &me.content)
+        &cx.me().content
     }
 }
