@@ -1,4 +1,4 @@
-use crate::{prelude::*, RendererContext};
+use crate::{prelude::*, WindowContext};
 use taffy::{FlexDirection, Style};
 
 #[derive(Data)]
@@ -35,7 +35,7 @@ impl<C> Flex<C> {
 
 impl<C: Compose> Compose for Flex<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
+        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
         use_ref(&cx, || {
             let id = renderer_cx
                 .taffy

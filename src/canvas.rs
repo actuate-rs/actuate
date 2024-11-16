@@ -1,4 +1,4 @@
-use crate::{prelude::*, Draw, RendererContext};
+use crate::{prelude::*, Draw, WindowContext};
 use actuate_core::use_drop;
 use std::{cell::RefCell, mem, rc::Rc};
 use taffy::{Layout, Style};
@@ -33,7 +33,7 @@ unsafe impl Data for Canvas<'_> {
 impl Compose for Canvas<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
-        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
+        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
 
         let key = *use_ref(&cx, || {
             let key = renderer_cx

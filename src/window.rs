@@ -1,18 +1,19 @@
-use crate::RendererContext;
+use crate::WindowContext;
 use actuate_core::prelude::*;
 use parley::Rect;
 use std::{
     cell::{Cell, RefCell},
     mem,
     num::NonZeroUsize,
+    rc::Rc,
 };
-use taffy::{prelude::TaffyMaxContent, Size};
+use taffy::{prelude::TaffyMaxContent, FlexDirection, Size, Style, TaffyTree};
 use vello::{
     self,
     kurbo::{Affine, Vec2},
     peniko::{Color, Fill},
-    util::RenderSurface,
-    wgpu, AaConfig, RenderParams, Renderer, RendererOptions,
+    util::{RenderContext, RenderSurface},
+    wgpu, AaConfig, RenderParams, Renderer, RendererOptions, Scene,
 };
 use wgpu::PresentMode;
 use winit::{
@@ -44,7 +45,38 @@ impl<C> Window<C> {
 
 impl<C: Compose> Compose for Window<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let renderer_cx = use_context::<RendererContext>(&cx).unwrap();
+        let window_cx = use_provider(&cx, || {
+            let mut taffy = TaffyTree::new();
+            let root_key = taffy
+                .new_leaf(Style {
+                    flex_direction: FlexDirection::Column,
+                    ..Default::default()
+                })
+                .unwrap();
+
+            let mut scene = Scene::new();
+            scene.fill(
+                Fill::NonZero,
+                Affine::default(),
+                Color::BLACK,
+                None,
+                &Rect::new(0., 0., 500., 500.),
+            );
+
+            WindowContext {
+                scene: RefCell::new(scene),
+                taffy: RefCell::new(taffy),
+                parent_key: RefCell::new(root_key),
+                is_changed: Cell::new(false),
+                is_layout_changed: Cell::new(false),
+                canvas_update_fns: RefCell::default(),
+                listeners: Rc::default(),
+                pending_listeners: Rc::default(),
+                base_color: Cell::new(Color::WHITE),
+            }
+        });
+
+        let render_cx = use_ref(&cx, || RefCell::new(RenderContext::new()));
 
         let cursor_pos = use_ref(&cx, RefCell::default);
 
@@ -56,10 +88,10 @@ impl<C: Compose> Compose for Window<C> {
             WindowAttributes::default(),
             move |window, event| {
                 if is_first.get() {
-                    renderer_cx.scene.borrow_mut().fill(
+                    window_cx.scene.borrow_mut().fill(
                         Fill::NonZero,
                         Affine::default(),
-                        renderer_cx.base_color.get(),
+                        window_cx.base_color.get(),
                         None,
                         &Rect::new(
                             0.,
@@ -73,17 +105,16 @@ impl<C: Compose> Compose for Window<C> {
 
                 match event {
                     Event::Resumed => {
-                        let surface =
-                            pollster::block_on(renderer_cx.cx.borrow_mut().create_surface(
-                                window,
-                                window.inner_size().width,
-                                window.inner_size().height,
-                                PresentMode::AutoVsync,
-                            ))
-                            .unwrap();
+                        let surface = pollster::block_on(render_cx.borrow_mut().create_surface(
+                            window,
+                            window.inner_size().width,
+                            window.inner_size().height,
+                            PresentMode::AutoVsync,
+                        ))
+                        .unwrap();
 
                         let renderer = Renderer::new(
-                            &renderer_cx.cx.borrow().devices[surface.dev_id].device,
+                            &render_cx.borrow().devices[surface.dev_id].device,
                             RendererOptions {
                                 surface_format: Some(surface.format),
                                 use_cpu: false,
@@ -104,10 +135,9 @@ impl<C: Compose> Compose for Window<C> {
                         }
                         WindowEvent::MouseInput { button, state, .. } => {
                             let pos = *cursor_pos.borrow();
-                            let taffy = renderer_cx.taffy.borrow();
+                            let taffy = window_cx.taffy.borrow();
 
-                            let mut keys =
-                                vec![(Vec2::default(), *renderer_cx.parent_key.borrow())];
+                            let mut keys = vec![(Vec2::default(), *window_cx.parent_key.borrow())];
 
                             let mut target = None;
 
@@ -142,7 +172,7 @@ impl<C: Compose> Compose for Window<C> {
                             }
 
                             if let Some(key) = target {
-                                if let Some(listeners) = renderer_cx.listeners.borrow().get(&key) {
+                                if let Some(listeners) = window_cx.listeners.borrow().get(&key) {
                                     for f in listeners {
                                         f(*button, *state, *cursor_pos.borrow())
                                     }
@@ -159,9 +189,9 @@ impl<C: Compose> Compose for Window<C> {
 
                             let texture =
                                 state.render_surface.surface.get_current_texture().unwrap();
-                            let mut scene = renderer_cx.scene.borrow_mut();
+                            let mut scene = window_cx.scene.borrow_mut();
                             let device_handle =
-                                &renderer_cx.cx.borrow().devices[state.render_surface.dev_id];
+                                &render_cx.borrow().devices[state.render_surface.dev_id];
 
                             state
                                 .renderer
@@ -186,7 +216,7 @@ impl<C: Compose> Compose for Window<C> {
                             scene.fill(
                                 Fill::NonZero,
                                 Affine::default(),
-                                renderer_cx.base_color.get(),
+                                window_cx.base_color.get(),
                                 None,
                                 &Rect::new(
                                     0.,
@@ -201,19 +231,19 @@ impl<C: Compose> Compose for Window<C> {
                     _ => {}
                 }
 
-                if renderer_cx.is_changed.take() {
+                if window_cx.is_changed.take() {
                     window.request_redraw();
 
-                    for f in renderer_cx.canvas_update_fns.borrow().values() {
+                    for f in window_cx.canvas_update_fns.borrow().values() {
                         f()
                     }
                 }
 
-                if renderer_cx.is_layout_changed.take() {
-                    renderer_cx
+                if window_cx.is_layout_changed.take() {
+                    window_cx
                         .taffy
                         .borrow_mut()
-                        .compute_layout(*renderer_cx.parent_key.borrow(), Size::MAX_CONTENT)
+                        .compute_layout(*window_cx.parent_key.borrow(), Size::MAX_CONTENT)
                         .unwrap();
                 }
             },
