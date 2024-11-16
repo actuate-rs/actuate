@@ -124,9 +124,10 @@ pub struct EventLoopContext {
     inner: Rc<RefCell<Inner>>,
 }
 
+#[derive(Data)]
 pub struct Window<'a, C> {
     window_attributes: WindowAttributes,
-    on_event: Rc<dyn Fn(&RawWindow, &Event<()>) + 'a>,
+    on_event: Box<dyn Fn(&RawWindow, &Event<()>) + 'a>,
     content: C,
 }
 
@@ -138,15 +139,10 @@ impl<'a, C> Window<'a, C> {
     ) -> Self {
         Self {
             window_attributes,
-            on_event: Rc::new(on_event),
+            on_event: Box::new(on_event),
             content,
         }
     }
-}
-
-// TODO
-unsafe impl<C: Data> Data for Window<'_, C> {
-    type Id = Window<'static, C::Id>;
 }
 
 impl<C: Compose> Compose for Window<'_, C> {
@@ -175,7 +171,7 @@ impl<C: Compose> Compose for Window<'_, C> {
             drop_inner.borrow_mut().handler_fns.remove(&id);
         });
 
-        let on_event = cx.me().on_event.clone();
+        let on_event = &*cx.me().on_event;
         let on_event: Rc<dyn Fn(&Event<()>)> = Rc::new(move |event| on_event(window, event));
         let on_event: Rc<dyn Fn(&Event<()>)> = unsafe { mem::transmute(on_event) };
 

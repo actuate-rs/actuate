@@ -16,7 +16,7 @@ use thiserror::Error;
 pub mod prelude {
     pub use crate::{
         use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
-        DynCompose, FieldWrap, Map, Memo, Mut, Ref, Scope, StateField, StaticField,
+        DynCompose, FieldWrap, FnField, Map, Memo, Mut, Ref, Scope, StateField, StaticField,
     };
 }
 
@@ -652,27 +652,6 @@ unsafe impl<T: Data> Data for Option<T> {
     type Id = Option<T::Id>;
 }
 
-macro_rules! impl_data_for_fns {
-    ($($t:tt),*) => {
-        unsafe impl<$($t,)* R> Data for &dyn Fn($($t),*) -> R {
-            type Id = &'static dyn Fn();
-        }
-
-        unsafe impl<$($t,)* R> Data for Box<dyn Fn($($t),*) -> R + '_>{
-            type Id = Box<dyn Fn()>;
-        }
-    }
-}
-
-impl_data_for_fns!(T1);
-impl_data_for_fns!(T1, T2);
-impl_data_for_fns!(T1, T2, T3);
-impl_data_for_fns!(T10, T2, T3, T4);
-impl_data_for_fns!(T1, T2, T3, T4, T5);
-impl_data_for_fns!(T1, T2, T3, T4, T5, T6);
-impl_data_for_fns!(T1, T2, T3, T4, T5, T6, T7);
-impl_data_for_fns!(T1, T2, T3, T4, T5, T6, T7, T8);
-
 unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
     type Id = PhantomData<Ref<'static, T::Id>>;
 }
@@ -699,6 +678,29 @@ pub unsafe trait StateField {
 }
 
 unsafe impl<T: 'static> StateField for FieldWrap<&T> {}
+
+#[doc(hidden)]
+pub unsafe trait FnField<Marker> {
+    fn check(&self) {
+        let _ = self;
+    }
+}
+
+macro_rules! impl_data_for_fns {
+    ($($t:tt),*) => {
+        unsafe impl<$($t,)* F: Fn($($t,)*)> FnField<fn($($t,)*)> for &FieldWrap<F> {}
+    }
+}
+
+impl_data_for_fns!();
+impl_data_for_fns!(T1);
+impl_data_for_fns!(T1, T2);
+impl_data_for_fns!(T1, T2, T3);
+impl_data_for_fns!(T1, T2, T3, T4);
+impl_data_for_fns!(T1, T2, T3, T4, T5);
+impl_data_for_fns!(T1, T2, T3, T4, T5, T6);
+impl_data_for_fns!(T1, T2, T3, T4, T5, T6, T7);
+impl_data_for_fns!(T1, T2, T3, T4, T5, T6, T7, T8);
 
 #[doc(hidden)]
 pub unsafe trait DataField {
