@@ -455,19 +455,21 @@ impl<'a, C> Deref for Scope<'a, C> {
 /// Use an immutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
+pub fn use_ref<'a, T: 'a>(cx: &'a ScopeState, make_value: impl FnOnce() -> T) -> &'a T {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
     cx.hook_idx.set(idx + 1);
 
     let any = if idx >= hooks.len() {
-        hooks.push(Box::new(make_value()));
+        let b = Box::new(make_value());
+        hooks.push(unsafe { core::mem::transmute::<Box<T>, Box<()>>(b) });
         hooks.last().unwrap()
     } else {
         hooks.get(idx).unwrap()
     };
-    (**any).downcast_ref().unwrap()
+    let b = (**any).downcast_ref::<()>().unwrap();
+    unsafe { core::mem::transmute::<&(), &T>(b) }
 }
 
 struct MutState<T> {
@@ -967,7 +969,7 @@ where
 
         let cx = Scope { me: self, state };
 
-        let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
+        let cell: &UnsafeCell<Option<_>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
         let child_state = use_ref(&cx, ScopeState::default);
@@ -992,14 +994,7 @@ where
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
             child_state.is_parent_changed.set(true);
 
-            unsafe {
-                if let Some(ref mut content) = cell {
-                    child.reborrow((**content).as_ptr_mut());
-                } else {
-                    let boxed: Box<dyn AnyCompose> = Box::new(child);
-                    *cell = Some(mem::transmute(boxed));
-                }
-            }
+            *cell = Some(child);
         } else {
             child_state.is_parent_changed.set(false);
         }
