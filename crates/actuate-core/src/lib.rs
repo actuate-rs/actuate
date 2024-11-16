@@ -534,29 +534,51 @@ pub fn use_provider<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T)
     (*r).clone()
 }
 
+pub trait Memoize {
+    type Value: PartialEq + 'static;
+
+    fn memoized(self) -> Self::Value;
+}
+
+impl<T: PartialEq + 'static> Memoize for T {
+    type Value = T;
+
+    fn memoized(self) -> Self::Value {
+        self
+    }
+}
+
+impl<T> Memoize for Mut<'_, T> {
+    type Value = u64;
+
+    fn memoized(self) -> Self::Value {
+        unsafe { &*self.generation }.get()
+    }
+}
+
 /// Use a memoized value of type `T` with a dependency of type `D`.
 ///
 /// `make_value` will update the returned value whenver `dependency` is changed.
 pub fn use_memo<D, T>(cx: &ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
 where
-    D: Hash,
+    D: Memoize,
     T: 'static,
 {
-    let mut hasher = DefaultHasher::new();
-    dependency.hash(&mut hasher);
-    let hash = hasher.finish();
+    let mut dependency_cell = Some(dependency.memoized());
 
     let mut make_value_cell = Some(make_value);
     let value_mut = use_mut(cx, || make_value_cell.take().unwrap()());
 
-    let hash_mut = use_mut(cx, || hash);
+    let hash_mut = use_mut(cx, || dependency_cell.take().unwrap());
 
     if let Some(make_value) = make_value_cell {
-        if hash != *hash_mut {
-            let value = make_value();
-            value_mut.with(move |update| *update = value);
+        if let Some(dependency) = dependency_cell.take() {
+            if dependency != *hash_mut {
+                let value = make_value();
+                value_mut.with(move |update| *update = value);
 
-            hash_mut.with(move |dst| *dst = hash);
+                hash_mut.with(move |dst| *dst = dependency);
+            }
         }
     }
 

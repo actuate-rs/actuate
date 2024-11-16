@@ -55,6 +55,7 @@ impl<'a> IntoFontStack<'a> for GenericFamily {
     }
 }
 
+#[derive(Clone, PartialEq)]
 pub struct TextContext {
     pub color: Color,
     pub font_size: f32,
@@ -93,8 +94,7 @@ where
         let text_cx = use_context::<TextContext>(&cx);
         let content = format!("{}", cx.me().content);
 
-        // TODO font_size
-        let text_layout = use_memo(&cx, (&content, text_cx.color), || {
+        let text_layout = use_memo(&cx, (content.clone(), text_cx.clone()), || {
             let mut font_cx = font_cx.inner.borrow_mut();
 
             let mut layout_cx = LayoutContext::<Color>::new();

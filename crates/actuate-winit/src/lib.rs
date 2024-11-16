@@ -163,7 +163,7 @@ impl<C: Compose> Compose for Window<'_, C> {
                 .unwrap()
         });
 
-        use_memo(&cx, &cx.me().window_attributes.title, || {
+        use_memo(&cx, cx.me().window_attributes.title.clone(), || {
             window.set_title(&cx.me().window_attributes.title);
         });
 
