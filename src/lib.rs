@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, ScopeState};
+use actuate_core::prelude::*;
 use canvas::CanvasContext;
 use parley::{FontStack, Rect};
 use std::{
@@ -115,7 +115,7 @@ pub trait View: Compose {
 impl<C: Compose> View for C {}
 
 pub trait State {
-    unsafe fn use_state<'a>(&'a self, cx: &'a ScopeState<'a>);
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>);
 }
 
 pub struct WithState<T, C> {
@@ -158,7 +158,7 @@ unsafe impl Data for Clickable<'_> {
 }
 
 impl State for Clickable<'_> {
-    unsafe fn use_state<'a>(&'a self, cx: &'a ScopeState<'a>) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
 
         use_ref(cx, || {
@@ -189,7 +189,7 @@ pub struct FontSize {
 }
 
 impl State for FontSize {
-    unsafe fn use_state<'a>(&'a self, cx: &'a ScopeState<'a>) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let text_cx = use_context::<TextContext>(&cx).unwrap();
 
         use_provider(&cx, || TextContext {
@@ -206,7 +206,7 @@ pub struct FontStackState {
 }
 
 impl State for FontStackState {
-    unsafe fn use_state<'a>(&'a self, cx: &'a ScopeState<'a>) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let text_cx = use_context::<TextContext>(&cx).unwrap();
 
         use_provider(cx, || TextContext {
@@ -246,7 +246,7 @@ unsafe impl<T: Data> Data for DrawState<T> {
 }
 
 impl<T: Draw + 'static> State for DrawState<T> {
-    unsafe fn use_state<'a>(&'a self, cx: &'a ScopeState<'a>) {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
         let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
 
         let draw = self.draw.clone();
