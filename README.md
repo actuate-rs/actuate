@@ -45,7 +45,7 @@ impl Compose for App {
         Window::new((
             Text::new(format!("High five count: {}", *count))
                 .font(GenericFamily::Cursive)
-                .font_size(100.),
+                .font_size(60.),
             Text::new("Up high!")
                 .on_click(move || count.update(|x| *x += 1))
                 .background_color(Color::BLUE),
@@ -53,7 +53,7 @@ impl Compose for App {
                 .on_click(move || count.update(|x| *x -= 1))
                 .background_color(Color::RED),
         ))
-        .font_size(50.)
+        .font_size(40.)
     }
 }
 

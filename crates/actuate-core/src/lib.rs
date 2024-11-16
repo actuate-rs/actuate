@@ -721,6 +721,8 @@ pub unsafe trait StaticField {
 unsafe impl<T: 'static> StaticField for &&FieldWrap<T> {}
 
 /// A composable function.
+/// 
+/// For a dynamically-typed composable, see [`DynCompose`].
 pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
 
