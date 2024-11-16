@@ -131,7 +131,7 @@ impl<C: Compose> Compose for RefMap<'_, C> {
 
         state.is_parent_changed.set(cx.is_parent_changed.get());
 
-        (**cx.me()).any_compose(state);
+        unsafe { (**cx.me()).any_compose(state) }
     }
 }
 
@@ -182,7 +182,7 @@ impl<C: Compose> Compose for Map<'_, C> {
 
         state.is_parent_changed.set(cx.is_parent_changed.get());
 
-        (**cx.me()).any_compose(state);
+        unsafe { (**cx.me()).any_compose(state) }
     }
 
     #[cfg(feature = "tracing")]
@@ -771,7 +771,9 @@ impl Compose for () {
 
 impl<C: Compose> Compose for &C {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        (**cx.me()).any_compose(&cx);
+        unsafe {
+            (**cx.me()).any_compose(&cx);
+        }
     }
 }
 
@@ -784,12 +786,16 @@ impl<C: Compose> Compose for Option<C> {
         if let Some(content) = &*cx.me() {
             if let Some(state) = &*state_cell.borrow() {
                 state.is_parent_changed.set(cx.is_parent_changed.get());
-                content.any_compose(state);
+                unsafe {
+                    content.any_compose(state);
+                }
             } else {
                 let mut state = ScopeData::default();
                 state.contexts = cx.contexts.clone();
                 *state_cell.borrow_mut() = Some(state);
-                content.any_compose(&*state_cell.borrow().as_ref().unwrap());
+                unsafe {
+                    content.any_compose(&*state_cell.borrow().as_ref().unwrap());
+                }
             }
         } else {
             *state_cell.borrow_mut() = None;
@@ -894,7 +900,7 @@ impl<'a> Compose for DynCompose<'a> {
             }
         }
 
-        cell.as_mut().unwrap().compose.any_compose(child_state);
+        unsafe { cell.as_mut().unwrap().compose.any_compose(child_state) }
     }
 }
 
@@ -916,7 +922,7 @@ macro_rules! impl_tuples {
                     *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
                     state.is_parent_changed.set(cx.is_parent_changed.get());
 
-                    cx.me().$idx.any_compose(state);
+                    unsafe { cx.me().$idx.any_compose(state) }
                 )*
             }
 
@@ -948,7 +954,7 @@ trait AnyCompose {
 
     unsafe fn reborrow(&mut self, ptr: *mut ());
 
-    fn any_compose(&self, state: &ScopeData);
+    unsafe fn any_compose(&self, state: &ScopeData);
 
     #[cfg(feature = "tracing")]
     fn name(&self) -> std::borrow::Cow<'static, str>;
@@ -970,7 +976,7 @@ where
         std::ptr::swap(self, ptr as _);
     }
 
-    fn any_compose(&self, state: &ScopeData) {
+    unsafe fn any_compose(&self, state: &ScopeData) {
         state.hook_idx.set(0);
 
         // Transmute the lifetime of `&Self`, `&ScopeData`, and the `Scope` containing both to the same`'a`.
@@ -1071,7 +1077,7 @@ impl Composer {
     pub fn compose(&mut self) {
         self.rt.enter();
 
-        self.compose.any_compose(&*self.scope_state);
+        unsafe { self.compose.any_compose(&*self.scope_state) }
     }
 }
 
