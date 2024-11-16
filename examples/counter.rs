@@ -3,11 +3,13 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Data)]
-struct App;
+struct Counter {
+    start: i32,
+}
 
-impl Compose for App {
+impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let count = use_mut(&cx, || 0);
+        let count = use_mut(&cx, || cx.me().start);
 
         Window::new((
             Text::new(format!("High five count: {}", *count))
@@ -32,5 +34,5 @@ fn main() {
     )
     .unwrap();
 
-    actuate::run(App)
+    actuate::run(Counter { start: 0 })
 }
