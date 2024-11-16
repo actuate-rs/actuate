@@ -977,9 +977,6 @@ where
             || cx.is_parent_changed.get()
             || cx.is_container.get()
         {
-            #[cfg(feature = "tracing")]
-            tracing::trace!("Compose::compose: {}", self.name());
-
             let child = C::compose(cx);
 
             cx.is_parent_changed.set(false);
@@ -987,28 +984,24 @@ where
                 return;
             }
 
+            #[cfg(feature = "tracing")]
+            if !cx.is_container.get() {
+                tracing::trace!("Compose::compose: {}", self.name());
+            }
+
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
             child_state.is_parent_changed.set(true);
 
             unsafe {
                 if let Some(ref mut content) = cell {
-                    #[cfg(feature = "tracing")]
-                    tracing::trace!("Reborrow composable");
-
                     child.reborrow((**content).as_ptr_mut());
                 } else {
-                    #[cfg(feature = "tracing")]
-                    tracing::trace!("Allocate new composable");
-
                     let boxed: Box<dyn AnyCompose> = Box::new(child);
                     *cell = Some(mem::transmute(boxed));
                 }
             }
         } else {
             child_state.is_parent_changed.set(false);
-
-            #[cfg(feature = "tracing")]
-            tracing::trace!("Skip: {}", self.name());
         }
 
         let child = cell.as_mut().unwrap();
@@ -1017,7 +1010,7 @@ where
 
     #[cfg(feature = "tracing")]
     fn name(&self) -> std::borrow::Cow<'static, str> {
-        format!("Memo<{}>", C::name()).into()
+        C::name().into()
     }
 }
 
