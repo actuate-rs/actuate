@@ -12,6 +12,7 @@ pub(crate) struct CanvasContext {
     pub(crate) draws: RefCell<Vec<Rc<dyn Draw>>>,
 }
 
+#[derive(Data)]
 pub struct Canvas<'a> {
     style: Style,
     f: Box<dyn Fn(Layout, &mut Scene) + 'a>,
@@ -24,10 +25,6 @@ impl<'a> Canvas<'a> {
             f: Box::new(draw_fn),
         }
     }
-}
-
-unsafe impl Data for Canvas<'_> {
-    type Id = Canvas<'static>;
 }
 
 impl Compose for Canvas<'_> {

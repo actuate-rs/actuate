@@ -141,20 +141,17 @@ impl<T: State + Data, C: Compose> Compose for WithState<T, C> {
     }
 }
 
+#[derive(Data)]
 pub struct Clickable<'a> {
-    on_click: Rc<dyn Fn() + 'a>,
+    on_click: Box<dyn Fn() + 'a>,
 }
 
 impl<'a> Clickable<'a> {
     pub fn new(on_click: impl Fn() + 'a) -> Self {
         Self {
-            on_click: Rc::new(on_click),
+            on_click: Box::new(on_click),
         }
     }
-}
-
-unsafe impl Data for Clickable<'_> {
-    type Id = Clickable<'static>;
 }
 
 impl State for Clickable<'_> {
@@ -165,18 +162,20 @@ impl State for Clickable<'_> {
             let is_pressed = Cell::new(false);
 
             // Safety: `f` is removed from `canvas_update_fns` on drop.
-            let f: Rc<dyn Fn() + 'static> = unsafe { mem::transmute(self.on_click.clone()) };
-            let f = Rc::new(move |button, state, _| {
-                if button != MouseButton::Left {
-                    return;
-                }
 
-                if state == ElementState::Pressed {
-                    is_pressed.set(true)
-                } else if is_pressed.get() && state == ElementState::Released {
-                    f()
-                }
-            });
+            let f: Rc<dyn Fn(MouseButton, ElementState, Vec2)> =
+                Rc::new(move |button, state, _| {
+                    if button != MouseButton::Left {
+                        return;
+                    }
+
+                    if state == ElementState::Pressed {
+                        is_pressed.set(true)
+                    } else if is_pressed.get() && state == ElementState::Released {
+                        (self.on_click)()
+                    }
+                });
+            let f: Rc<dyn Fn(MouseButton, ElementState, Vec2)> = unsafe { mem::transmute(f) };
 
             renderer_cx.pending_listeners.borrow_mut().push(f);
         });
