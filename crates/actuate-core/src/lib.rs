@@ -15,7 +15,7 @@ use thiserror::Error;
 
 pub mod prelude {
     pub use crate::{
-        use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,use_drop,
+        use_context, use_drop, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
         DynCompose, FieldWrap, FnField, Map, Memo, Mut, Ref, Scope, ScopeState, StateField,
         StaticField,
     };
