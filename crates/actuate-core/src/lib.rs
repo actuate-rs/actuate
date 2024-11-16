@@ -249,14 +249,13 @@ pub struct Mut<'a, T> {
 impl<'a, T: 'static> Mut<'a, T> {
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(self, f: impl FnOnce(&mut T) + 'static) {
-        let mut cell = Some(f);
         let ptr = self.ptr;
         let is_changed = self.scope_is_changed;
         let generation = self.generation;
 
         Runtime::current().update(move || {
             let value = unsafe { &mut *ptr };
-            cell.take().unwrap()(value);
+            f(value);
 
             unsafe {
                 (*is_changed).set(true);
@@ -317,7 +316,7 @@ impl<T> Hash for Mut<'_, T> {
 
 /// An update to apply to a composable.
 pub struct Update {
-    f: Box<dyn FnMut()>,
+    f: Box<dyn FnOnce()>,
 }
 
 impl Update {
@@ -325,7 +324,7 @@ impl Update {
     ///
     /// # Safety
     /// The caller must ensure the composable triggering this update still exists.
-    pub unsafe fn apply(&mut self) {
+    pub unsafe fn apply(self) {
         (self.f)();
     }
 }
@@ -359,7 +358,7 @@ impl Runtime {
     }
 
     /// Queue an update to run after [`Composer::compose`].
-    pub fn update(&self, f: impl FnMut() + 'static) {
+    pub fn update(&self, f: impl FnOnce() + 'static) {
         self.updater.update(Update { f: Box::new(f) });
     }
 }
@@ -1030,7 +1029,7 @@ pub trait Updater {
 struct DefaultUpdater;
 
 impl Updater for DefaultUpdater {
-    fn update(&self, mut update: crate::Update) {
+    fn update(&self, update: crate::Update) {
         unsafe {
             update.apply();
         }

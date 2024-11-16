@@ -63,7 +63,7 @@ impl ApplicationHandler<Update> for Handler {
         }
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: Update) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Update) {
         #[cfg(feature = "tracing")]
         tracing::trace!("Update");
 
