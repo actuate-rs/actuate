@@ -194,6 +194,7 @@ impl<C: Compose> Compose for Map<'_, C> {
 #[derive(Hash)]
 pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
+    generation: *const Cell<u64>,
 }
 
 impl<'a, T> Ref<'a, T> {
@@ -212,7 +213,10 @@ impl<'a, T> Ref<'a, T> {
 
 impl<T: ?Sized> Clone for Ref<'_, T> {
     fn clone(&self) -> Self {
-        Self { value: self.value }
+        Self {
+            value: self.value,
+            generation: self.generation,
+        }
     }
 }
 
@@ -223,6 +227,14 @@ impl<T: ?Sized> Deref for Ref<'_, T> {
 
     fn deref(&self) -> &Self::Target {
         self.value
+    }
+}
+
+impl<T> Memoize for Ref<'_, T> {
+    type Value = u64;
+
+    fn memoized(self) -> Self::Value {
+        unsafe { &*self.generation }.get()
     }
 }
 
@@ -268,7 +280,10 @@ impl<'a, T: 'static> Mut<'a, T> {
 
     /// Convert this mutable reference to an immutable reference.
     pub fn as_ref(self) -> Ref<'a, T> {
-        Ref { value: self.value }
+        Ref {
+            value: self.value,
+            generation: self.generation,
+        }
     }
 }
 
@@ -370,6 +385,7 @@ pub struct ScopeState {
     is_container: Cell<bool>,
     contexts: RefCell<Contexts>,
     drops: RefCell<Vec<usize>>,
+    generation: Cell<u64>,
 }
 
 impl ScopeState {
@@ -403,7 +419,10 @@ pub struct Scope<'a, C: ?Sized> {
 
 impl<'a, C> Scope<'a, C> {
     pub fn me(&self) -> Ref<'a, C> {
-        Ref { value: self.me }
+        Ref {
+            value: self.me,
+            generation: &self.state.generation,
+        }
     }
 
     pub unsafe fn me_as_ref(self) -> &'a C {
