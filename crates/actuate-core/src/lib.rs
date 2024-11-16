@@ -3,7 +3,7 @@ use std::{
     cell::{Cell, RefCell, UnsafeCell},
     collections::HashMap,
     fmt,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     marker::PhantomData,
     mem,
     ops::Deref,
@@ -771,36 +771,36 @@ impl<C: Compose> Compose for Option<C> {
     }
 }
 
-pub struct Memo<C> {
-    hash: u64,
+#[derive(Data)]
+pub struct Memo<T, C> {
+    dependency: T,
     content: C,
 }
 
-impl<C> Memo<C> {
-    pub fn new(dependency: impl Hash, content: C) -> Self {
-        let mut hasher = DefaultHasher::new();
-        dependency.hash(&mut hasher);
-        let hash = hasher.finish();
-
-        Self { hash, content }
+impl<T, C> Memo<T, C> {
+    pub fn new(dependency: impl Memoize<Value = T>, content: C) -> Self {
+        Self {
+            dependency: dependency.memoized(),
+            content,
+        }
     }
 }
 
-unsafe impl<C: Data> Data for Memo<C> {
-    type Id = Memo<C::Id>;
-}
-
-impl<C: Compose> Compose for Memo<C> {
+impl<T, C> Compose for Memo<T, C>
+where
+    T: Clone + Data + PartialEq + 'static,
+    C: Compose,
+{
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let hash = use_ref(&cx, RefCell::default);
-        let mut hash = hash.borrow_mut();
-        if let Some(last_hash) = &mut *hash {
-            if cx.me().hash != *last_hash {
-                *last_hash = cx.me().hash;
+        let last = use_ref(&cx, RefCell::default);
+        let mut last = last.borrow_mut();
+        if let Some(last) = &mut *last {
+            if cx.me().dependency != *last {
+                *last = cx.me().dependency.clone();
                 cx.is_parent_changed.set(true);
             }
         } else {
-            *hash = Some(cx.me().hash);
+            *last = Some(cx.me().dependency.clone());
             cx.is_parent_changed.set(true);
         }
 
