@@ -241,9 +241,9 @@ impl<T> Memoize for Ref<'_, T> {
 /// Mutable reference to a value of type `T`.
 pub struct Mut<'a, T> {
     ptr: *mut T,
-    value: &'a T,
     scope_is_changed: *const Cell<bool>,
     generation: *const Cell<u64>,
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a, T: 'static> Mut<'a, T> {
@@ -281,7 +281,7 @@ impl<'a, T: 'static> Mut<'a, T> {
     /// Convert this mutable reference to an immutable reference.
     pub fn as_ref(self) -> Ref<'a, T> {
         Ref {
-            value: self.value,
+            value: unsafe { &*self.ptr },
             generation: self.generation,
         }
     }
@@ -291,9 +291,9 @@ impl<T> Clone for Mut<'_, T> {
     fn clone(&self) -> Self {
         Self {
             ptr: self.ptr,
-            value: self.value,
             scope_is_changed: self.scope_is_changed,
             generation: self.generation,
+            phantom: self.phantom,
         }
     }
 }
@@ -304,7 +304,7 @@ impl<T> Deref for Mut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.value
+        unsafe { &*self.ptr }
     }
 }
 
@@ -499,9 +499,9 @@ pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> M
 
     Mut {
         ptr: &mut state.value as *mut T,
-        value: &state.value,
         scope_is_changed: &cx.is_changed,
         generation: &state.generation,
+        phantom: PhantomData::<&()>,
     }
 }
 
