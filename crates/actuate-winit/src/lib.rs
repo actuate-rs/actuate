@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, use_drop, Composer, Update, Updater};
+use actuate_core::{prelude::*, Composer, Update, Updater};
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::mpsc, thread};
 use winit::{
     application::ApplicationHandler,

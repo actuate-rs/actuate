@@ -15,7 +15,7 @@ use thiserror::Error;
 
 pub mod prelude {
     pub use crate::{
-        use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,
+        use_context, use_memo, use_mut, use_provider, use_ref, Compose, Data, DataField,use_drop,
         DynCompose, FieldWrap, FnField, Map, Memo, Mut, Ref, Scope, ScopeState, StateField,
         StaticField,
     };
@@ -405,11 +405,8 @@ impl Drop for ScopeData<'_> {
     fn drop(&mut self) {
         for idx in &*self.drops.borrow() {
             let hooks = unsafe { &mut *self.hooks.get() };
-            hooks
-                .get_mut(*idx)
-                .unwrap()
-                .downcast_mut::<Box<dyn FnMut()>>()
-                .unwrap()();
+            let any = hooks.get_mut(*idx).unwrap();
+            (**any).downcast_mut::<Box<dyn FnMut()>>().unwrap()();
         }
     }
 }
@@ -641,8 +638,9 @@ where
 pub fn use_drop<'a>(cx: ScopeState<'_>, f: impl FnOnce() + 'static) {
     let mut f_cell = Some(f);
 
+    let idx = cx.hook_idx.get();
     use_ref(cx, || {
-        cx.drops.borrow_mut().push(cx.hook_idx.get());
+        cx.drops.borrow_mut().push(idx);
         let f = Box::new(move || {
             f_cell.take().unwrap()();
         }) as Box<dyn FnMut()>;
@@ -782,9 +780,10 @@ impl<C: Compose> Compose for Option<C> {
         cx.is_container.set(true);
 
         let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
+        let mut state_cell = state_cell.borrow_mut();
 
         if let Some(content) = &*cx.me() {
-            if let Some(state) = &*state_cell.borrow() {
+            if let Some(state) = &*state_cell {
                 state.is_parent_changed.set(cx.is_parent_changed.get());
                 unsafe {
                     content.any_compose(state);
@@ -792,13 +791,13 @@ impl<C: Compose> Compose for Option<C> {
             } else {
                 let mut state = ScopeData::default();
                 state.contexts = cx.contexts.clone();
-                *state_cell.borrow_mut() = Some(state);
+                *state_cell = Some(state);
                 unsafe {
-                    content.any_compose(&*state_cell.borrow().as_ref().unwrap());
+                    content.any_compose(&*state_cell.as_ref().unwrap());
                 }
             }
         } else {
-            *state_cell.borrow_mut() = None;
+            *state_cell = None;
         }
     }
 }

@@ -15,12 +15,17 @@ impl Compose for Counter {
             Text::new(format!("High five count: {}", *count))
                 .font(GenericFamily::Cursive)
                 .font_size(60.),
-            Text::new("Up high!")
+            Text::new("Up high")
                 .on_click(move || count.update(|x| *x += 1))
                 .background_color(Color::BLUE),
-            Text::new("Down low!")
+            Text::new("Down low")
                 .on_click(move || count.update(|x| *x -= 1))
                 .background_color(Color::RED),
+            if *count == 0 {
+                Some(Text::new("Gimme five!"))
+            } else {
+                None
+            },
         ))
         .font_size(40.)
     }
