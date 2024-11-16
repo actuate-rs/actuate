@@ -375,7 +375,7 @@ struct Contexts {
 
 /// State of a composable.
 #[derive(Default)]
-pub struct ScopeState {
+pub struct ScopeState<'a> {
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
     hook_idx: Cell<usize>,
     is_changed: Cell<bool>,
@@ -385,9 +385,10 @@ pub struct ScopeState {
     contexts: RefCell<Contexts>,
     drops: RefCell<Vec<usize>>,
     generation: Cell<u64>,
+    _marker: PhantomData<&'a fn(ScopeState<'a>) -> ScopeState<'a>>,
 }
 
-impl ScopeState {
+impl ScopeState<'_> {
     pub fn set_changed(&self) {
         self.is_changed.set(true);
     }
@@ -397,7 +398,7 @@ impl ScopeState {
     }
 }
 
-impl Drop for ScopeState {
+impl Drop for ScopeState<'_> {
     fn drop(&mut self) {
         for idx in &*self.drops.borrow() {
             let hooks = unsafe { &mut *self.hooks.get() };
@@ -413,7 +414,7 @@ impl Drop for ScopeState {
 /// Composable scope.
 pub struct Scope<'a, C: ?Sized> {
     me: &'a C,
-    state: &'a ScopeState,
+    state: &'a ScopeState<'a>,
 }
 
 impl<'a, C> Scope<'a, C> {
@@ -445,7 +446,7 @@ impl<C> Clone for Scope<'_, C> {
 impl<C> Copy for Scope<'_, C> {}
 
 impl<'a, C> Deref for Scope<'a, C> {
-    type Target = &'a ScopeState;
+    type Target = &'a ScopeState<'a>;
 
     fn deref(&self) -> &Self::Target {
         &self.state
@@ -455,7 +456,7 @@ impl<'a, C> Deref for Scope<'a, C> {
 /// Use an immutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_ref<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> &T {
+pub fn use_ref<'a, T: 'static>(cx: &'a ScopeState<'a>, make_value: impl FnOnce() -> T) -> &T {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -478,7 +479,10 @@ struct MutState<T> {
 /// Use a mutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> Mut<T> {
+pub fn use_mut<'a, T: 'static>(
+    cx: &'a ScopeState<'a>,
+    make_value: impl FnOnce() -> T,
+) -> Mut<'a, T> {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -505,7 +509,7 @@ pub fn use_mut<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> M
 }
 
 pub fn use_callback<'a, T, R>(
-    cx: &'a ScopeState,
+    cx: &'a ScopeState<'a>,
     f: impl FnMut(T) -> R + 'a,
 ) -> &'a Rc<dyn Fn(T) -> R + 'a>
 where
@@ -566,7 +570,10 @@ pub fn use_context<T: 'static>(cx: &ScopeState) -> Result<Rc<T>, ContextError<T>
 /// Provide a context value of type `T`.
 ///
 /// This value will be available to [`use_context`] to all children of this composable.
-pub fn use_provider<T: 'static>(cx: &ScopeState, make_value: impl FnOnce() -> T) -> Rc<T> {
+pub fn use_provider<'a, T: 'static>(
+    cx: &'a ScopeState<'a>,
+    make_value: impl FnOnce() -> T,
+) -> Rc<T> {
     // TODO
     let r = use_ref(cx, || {
         let value = Rc::new(make_value());
@@ -604,7 +611,11 @@ impl<T> Memoize for Mut<'_, T> {
 /// Use a memoized value of type `T` with a dependency of type `D`.
 ///
 /// `make_value` will update the returned value whenver `dependency` is changed.
-pub fn use_memo<D, T>(cx: &ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
+pub fn use_memo<'a, D, T>(
+    cx: &'a ScopeState<'a>,
+    dependency: D,
+    make_value: impl FnOnce() -> T,
+) -> Ref<T>
 where
     D: Memoize,
     T: 'static,
@@ -630,7 +641,7 @@ where
     value_mut.as_ref()
 }
 
-pub fn use_drop<'a>(cx: &'a ScopeState, f: impl FnOnce() + 'static) {
+pub fn use_drop<'a>(cx: &'a ScopeState<'a>, f: impl FnOnce() + 'static) {
     let mut f_cell = Some(f);
 
     use_ref(cx, || {
@@ -965,7 +976,11 @@ where
     fn any_compose<'a>(&'a self, state: &'a ScopeState) {
         state.hook_idx.set(0);
 
-        let cx = Scope { me: self, state };
+        let cx: Scope<'_, C> = Scope {
+            me: unsafe { mem::transmute(self) },
+            state: unsafe { mem::transmute(state) },
+        };
+        let cx: Scope<'_, C> = unsafe { mem::transmute(cx) };
 
         let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
@@ -1032,7 +1047,7 @@ impl Updater for DefaultUpdater {
 /// Composer for composable content.
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
-    scope_state: Box<ScopeState>,
+    scope_state: Box<ScopeState<'static>>,
     rt: Runtime,
 }
 
@@ -1058,10 +1073,7 @@ impl Composer {
     pub fn compose(&mut self) {
         self.rt.enter();
 
-        self.compose.any_compose(&Scope {
-            me: &self.compose,
-            state: &self.scope_state,
-        });
+        self.compose.any_compose(&*self.scope_state);
     }
 }
 
