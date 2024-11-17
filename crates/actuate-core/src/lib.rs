@@ -33,8 +33,9 @@ pub use actuate_macros::Data;
 
 pub mod prelude {
     pub use crate::{
-        use_context, use_drop, use_memo, use_mut, use_provider, use_ref, Cow, Data, DataField,
-        FieldWrap, FnField, Map, Mut, Ref, RefMap, Scope, ScopeState, StateField, StaticField,
+        use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, use_task,
+        Cow, Data, DataField, FieldWrap, FnField, Map, Mut, Ref, RefMap, Scope, ScopeState,
+        StateField, StaticField,
     };
 
     pub use crate::compose::{self, Compose, DynCompose, Memo};

@@ -67,10 +67,13 @@ impl<C: Compose> Compose for Option<C> {
     }
 }
 
-pub fn from_iter<'a, I, C>(iter: I, f: impl Fn(I::Item) -> C + 'a) -> FromIter<'a, I, I::Item, C>
+pub fn from_iter<'a, I, C>(
+    iter: I,
+    f: impl Fn(&'a I::Item) -> C + 'a,
+) -> FromIter<'a, I, I::Item, C>
 where
     I: IntoIterator + Clone + Data,
-    I::Item: Clone + Data,
+    I::Item: Data,
     C: Compose,
 {
     FromIter {
@@ -81,7 +84,7 @@ where
 
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
-    f: Box<dyn Fn(Item) -> C + 'a>,
+    f: Box<dyn Fn(&'a Item) -> C + 'a>,
 }
 
 unsafe impl<I, Item, C> Data for FromIter<'_, I, Item, C>
@@ -96,27 +99,39 @@ where
 impl<I, Item, C> Compose for FromIter<'_, I, Item, C>
 where
     I: IntoIterator<Item = Item> + Clone + Data,
-    Item: Clone + Data,
+    Item: Data,
     C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_container.set(true);
 
+        let items_cell = use_ref(&cx, || RefCell::new(None));
+        let mut items_cell = items_cell.borrow_mut();
+
         let states = use_ref(&cx, || RefCell::new(Vec::new()));
         let mut states = states.borrow_mut();
 
-        let items: Vec<_> = cx.me().iter.clone().into_iter().collect();
-        if items.len() >= states.len() {
-            for _ in states.len()..items.len() {
-                states.push(ScopeData::default());
+        if cx.is_parent_changed() || items_cell.is_none() {
+            let items: Vec<I::Item> = cx.me().iter.clone().into_iter().collect();
+            let items: Vec<()> = unsafe { mem::transmute(items) };
+
+            if items.len() >= states.len() {
+                for _ in states.len()..items.len() {
+                    states.push(ScopeData::default());
+                }
+            } else {
+                for _ in items.len()..states.len() {
+                    states.pop();
+                }
             }
-        } else {
-            for _ in items.len()..states.len() {
-                states.pop();
-            }
+
+            *items_cell = Some(items);
         }
 
-        for (item, state) in items.into_iter().zip(&*states) {
+        let items: &Vec<_> = items_cell.as_ref().unwrap();
+        let items: &Vec<I::Item> = unsafe { mem::transmute(items) };
+
+        for (item, state) in items.iter().zip(&*states) {
             *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
             state.is_parent_changed.set(cx.is_parent_changed.get());
 

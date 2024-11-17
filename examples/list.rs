@@ -20,7 +20,7 @@ impl Compose for List {
             ))
             .color(Color::WHITE)
             .background_color(Color::BLACK),
-            compose::from_iter((*items).clone(), |label| Text::new(label)),
+            compose::from_iter(items, |label| Text::new(label)),
         ))
         .font_size(40.)
     }
