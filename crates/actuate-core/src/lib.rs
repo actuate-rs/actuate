@@ -642,17 +642,40 @@ where
     value_mut.as_ref()
 }
 
-pub fn use_drop<'a>(cx: ScopeState<'_>, f: impl FnOnce() + 'static) {
+/// Use a function that will be called when this scope is dropped.
+pub fn use_drop<'a>(cx: ScopeState<'a>, f: impl FnOnce() + 'a) {
     let mut f_cell = Some(f);
+
+    let cell = use_ref(cx, || {
+        let f: Box<dyn FnOnce()> = Box::new(f_cell.take().unwrap());
+
+        // Safety `f` is guranteed to live as long as `cx`.
+        let f: Box<dyn FnOnce()> = unsafe { mem::transmute(f) };
+
+        RefCell::new(Some(f))
+    });
 
     let idx = cx.hook_idx.get();
     use_ref(cx, || {
         cx.drops.borrow_mut().push(idx);
-        let f = Box::new(move || {
-            f_cell.take().unwrap()();
-        }) as Box<dyn FnMut()>;
+
+        let f: Box<dyn FnMut()> = Box::new(move || {
+            cell.borrow_mut().take().unwrap()();
+        });
+
+        // Safety `f` is guranteed to live as long as `cx`.
+        let f: Box<dyn FnMut()> = unsafe { mem::transmute(f) };
         f
     });
+
+    if let Some(f) = f_cell {
+        let f: Box<dyn FnOnce()> = Box::new(f);
+
+        // Safety `f` is guranteed to live as long as `cx`.
+        let f: Box<dyn FnOnce()> = unsafe { mem::transmute(f) };
+
+        *cell.borrow_mut() = Some(f);
+    }
 }
 
 /// Updater for a [`Composer`].
