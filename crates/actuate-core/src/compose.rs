@@ -1,3 +1,4 @@
+use crate::{prelude::*, Memoize, ScopeData};
 use std::{
     any::TypeId,
     borrow::Cow,
@@ -5,12 +6,11 @@ use std::{
     mem,
 };
 
-use crate::{prelude::*, Memoize, ScopeData};
-
 /// A composable function.
 ///
 /// For a dynamically-typed composable, see [`DynCompose`].
 pub trait Compose: Data {
+    /// Compose this function.
     fn compose(cx: Scope<Self>) -> impl Compose;
 
     #[doc(hidden)]
@@ -67,6 +67,7 @@ impl<C: Compose> Compose for Option<C> {
     }
 }
 
+/// Create a composable from an iterator.
 pub fn from_iter<'a, I, C>(
     iter: I,
     f: impl Fn(&'a I::Item) -> C + 'a,
@@ -82,6 +83,7 @@ where
     }
 }
 
+/// Composable from an iterator, created with [`from_iter`].
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
     f: Box<dyn Fn(&'a Item) -> C + 'a>,
@@ -140,6 +142,9 @@ where
     }
 }
 
+/// Memoized composable.
+///
+/// The content of the memoized composable is only re-composed when the dependency changes.
 #[derive(Data)]
 pub struct Memo<T, C> {
     dependency: T,
@@ -147,6 +152,9 @@ pub struct Memo<T, C> {
 }
 
 impl<T, C> Memo<T, C> {
+    /// Create a new memoized composable.
+    ///
+    /// `content` is only re-composed when `dependency` is changed.
     pub fn new(dependency: impl Memoize<Value = T>, content: C) -> Self {
         Self {
             dependency: dependency.memoized(),
@@ -187,6 +195,7 @@ pub struct DynCompose<'a> {
 }
 
 impl<'a> DynCompose<'a> {
+    /// Create a new dynamically-typed composable.
     pub fn new(content: impl Compose + 'a) -> Self {
         Self {
             compose: UnsafeCell::new(Some(Box::new(content))),

@@ -10,6 +10,8 @@
 //! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
 //! Instead, always use hooks at the top level of your composable, before any early returns.
 
+#![deny(missing_docs)]
+
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     any::{Any, TypeId},
@@ -31,6 +33,8 @@ use tokio::sync::RwLock;
 
 pub use actuate_macros::Data;
 
+/// Prelude of commonly-used hooks and composables.
+/// `use acture_core::prelude::*;`
 pub mod prelude {
     pub use crate::{
         use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, use_task,
@@ -41,6 +45,7 @@ pub mod prelude {
     pub use crate::compose::{self, Compose, DynCompose, Memo};
 }
 
+/// Composable functions.
 pub mod compose;
 use self::compose::{AnyCompose, Compose};
 
@@ -52,11 +57,14 @@ pub use self::data::{Data, DataField, FieldWrap, FnField, StateField, StaticFiel
 /// This represents either a borrowed or owned value.
 /// A borrowed value is stored as a [`RefMap`], which can be either a reference or a mapped reference.
 pub enum Cow<'a, T> {
+    /// Borrowed value, contained inside either a [`Ref`] or [`Map`].
     Borrowed(RefMap<'a, T>),
+    /// Owned value.
     Owned(T),
 }
 
 impl<'a, T> Cow<'a, T> {
+    /// Convert or clone this value to an owned value.
     pub fn into_owned(self) -> T
     where
         T: Clone,
@@ -99,7 +107,9 @@ impl<'a, T> From<Map<'a, T>> for Cow<'a, T> {
 
 /// Immutable reference or mapped reference to a value.
 pub enum RefMap<'a, T: ?Sized> {
+    /// Reference to a value.
     Ref(Ref<'a, T>),
+    /// Mapped reference to a value.
     Map(Map<'a, T>),
 }
 
@@ -435,6 +445,7 @@ struct Contexts {
     values: HashMap<TypeId, Rc<dyn Any>>,
 }
 
+/// Scope state of a composable function.
 pub type ScopeState<'a> = &'a ScopeData<'a>;
 
 /// State of a composable.
@@ -453,10 +464,12 @@ pub struct ScopeData<'a> {
 }
 
 impl ScopeData<'_> {
+    /// Set this scope as changed.
     pub fn set_changed(&self) {
         self.is_changed.set(true);
     }
 
+    /// Returns `true` if an ancestor to this scope is changed.
     pub fn is_parent_changed(&self) -> bool {
         self.is_parent_changed.get()
     }
@@ -479,18 +492,16 @@ pub struct Scope<'a, C: ?Sized> {
 }
 
 impl<'a, C> Scope<'a, C> {
-    pub fn me(&self) -> Ref<'a, C> {
+    /// Get a [`Ref`] to this composable.
+    pub fn me(self) -> Ref<'a, C> {
         Ref {
             value: self.me,
             generation: &self.state.generation,
         }
     }
 
-    pub unsafe fn me_as_ref(self) -> &'a C {
-        self.me
-    }
-
-    pub fn state(&self) -> &'a ScopeData {
+    /// Get the state of this composable.
+    pub fn state(self) -> ScopeState<'a> {
         self.state
     }
 }
@@ -566,6 +577,8 @@ pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Mu
     }
 }
 
+/// Use a callback function.
+/// The returned function will be updated to `f` whenever this component is re-composed.
 pub fn use_callback<'a, T, R>(
     cx: ScopeState<'a>,
     f: impl FnMut(T) -> R + 'a,
@@ -590,6 +603,7 @@ where
 }
 
 #[derive(Error)]
+/// Error for a missing context.
 pub struct ContextError<T> {
     _marker: PhantomData<T>,
 }
@@ -641,9 +655,19 @@ pub fn use_provider<'a, T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce(
     (*r).clone()
 }
 
+/// Memoize a value, caching it until the dependency changes.
+///
+/// This is implemented for `T: PartialEq + 'static` by default.
+/// As well as:
+/// - [`Ref`]
+/// - [`Map`]
+/// - [`RefMap`]
+/// - [`Mut`]
 pub trait Memoize {
+    /// Inner value to store and compare.
     type Value: PartialEq + 'static;
 
+    /// Return the inner value for memoization.
     fn memoized(self) -> Self::Value;
 }
 
@@ -777,6 +801,9 @@ impl Wake for TaskWaker {
     }
 }
 
+/// Use a local task that runs on the current thread.
+///
+/// This will run on the window event loop, polling the task until it completes.
 pub fn use_local_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + 'a,
@@ -826,10 +853,14 @@ impl Future for WrappedFuture {
 
 unsafe impl Send for WrappedFuture {}
 
+/// Context for the Tokio runtime.
 pub struct RuntimeContext {
     rt: tokio::runtime::Runtime,
 }
 
+/// Use a multi-threaded task that runs on a separate thread.
+///
+/// This will run on the Tokio runtime, polling the task until it completes.
 pub fn use_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + Send + 'a,
@@ -857,6 +888,7 @@ where
 
 /// Updater for a [`Composer`].
 pub trait Updater: Send + Sync {
+    /// Update the content of a [`Composer`].
     fn update(&self, update: Update);
 }
 

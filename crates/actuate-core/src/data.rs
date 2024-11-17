@@ -5,8 +5,10 @@ use std::marker::PhantomData;
 ///
 /// This trait should be derived with `#[derive(Data)]`.
 pub unsafe trait Data: Sized {
+    /// Static, typed ID for this data.
     type Id: 'static;
 
+    #[doc(hidden)]
     unsafe fn reborrow(self, ptr: *mut ()) {
         let x = ptr as *mut Self;
         *x = self;
@@ -58,6 +60,7 @@ unsafe impl Data for DynCompose<'_> {
     type Id = PhantomData<DynCompose<'static>>;
 }
 
+#[doc(hidden)]
 pub struct FieldWrap<T>(pub T);
 
 #[doc(hidden)]
