@@ -1,6 +1,8 @@
 use crate::{prelude::*, LayoutContext, WindowContext};
 use taffy::{FlexDirection, Style};
 
+use super::use_layout;
+
 #[derive(Data)]
 pub struct Flex<C> {
     style: Style,
@@ -35,22 +37,9 @@ impl<C> Flex<C> {
 
 impl<C: Compose> Compose for Flex<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let layout_cx = use_context::<LayoutContext>(&cx).unwrap();
-        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
+        let (id, _layout) = use_layout(&cx, cx.me().style.clone());
 
-        use_provider(&cx, || {
-            let id = renderer_cx
-                .taffy
-                .borrow_mut()
-                .new_leaf(cx.me().style.clone())
-                .unwrap();
-            renderer_cx
-                .taffy
-                .borrow_mut()
-                .add_child(layout_cx.parent_id, id)
-                .unwrap();
-            LayoutContext { parent_id: id }
-        });
+        use_provider(&cx, || LayoutContext { parent_id: id });
 
         Ref::map(cx.me(), |me| &me.content)
     }
