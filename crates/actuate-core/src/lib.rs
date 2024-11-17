@@ -614,14 +614,17 @@ impl<T> fmt::Display for ContextError<T> {
 ///
 /// # Panics
 /// Panics if the context value is not found.
-pub fn use_context<T: 'static>(cx: &ScopeData) -> Result<Rc<T>, ContextError<T>> {
+pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a T, ContextError<T>> {
     let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
         return Err(ContextError {
             _marker: PhantomData,
         });
     };
 
-    Ok(any.downcast().unwrap())
+    let value: &T = (*any).downcast_ref().unwrap();
+    let value: &'a T = unsafe { mem::transmute(value) };
+
+    Ok(value)
 }
 
 /// Provide a context value of type `T`.

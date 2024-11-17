@@ -73,16 +73,12 @@ pub struct WindowContext {
     is_layout_changed: Cell<bool>,
     canvas_update_fns: RefCell<HashMap<NodeId, Box<dyn Fn()>>>,
     listeners: Rc<RefCell<HashMap<NodeId, Vec<ListenerFn>>>>,
-    pending_listeners: Rc<RefCell<Vec<ListenerFn>>>,
     base_color: Cell<Color>,
 }
 
+#[derive(Data)]
 struct RenderRoot<C> {
     content: C,
-}
-
-unsafe impl<C: Data> Data for RenderRoot<C> {
-    type Id = RenderRoot<C::Id>;
 }
 
 impl<C: Compose> Compose for RenderRoot<C> {

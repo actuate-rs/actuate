@@ -72,7 +72,6 @@ impl<C: Compose> Compose for Window<C> {
                 is_layout_changed: Cell::new(false),
                 canvas_update_fns: RefCell::default(),
                 listeners: Rc::default(),
-                pending_listeners: Rc::default(),
                 base_color: Cell::new(Color::WHITE),
             }
         });
