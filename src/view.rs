@@ -85,7 +85,10 @@ unsafe impl<T: Data, C: Data> Data for Modified<T, C> {
 
 impl<T: Modify + Data, C: Compose> Compose for Modified<T, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        unsafe { cx.me().state.use_state(mem::transmute(&**cx)) }
+        // Safety: `state` is guranteed to live as long as `cx`.
+        let state_cx: ScopeState = unsafe { mem::transmute(&**cx) };
+
+        cx.me().state.use_state(state_cx);
 
         Ref::map(cx.me(), |me| &me.content)
     }
@@ -133,7 +136,7 @@ unsafe impl<H: Data> Data for OnEvent<H> {
 
 impl<H: Handler> Modify for OnEvent<H> {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
+        let renderer_cx = use_context::<WindowContext>(cx).unwrap();
 
         let state = use_ref(cx, || RefCell::new(self.on_event.borrow_mut().build()));
         use_ref(cx, || {
@@ -225,23 +228,21 @@ impl Handler for Clickable<'_> {
     }
 
     fn handle(&self, state: &mut Self::State, event: Event) {
-        match event {
-            Event::MouseInput {
-                button,
-                state: button_state,
-                ..
-            } => {
-                if button != MouseButton::Left {
-                    return;
-                }
-
-                if button_state == ElementState::Pressed {
-                    *state = true
-                } else if *state && button_state == ElementState::Released {
-                    (self.on_click)()
-                }
+        if let Event::MouseInput {
+            button,
+            state: button_state,
+            ..
+        } = event
+        {
+            if button != MouseButton::Left {
+                return;
             }
-            _ => {}
+
+            if button_state == ElementState::Pressed {
+                *state = true
+            } else if *state && button_state == ElementState::Released {
+                (self.on_click)()
+            }
         }
     }
 }
@@ -253,9 +254,9 @@ pub struct FontColor {
 
 impl Modify for FontColor {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let text_cx = use_context::<TextContext>(&cx).unwrap();
+        let text_cx = use_context::<TextContext>(cx).unwrap();
 
-        use_provider(&cx, || TextContext {
+        use_provider(cx, || TextContext {
             color: self.color,
             font_size: text_cx.font_size,
             font_stack: text_cx.font_stack.clone(),
@@ -270,9 +271,9 @@ pub struct FontSize {
 
 impl Modify for FontSize {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let text_cx = use_context::<TextContext>(&cx).unwrap();
+        let text_cx = use_context::<TextContext>(cx).unwrap();
 
-        use_provider(&cx, || TextContext {
+        use_provider(cx, || TextContext {
             color: text_cx.color,
             font_size: self.font_size,
             font_stack: text_cx.font_stack.clone(),
@@ -287,7 +288,7 @@ pub struct Font {
 
 impl Modify for Font {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let text_cx = use_context::<TextContext>(&cx).unwrap();
+        let text_cx = use_context::<TextContext>(cx).unwrap();
 
         use_provider(cx, || TextContext {
             color: text_cx.color,
@@ -315,7 +316,7 @@ unsafe impl<T: Data> Data for DrawModifier<T> {
 
 impl<T: Draw + 'static> Modify for DrawModifier<T> {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
+        let canvas_cx = use_context::<CanvasContext>(cx).unwrap();
 
         let draw = self.draw.clone();
         use_provider(cx, move || {

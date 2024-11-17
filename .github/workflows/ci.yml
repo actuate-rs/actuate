@@ -21,6 +21,11 @@ jobs:
       run: cargo build --no-default-features --workspace --verbose
     - name: Build
       run: cargo build --workspace --verbose
+    - name: Clippy
+      run: |
+          rustup toolchain install nightly --component clippy
+          rustup override set nightly
+          cargo clippy --workspace -- -D warnings
     - name: Run tests
       run: cargo test --workspace --verbose
     - name: Install Miri

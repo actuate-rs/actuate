@@ -58,7 +58,7 @@ impl<C: Compose> Compose for Option<C> {
                 state.contexts = cx.contexts.clone();
                 *state_cell = Some(state);
                 unsafe {
-                    content.any_compose(&*state_cell.as_ref().unwrap());
+                    content.any_compose(state_cell.as_ref().unwrap());
                 }
             }
         } else {
@@ -208,7 +208,7 @@ struct DynComposeState {
     data_id: TypeId,
 }
 
-impl<'a> Compose for DynCompose<'a> {
+impl Compose for DynCompose<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_container.set(true);
 
@@ -324,10 +324,8 @@ where
         state.hook_idx.set(0);
 
         // Transmute the lifetime of `&Self`, `&ScopeData`, and the `Scope` containing both to the same`'a`.
-        let cx: Scope<'_, C> = Scope {
-            me: unsafe { mem::transmute(self) },
-            state: unsafe { mem::transmute(state) },
-        };
+        let state: ScopeState = unsafe { mem::transmute(state) };
+        let cx: Scope<'_, C> = Scope { me: self, state };
         let cx: Scope<'_, C> = unsafe { mem::transmute(cx) };
 
         let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
@@ -360,7 +358,8 @@ where
                     child.reborrow((**content).as_ptr_mut());
                 } else {
                     let boxed: Box<dyn AnyCompose> = Box::new(child);
-                    *cell = Some(mem::transmute(boxed));
+                    let boxed: Box<dyn AnyCompose> = mem::transmute(boxed);
+                    *cell = Some(boxed);
                 }
             }
         } else {
@@ -372,6 +371,6 @@ where
     }
 
     fn name(&self) -> Cow<'static, str> {
-        C::name().into()
+        C::name()
     }
 }

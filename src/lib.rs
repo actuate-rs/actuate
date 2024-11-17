@@ -64,14 +64,16 @@ pub enum Event {
     MouseOut,
 }
 
+type ListenerFn = Rc<dyn Fn(Event)>;
+
 pub struct WindowContext {
     scene: RefCell<Scene>,
     taffy: RefCell<TaffyTree>,
     is_changed: Cell<bool>,
     is_layout_changed: Cell<bool>,
     canvas_update_fns: RefCell<HashMap<NodeId, Box<dyn Fn()>>>,
-    listeners: Rc<RefCell<HashMap<NodeId, Vec<Rc<dyn Fn(Event)>>>>>,
-    pending_listeners: Rc<RefCell<Vec<Rc<dyn Fn(Event)>>>>,
+    listeners: Rc<RefCell<HashMap<NodeId, Vec<ListenerFn>>>>,
+    pending_listeners: Rc<RefCell<Vec<ListenerFn>>>,
     base_color: Cell<Color>,
 }
 

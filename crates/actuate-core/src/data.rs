@@ -1,9 +1,14 @@
 use crate::prelude::*;
-use std::marker::PhantomData;
 
 /// Composable data.
 ///
-/// This trait should be derived with `#[derive(Data)]`.
+/// For most cases, this trait should be derived with `#[derive(Data)]`.
+///
+/// # Safety
+/// This struct must ensure the lifetime of the data it holds cannot escape while composing children.
+///
+/// For example, a `RefCell<&'a T>` is unsafe because the compiler will infer the lifetime of a child composable's lifetime (e.g. `'a`)
+/// as this struct's lifetime (e.g. `'a`).
 pub unsafe trait Data: Sized {
     /// Static, typed ID for this data.
     type Id: 'static;
@@ -36,7 +41,7 @@ unsafe impl<T: Data> Data for Vec<T> {
     type Id = Vec<T::Id>;
 }
 
-unsafe impl<T: ?Sized + Data> Data for &T {
+unsafe impl<T: Data> Data for &T {
     type Id = &'static T::Id;
 }
 
@@ -44,20 +49,20 @@ unsafe impl<T: Data> Data for Option<T> {
     type Id = Option<T::Id>;
 }
 
-unsafe impl<T: Data + ?Sized> Data for Ref<'_, T> {
-    type Id = PhantomData<Ref<'static, T::Id>>;
+unsafe impl<T: Data> Data for Ref<'_, T> {
+    type Id = Ref<'static, T::Id>;
 }
 
-unsafe impl<T: Data + ?Sized> Data for Map<'_, T> {
-    type Id = PhantomData<Map<'static, T::Id>>;
+unsafe impl<T: Data> Data for Map<'_, T> {
+    type Id = Map<'static, T::Id>;
 }
 
 unsafe impl<T: Data> Data for Mut<'_, T> {
-    type Id = PhantomData<Mut<'static, T::Id>>;
+    type Id = Mut<'static, T::Id>;
 }
 
 unsafe impl Data for DynCompose<'_> {
-    type Id = PhantomData<DynCompose<'static>>;
+    type Id = DynCompose<'static>;
 }
 
 #[doc(hidden)]

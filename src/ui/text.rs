@@ -18,7 +18,7 @@ pub struct FontContext {
     inner: RefCell<parley::FontContext>,
 }
 
-pub fn use_font<'a, R>(cx: ScopeState<'_>, make_font: impl FnOnce() -> R)
+pub fn use_font<R>(cx: ScopeState, make_font: impl FnOnce() -> R)
 where
     R: Into<Vec<u8>>,
 {

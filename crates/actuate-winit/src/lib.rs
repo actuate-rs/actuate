@@ -47,7 +47,9 @@ struct Handler {
 
 impl Handler {
     fn compose(&mut self, event_loop: &ActiveEventLoop) {
-        self.cx.inner.borrow_mut().event_loop = Some(unsafe { mem::transmute(event_loop) });
+        // Safety: This reference to `event_loop` must not escape the context.
+        let event_loop: &'static ActiveEventLoop = unsafe { mem::transmute(event_loop) };
+        self.cx.inner.borrow_mut().event_loop = Some(event_loop);
 
         self.composer.compose();
 
@@ -135,7 +137,7 @@ pub fn run(content: impl Compose + 'static) {
 
 #[derive(Default)]
 struct Inner {
-    handler_fns: HashMap<WindowId, Rc<dyn Fn(&Event<()>)>>,
+    handler_fns: HashMap<WindowId, ListenerFn<'static>>,
     event_loop: Option<&'static ActiveEventLoop>,
 }
 
@@ -144,10 +146,14 @@ pub struct EventLoopContext {
     inner: Rc<RefCell<Inner>>,
 }
 
+type ListenerFn<'a> = Rc<dyn Fn(&Event<()>) + 'a>;
+
+type EventFn<'a> = Box<dyn Fn(&RawWindow, &Event<()>) + 'a>;
+
 #[derive(Data)]
 pub struct Window<'a, C> {
     window_attributes: WindowAttributes,
-    on_event: Box<dyn Fn(&RawWindow, &Event<()>) + 'a>,
+    on_event: EventFn<'a>,
     content: C,
 }
 
@@ -192,8 +198,8 @@ impl<C: Compose> Compose for Window<'_, C> {
         });
 
         let on_event = &*cx.me().on_event;
-        let on_event: Rc<dyn Fn(&Event<()>)> = Rc::new(move |event| on_event(window, event));
-        let on_event: Rc<dyn Fn(&Event<()>)> = unsafe { mem::transmute(on_event) };
+        let on_event: ListenerFn = Rc::new(move |event| on_event(window, event));
+        let on_event: ListenerFn = unsafe { mem::transmute(on_event) };
 
         inner.handler_fns.insert(id, on_event);
 
