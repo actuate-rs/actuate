@@ -208,7 +208,7 @@ struct DynComposeState {
     data_id: TypeId,
 }
 
-impl<'a> Compose for DynCompose<'a> {
+impl Compose for DynCompose<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_container.set(true);
 

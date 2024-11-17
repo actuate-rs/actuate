@@ -63,7 +63,7 @@ pub enum Cow<'a, T> {
     Owned(T),
 }
 
-impl<'a, T> Cow<'a, T> {
+impl<T> Cow<'_, T> {
     /// Convert or clone this value to an owned value.
     pub fn into_owned(self) -> T
     where
@@ -188,7 +188,7 @@ impl<T: ?Sized> Clone for Map<'_, T> {
 
 impl<T: ?Sized> Copy for Map<'_, T> {}
 
-impl<'a, T: ?Sized> Deref for Map<'a, T> {
+impl<T: ?Sized> Deref for Map<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
