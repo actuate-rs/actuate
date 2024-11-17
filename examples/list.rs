@@ -18,7 +18,7 @@ impl Compose for List {
                     })
                 }),
             )),
-            actuate::core::from_iter((*items).clone(), |label| Text::new(label)),
+            compose::from_iter((*items).clone(), |label| Text::new(label)),
         ))
         .font_size(40.)
     }
