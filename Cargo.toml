@@ -19,8 +19,8 @@ members = [
 ]
 
 [dependencies]
-actuate-core = { version = "0.3.0", path = "crates/actuate-core" }
-actuate-winit = { version = "0.1.4", path = "crates/actuate-winit" }
+actuate-core = { version = "0.4.0", path = "crates/actuate-core" }
+actuate-winit = { version = "0.1.5", path = "crates/actuate-winit" }
 parley = "0.2.0"
 peniko = "0.2.0"
 pollster = "0.4.0"
