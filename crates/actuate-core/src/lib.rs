@@ -1,3 +1,15 @@
+//! # actuate-core
+//! Actuate-core provides a reactive framework for efficiently managing application state.
+//! This crate provides a generic library that can be used to build user interfaces, games, and other applications.
+//! 
+//! ## Hooks
+//! Functions that begin with `use_` are called `hooks` in Actuate.
+//! Hooks are used to manage state and side effects in composables.
+//!
+//! Hooks must be used in the same order for every re-compose.
+//! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
+//! Instead, always use hooks at the top level of your composable, before any early returns.
+
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     any::{Any, TypeId},

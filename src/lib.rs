@@ -1,3 +1,14 @@
+//! # Actuate
+//! Actuate is a native, declarative, and friendly user-interface (UI) framework.
+//!
+//! ## Hooks
+//! Functions that begin with `use_` are called `hooks` in Actuate.
+//! Hooks are used to manage state and side effects in composables.
+//!
+//! Hooks must be used in the same order for every re-compose.
+//! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
+//! Instead, always use hooks at the top level of your composable, before any early returns.
+
 use actuate_core::prelude::*;
 use std::{
     cell::{Cell, RefCell},
