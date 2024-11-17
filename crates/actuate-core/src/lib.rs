@@ -11,7 +11,7 @@ use std::{
     ops::Deref,
     pin::Pin,
     rc::Rc,
-    sync::{mpsc, Arc, Mutex},
+    sync::{mpsc, Arc, Mutex, RwLock},
     task::{Poll, Wake, Waker},
 };
 use thiserror::Error;
@@ -352,6 +352,7 @@ pub struct Runtime {
     updater: Arc<dyn Updater>,
     tasks: Rc<RefCell<SlotMap<DefaultKey, Pin<Box<dyn Future<Output = ()>>>>>>,
     task_tx: mpsc::Sender<DefaultKey>,
+    lock: Arc<RwLock<()>>,
 }
 
 impl Runtime {
@@ -745,6 +746,8 @@ impl Future for WrappedFuture {
         if *guard {
             me.rt.enter();
 
+            let _guard = me.rt.lock.read().unwrap();
+
             me.task.as_mut().poll(cx)
         } else {
             Poll::Ready(())
@@ -798,6 +801,18 @@ impl Updater for DefaultUpdater {
     }
 }
 
+struct UpdateWrapper<U> {
+    updater: U,
+    lock: Arc<RwLock<()>>,
+}
+
+impl<U: Updater> Updater for UpdateWrapper<U> {
+    fn update(&self, update: crate::Update) {
+        let _guard = self.lock.write().unwrap();
+        self.updater.update(update);
+    }
+}
+
 /// Composer for composable content.
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
@@ -814,7 +829,11 @@ impl Composer {
 
     /// Create a new [`Composer`] with the given content and default updater.
     pub fn with_updater(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
-        let updater = Arc::new(updater);
+        let lock = Arc::new(RwLock::new(()));
+        let updater = Arc::new(UpdateWrapper {
+            updater,
+            lock: lock.clone(),
+        });
         let (task_tx, task_rx) = mpsc::channel();
 
         let scope_data = ScopeData::default();
@@ -832,6 +851,7 @@ impl Composer {
                 updater: updater.clone(),
                 tasks: Rc::new(RefCell::new(SlotMap::new())),
                 task_tx,
+                lock,
             },
             task_rx,
         }
