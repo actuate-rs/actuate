@@ -135,6 +135,11 @@ where
 
         for (item, state) in items.iter().zip(&*states) {
             *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+            state
+                .contexts
+                .borrow_mut()
+                .values
+                .extend(cx.child_contexts.borrow().values.clone());
             state.is_parent_changed.set(cx.is_parent_changed.get());
 
             unsafe { (cx.me().f)(item).any_compose(state) }
@@ -221,6 +226,12 @@ impl Compose for DynCompose<'_> {
 
         *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
         child_state
+            .contexts
+            .borrow_mut()
+            .values
+            .extend(cx.child_contexts.borrow().values.clone());
+
+        child_state
             .is_parent_changed
             .set(cx.is_parent_changed.get());
 
@@ -265,6 +276,12 @@ macro_rules! impl_tuples {
                     });
 
                     *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                    state
+                        .contexts
+                        .borrow_mut()
+                        .values
+                        .extend(cx.child_contexts.borrow().values.clone());
+
                     state.is_parent_changed.set(cx.is_parent_changed.get());
 
                     unsafe { cx.me().$idx.any_compose(state) }
@@ -351,6 +368,12 @@ where
             }
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+            child_state
+                .contexts
+                .borrow_mut()
+                .values
+                .extend(cx.child_contexts.borrow().values.clone());
+
             child_state.is_parent_changed.set(true);
 
             unsafe {
