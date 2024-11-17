@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.4...actuate-winit-v0.1.5) - 2024-11-17
+
+### Other
+
+- Fix `Compose` impl for `Option` ([#40](https://github.com/actuate-rs/actuate/pull/40))
+- Batch updates with a separate thread ([#36](https://github.com/actuate-rs/actuate/pull/36))
+- Make Update FnOnce ([#31](https://github.com/actuate-rs/actuate/pull/31))
+
 ## [0.1.4](https://github.com/actuate-rs/actuate/compare/actuate-winit-v0.1.3...actuate-winit-v0.1.4) - 2024-11-16
 
 ### Other
