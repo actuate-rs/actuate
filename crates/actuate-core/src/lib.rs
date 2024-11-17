@@ -11,6 +11,11 @@
 //! Instead, always use hooks at the top level of your composable, before any early returns.
 
 #![deny(missing_docs)]
+#![warn(rust_2018_idioms)]
+#![warn(future_incompatible)]
+#![deny(clippy::all)]
+#![deny(clippy::if_not_else)]
+#![deny(clippy::enum_glob_use)]
 
 use slotmap::{DefaultKey, SlotMap};
 use std::{
@@ -156,7 +161,7 @@ unsafe impl<T: Data> Data for RefMap<'_, T> {
 }
 
 impl<C: Compose> Compose for RefMap<'_, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         cx.is_container.set(true);
 
         let state = use_ref(&cx, || {
@@ -215,7 +220,7 @@ unsafe impl<T: Sync> Sync for Map<'_, T> {}
 // Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
 // an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
 impl<C: Compose> Compose for Map<'_, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         cx.is_container.set(true);
 
         let state = use_ref(&cx, || {
@@ -528,7 +533,7 @@ impl<'a, C> Deref for Scope<'a, C> {
 /// Use an immutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_ref<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> &T {
+pub fn use_ref<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> &T {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -551,7 +556,7 @@ struct MutState<T> {
 /// Use a mutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Mut<'_, T> {
+pub fn use_mut<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> Mut<'_, T> {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -629,7 +634,7 @@ impl<T> fmt::Display for ContextError<T> {
 ///
 /// # Panics
 /// Panics if the context value is not found.
-pub fn use_context<T: 'static>(cx: &ScopeData) -> Result<Rc<T>, ContextError<T>> {
+pub fn use_context<T: 'static>(cx: &ScopeData<'_>) -> Result<Rc<T>, ContextError<T>> {
     let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
         return Err(ContextError {
             _marker: PhantomData,
@@ -721,7 +726,7 @@ pub fn use_memo<'a, D, T>(
     cx: ScopeState<'_>,
     dependency: D,
     make_value: impl FnOnce() -> T,
-) -> Ref<T>
+) -> Ref<'_, T>
 where
     D: Memoize,
     T: 'static,
@@ -998,7 +1003,7 @@ mod tests {
     }
 
     impl Compose for Counter {
-        fn compose(cx: Scope<Self>) -> impl Compose {
+        fn compose(cx: Scope<'_, Self>) -> impl Compose {
             cx.me().x.set(cx.me().x.get() + 1);
 
             cx.set_changed();
@@ -1011,7 +1016,7 @@ mod tests {
     }
 
     impl Compose for NonUpdateCounter {
-        fn compose(cx: Scope<Self>) -> impl Compose {
+        fn compose(cx: Scope<'_, Self>) -> impl Compose {
             cx.me().x.set(cx.me().x.get() + 1);
         }
     }
@@ -1024,7 +1029,7 @@ mod tests {
         }
 
         impl Compose for Wrap {
-            fn compose(cx: Scope<Self>) -> impl Compose {
+            fn compose(cx: Scope<'_, Self>) -> impl Compose {
                 Counter {
                     x: cx.me().x.clone(),
                 }
@@ -1049,7 +1054,7 @@ mod tests {
         }
 
         impl Compose for Wrap {
-            fn compose(cx: Scope<Self>) -> impl Compose {
+            fn compose(cx: Scope<'_, Self>) -> impl Compose {
                 NonUpdateCounter {
                     x: cx.me().x.clone(),
                 }
@@ -1074,7 +1079,7 @@ mod tests {
         }
 
         impl Compose for Wrap {
-            fn compose(cx: crate::Scope<Self>) -> impl Compose {
+            fn compose(cx: crate::Scope<'_, Self>) -> impl Compose {
                 DynCompose::new(Counter {
                     x: cx.me().x.clone(),
                 })
@@ -1099,7 +1104,7 @@ mod tests {
         }
 
         impl Compose for B {
-            fn compose(cx: Scope<Self>) -> impl Compose {
+            fn compose(cx: Scope<'_, Self>) -> impl Compose {
                 *cx.me().x.borrow_mut() += 1;
             }
         }
@@ -1110,7 +1115,7 @@ mod tests {
         }
 
         impl Compose for A {
-            fn compose(cx: Scope<Self>) -> impl Compose {
+            fn compose(cx: Scope<'_, Self>) -> impl Compose {
                 let x = cx.me().x.clone();
                 Memo::new((), B { x })
             }

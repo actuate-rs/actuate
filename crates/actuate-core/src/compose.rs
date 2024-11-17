@@ -11,7 +11,7 @@ use std::{
 /// For a dynamically-typed composable, see [`DynCompose`].
 pub trait Compose: Data {
     /// Compose this function.
-    fn compose(cx: Scope<Self>) -> impl Compose;
+    fn compose(cx: Scope<'_, Self>) -> impl Compose;
 
     #[doc(hidden)]
     fn name() -> Cow<'static, str> {
@@ -27,13 +27,13 @@ pub trait Compose: Data {
 }
 
 impl Compose for () {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         cx.is_empty.set(true);
     }
 }
 
 impl<C: Compose> Compose for &C {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         unsafe {
             (**cx.me()).any_compose(&cx);
         }
@@ -41,10 +41,10 @@ impl<C: Compose> Compose for &C {
 }
 
 impl<C: Compose> Compose for Option<C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         cx.is_container.set(true);
 
-        let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
+        let state_cell: &RefCell<Option<ScopeData<'_>>> = use_ref(&cx, || RefCell::new(None));
         let mut state_cell = state_cell.borrow_mut();
 
         if let Some(content) = &*cx.me() {
@@ -104,7 +104,7 @@ where
     Item: Data,
     C: Compose,
 {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         cx.is_container.set(true);
 
         let items_cell = use_ref(&cx, || RefCell::new(None));
@@ -168,7 +168,7 @@ where
     T: Clone + Data + PartialEq + 'static,
     C: Compose,
 {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         let last = use_ref(&cx, RefCell::default);
         let mut last = last.borrow_mut();
         if let Some(last) = &mut *last {
@@ -209,7 +209,7 @@ struct DynComposeState {
 }
 
 impl<'a> Compose for DynCompose<'a> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
+    fn compose(cx: Scope<'_, Self>) -> impl Compose {
         cx.is_container.set(true);
 
         let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
@@ -256,7 +256,7 @@ macro_rules! impl_tuples {
         }
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
-            fn compose(cx: Scope<Self>) -> impl Compose {
+            fn compose(cx: Scope<'_, Self>) -> impl Compose {
                 cx.is_container.set(true);
 
                 $(
@@ -299,7 +299,7 @@ pub(crate) trait AnyCompose {
 
     unsafe fn reborrow(&mut self, ptr: *mut ());
 
-    unsafe fn any_compose(&self, state: &ScopeData);
+    unsafe fn any_compose(&self, state: &ScopeData<'_>);
 
     fn name(&self) -> Cow<'static, str>;
 }
@@ -320,7 +320,7 @@ where
         std::ptr::swap(self, ptr as _);
     }
 
-    unsafe fn any_compose(&self, state: &ScopeData) {
+    unsafe fn any_compose(&self, state: &ScopeData<'_>) {
         state.hook_idx.set(0);
 
         // Transmute the lifetime of `&Self`, `&ScopeData`, and the `Scope` containing both to the same`'a`.
