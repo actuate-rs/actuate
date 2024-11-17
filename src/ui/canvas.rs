@@ -1,4 +1,4 @@
-use crate::{prelude::*, Draw, LayoutContext, WindowContext};
+use crate::{prelude::*, Draw, ListenerFn, WindowContext};
 use std::{cell::RefCell, mem, rc::Rc};
 use taffy::{Layout, Style};
 use vello::{
@@ -6,9 +6,12 @@ use vello::{
     Scene,
 };
 
+use super::use_layout;
+
 #[derive(Clone, Default)]
 pub(crate) struct CanvasContext {
     pub(crate) draws: RefCell<Vec<Rc<dyn Draw>>>,
+    pub(crate) pending_listeners: Rc<RefCell<Vec<ListenerFn>>>,
 }
 
 type DrawFn<'a> = Box<dyn Fn(Layout, &mut Scene) + 'a>;
@@ -31,25 +34,12 @@ impl<'a> Canvas<'a> {
 impl Compose for Canvas<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
-        let layout_cx = use_context::<LayoutContext>(&cx).unwrap();
         let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
 
-        let parent_key = layout_cx.parent_id;
-        let key = *use_ref(&cx, || {
-            let key = renderer_cx
-                .taffy
-                .borrow_mut()
-                .new_leaf(cx.me().style.clone())
-                .unwrap();
-            renderer_cx
-                .taffy
-                .borrow_mut()
-                .add_child(parent_key, key)
-                .unwrap();
+        let (key, layout) = use_layout(&cx, cx.me().style.clone());
 
-            renderer_cx.is_layout_changed.set(true);
-
-            let listeners = mem::take(&mut *renderer_cx.pending_listeners.borrow_mut());
+        use_ref(&cx, || {
+            let listeners = canvas_cx.pending_listeners.borrow().clone();
             renderer_cx.listeners.borrow_mut().insert(key, listeners);
 
             let f: Box<dyn Fn()> = Box::new(move || {
@@ -60,36 +50,15 @@ impl Compose for Canvas<'_> {
             let f: Box<dyn Fn()> = unsafe { mem::transmute(f) };
 
             renderer_cx.canvas_update_fns.borrow_mut().insert(key, f);
-
-            key
         });
 
         // Safety: We must remove `f` here to make the above valid.
-
-        let renderer_cx_handle = renderer_cx.clone();
         use_drop(&cx, move || {
-            renderer_cx_handle
-                .canvas_update_fns
-                .borrow_mut()
-                .remove(&key);
-
-            renderer_cx_handle.taffy.borrow_mut().remove(key).unwrap();
-            renderer_cx_handle.listeners.borrow_mut().remove(&key);
+            renderer_cx.canvas_update_fns.borrow_mut().remove(&key);
         });
-
-        let last_style = use_ref(&cx, || cx.me().style.clone());
-        if cx.me().style != *last_style {
-            renderer_cx.is_layout_changed.set(true);
-            renderer_cx
-                .taffy
-                .borrow_mut()
-                .set_style(key, cx.me().style.clone())
-                .unwrap();
-        }
 
         let scene = use_ref(&cx, || RefCell::new(Scene::new()));
 
-        let layout = *renderer_cx.taffy.borrow().layout(key).unwrap();
         let mut parent_scene = renderer_cx.scene.borrow_mut();
 
         if cx.is_parent_changed() {

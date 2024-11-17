@@ -5,7 +5,7 @@ use crate::{
         canvas::CanvasContext,
         text::{IntoFontStack, TextContext},
     },
-    Event, WindowContext,
+    Event,
 };
 use parley::FontStack;
 use std::{cell::RefCell, mem, rc::Rc};
@@ -136,10 +136,10 @@ unsafe impl<H: Data> Data for OnEvent<H> {
 
 impl<H: Handler> Modify for OnEvent<H> {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let renderer_cx = use_context::<WindowContext>(cx).unwrap();
+        let canvas_cx = use_context::<CanvasContext>(cx).unwrap();
 
         let state = use_ref(cx, || RefCell::new(self.on_event.borrow_mut().build()));
-        use_ref(cx, || {
+        use_provider(cx, || {
             // Safety: `f` is removed from `canvas_update_fns` on drop.
             let f: Rc<dyn Fn(Event)> = Rc::new(move |msg| {
                 self.on_event
@@ -148,7 +148,13 @@ impl<H: Handler> Modify for OnEvent<H> {
             });
             let f: Rc<dyn Fn(Event)> = unsafe { mem::transmute(f) };
 
-            renderer_cx.pending_listeners.borrow_mut().push(f);
+            let mut pending_listeners = canvas_cx.pending_listeners.borrow().clone();
+            pending_listeners.push(f);
+
+            CanvasContext {
+                draws: canvas_cx.draws.clone(),
+                pending_listeners: Rc::new(RefCell::new(pending_listeners)),
+            }
         });
     }
 }
