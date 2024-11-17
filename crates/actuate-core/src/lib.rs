@@ -1,13 +1,18 @@
+use slotmap::{DefaultKey, SlotMap};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
     collections::HashMap,
     fmt,
+    future::Future,
     hash::{Hash, Hasher},
     marker::PhantomData,
     mem,
     ops::Deref,
+    pin::Pin,
     rc::Rc,
+    sync::{mpsc, Arc, Mutex},
+    task::{Poll, Wake, Waker},
 };
 use thiserror::Error;
 
@@ -294,6 +299,10 @@ impl<'a, T: 'static> Mut<'a, T> {
     }
 }
 
+unsafe impl<T: Send> Send for Mut<'_, T> {}
+
+unsafe impl<T: Sync> Sync for Mut<'_, T> {}
+
 impl<T> Clone for Mut<'_, T> {
     fn clone(&self) -> Self {
         Self {
@@ -340,7 +349,9 @@ impl Update {
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
 pub struct Runtime {
-    updater: Rc<dyn Updater>,
+    updater: Arc<dyn Updater>,
+    tasks: Rc<RefCell<SlotMap<DefaultKey, Pin<Box<dyn Future<Output = ()>>>>>>,
+    task_tx: mpsc::Sender<DefaultKey>,
 }
 
 impl Runtime {
@@ -678,8 +689,102 @@ pub fn use_drop<'a>(cx: ScopeState<'a>, f: impl FnOnce() + 'a) {
     }
 }
 
+struct TaskWaker {
+    key: DefaultKey,
+    updater: Arc<dyn Updater>,
+    tx: mpsc::Sender<DefaultKey>,
+}
+
+impl Wake for TaskWaker {
+    fn wake(self: Arc<Self>) {
+        let key = self.key;
+        let pending = self.tx.clone();
+        self.updater.update(Update {
+            f: Box::new(move || {
+                pending.send(key).unwrap();
+            }),
+        });
+    }
+}
+
+pub fn use_local_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
+where
+    F: Future<Output = ()> + 'a,
+{
+    let key = *use_ref(cx, || {
+        let task: Pin<Box<dyn Future<Output = ()>>> = Box::pin(make_task());
+        let task: Pin<Box<dyn Future<Output = ()>>> = unsafe { mem::transmute(task) };
+
+        let rt = Runtime::current();
+        let key = rt.tasks.borrow_mut().insert(task);
+        rt.task_tx.send(key).unwrap();
+        key
+    });
+
+    use_drop(cx, move || {
+        Runtime::current().tasks.borrow_mut().remove(key);
+    })
+}
+
+struct WrappedFuture {
+    lock: Arc<Mutex<bool>>,
+    task: Pin<Box<dyn Future<Output = ()> + Send>>,
+    rt: Runtime,
+}
+
+impl Future for WrappedFuture {
+    type Output = ();
+
+    fn poll(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let me = &mut *self;
+        let guard = me.lock.lock().unwrap();
+
+        if *guard {
+            me.rt.enter();
+
+            me.task.as_mut().poll(cx)
+        } else {
+            Poll::Ready(())
+        }
+    }
+}
+
+unsafe impl Send for WrappedFuture {}
+
+pub struct RuntimeContext {
+    rt: tokio::runtime::Runtime,
+}
+
+pub fn use_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
+where
+    F: Future<Output = ()> + Send + 'a,
+{
+    let runtime_cx = use_context::<RuntimeContext>(cx).unwrap();
+    let lock = use_ref(cx, || {
+        let lock = Arc::new(Mutex::new(true));
+
+        let task: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(make_task());
+        let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
+
+        runtime_cx.rt.spawn(WrappedFuture {
+            lock: lock.clone(),
+            task,
+            rt: Runtime::current(),
+        });
+
+        lock
+    });
+
+    use_drop(cx, || {
+        *lock.lock().unwrap() = false;
+    });
+}
+
 /// Updater for a [`Composer`].
-pub trait Updater {
+pub trait Updater: Send + Sync {
     fn update(&self, update: Update);
 }
 
@@ -698,6 +803,7 @@ pub struct Composer {
     compose: Box<dyn AnyCompose>,
     scope_state: Box<ScopeData<'static>>,
     rt: Runtime,
+    task_rx: mpsc::Receiver<DefaultKey>,
 }
 
 impl Composer {
@@ -708,19 +814,45 @@ impl Composer {
 
     /// Create a new [`Composer`] with the given content and default updater.
     pub fn with_updater(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
-        let updater = Rc::new(updater);
+        let updater = Arc::new(updater);
+        let (task_tx, task_rx) = mpsc::channel();
+
+        let scope_data = ScopeData::default();
+        scope_data.contexts.borrow_mut().values.insert(
+            TypeId::of::<RuntimeContext>(),
+            Rc::new(RuntimeContext {
+                rt: tokio::runtime::Runtime::new().unwrap(),
+            }),
+        );
+
         Self {
             compose: Box::new(content),
-            scope_state: Box::new(ScopeData::default()),
+            scope_state: Box::new(scope_data),
             rt: Runtime {
                 updater: updater.clone(),
+                tasks: Rc::new(RefCell::new(SlotMap::new())),
+                task_tx,
             },
+            task_rx,
         }
     }
 
     /// Compose the content of this composer.
     pub fn compose(&mut self) {
         self.rt.enter();
+
+        while let Ok(key) = self.task_rx.try_recv() {
+            let waker = Waker::from(Arc::new(TaskWaker {
+                key,
+                updater: Runtime::current().updater.clone(),
+                tx: self.rt.task_tx.clone(),
+            }));
+            let mut cx = std::task::Context::from_waker(&waker);
+
+            let mut tasks = self.rt.tasks.borrow_mut();
+            let task = tasks.get_mut(key).unwrap();
+            let _ = task.as_mut().poll(&mut cx);
+        }
 
         unsafe { self.compose.any_compose(&*self.scope_state) }
     }
