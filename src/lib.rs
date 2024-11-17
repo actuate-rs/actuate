@@ -1,25 +1,25 @@
 use actuate_core::prelude::*;
 use canvas::CanvasContext;
-use parley::{FontStack, Rect};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
-    mem,
     rc::Rc,
 };
-use taffy::{Layout, NodeId, TaffyTree};
-use text::{FontContext, IntoFontStack, TextContext};
-use vello::{
-    kurbo::{Affine, Vec2},
-    peniko::{Color, Fill},
-    Scene,
-};
+use taffy::{NodeId, TaffyTree};
+use text::{FontContext, TextContext};
+use vello::{kurbo::Vec2, peniko::Color, Scene};
 use winit::event::{ElementState, MouseButton};
 
 pub use actuate_core as core;
 
 mod canvas;
 pub use self::canvas::Canvas;
+
+pub mod draw;
+use self::draw::Draw;
+
+pub mod modify;
+pub use modify::View;
 
 mod flex;
 pub use self::flex::Flex;
@@ -82,197 +82,4 @@ impl<C: Compose> Compose for RenderRoot<C> {
 
 pub fn run(content: impl Compose + 'static) {
     actuate_winit::run(RenderRoot { content });
-}
-
-pub trait View: Compose {
-    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> WithState<Clickable<'a>, Self> {
-        WithState {
-            state: Clickable::new(on_click),
-            content: self,
-        }
-    }
-
-    fn with_state<T: State>(self, state: T) -> WithState<T, Self> {
-        WithState::new(state, self)
-    }
-
-    fn font(self, font_stack: impl IntoFontStack<'static>) -> WithState<FontStackState, Self> {
-        self.with_state(FontStackState {
-            font_stack: font_stack.into_font_stack(),
-        })
-    }
-
-    fn font_size(self, font_size: f32) -> WithState<FontSize, Self> {
-        self.with_state(FontSize { font_size })
-    }
-
-    fn draw<D: Draw + 'static>(self, draw: D) -> WithState<DrawState<D>, Self> {
-        self.with_state(DrawState::new(draw))
-    }
-
-    fn background_color(self, color: Color) -> WithState<DrawState<BackgroundColor>, Self> {
-        self.draw(BackgroundColor { color })
-    }
-}
-
-impl<C: Compose> View for C {}
-
-pub trait State {
-    fn use_state<'a>(&'a self, cx: ScopeState<'a>);
-}
-
-pub struct WithState<T, C> {
-    state: T,
-    content: C,
-}
-
-impl<T, C> WithState<T, C> {
-    pub fn new(state: T, content: C) -> Self {
-        Self { state, content }
-    }
-}
-
-unsafe impl<T: Data, C: Data> Data for WithState<T, C> {
-    type Id = WithState<T::Id, C::Id>;
-}
-
-impl<T: State + Data, C: Compose> Compose for WithState<T, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        unsafe { cx.me().state.use_state(mem::transmute(&**cx)) }
-
-        Ref::map(cx.me(), |me| &me.content)
-    }
-}
-
-#[derive(Data)]
-pub struct Clickable<'a> {
-    on_click: Box<dyn Fn() + 'a>,
-}
-
-impl<'a> Clickable<'a> {
-    pub fn new(on_click: impl Fn() + 'a) -> Self {
-        Self {
-            on_click: Box::new(on_click),
-        }
-    }
-}
-
-impl State for Clickable<'_> {
-    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
-
-        use_ref(cx, || {
-            let is_pressed = Cell::new(false);
-
-            // Safety: `f` is removed from `canvas_update_fns` on drop.
-
-            let f: Rc<dyn Fn(MouseButton, ElementState, Vec2)> =
-                Rc::new(move |button, state, _| {
-                    if button != MouseButton::Left {
-                        return;
-                    }
-
-                    if state == ElementState::Pressed {
-                        is_pressed.set(true)
-                    } else if is_pressed.get() && state == ElementState::Released {
-                        (self.on_click)()
-                    }
-                });
-            let f: Rc<dyn Fn(MouseButton, ElementState, Vec2)> = unsafe { mem::transmute(f) };
-
-            renderer_cx.pending_listeners.borrow_mut().push(f);
-        });
-    }
-}
-
-#[derive(Data)]
-pub struct FontSize {
-    pub font_size: f32,
-}
-
-impl State for FontSize {
-    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let text_cx = use_context::<TextContext>(&cx).unwrap();
-
-        use_provider(&cx, || TextContext {
-            color: text_cx.color,
-            font_size: self.font_size,
-            font_stack: text_cx.font_stack.clone(),
-        });
-    }
-}
-
-#[derive(Data)]
-pub struct FontStackState {
-    pub font_stack: FontStack<'static>,
-}
-
-impl State for FontStackState {
-    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let text_cx = use_context::<TextContext>(&cx).unwrap();
-
-        use_provider(cx, || TextContext {
-            color: text_cx.color,
-            font_size: text_cx.font_size,
-            font_stack: self.font_stack.clone(),
-        });
-    }
-}
-
-pub trait Draw {
-    fn pre_process(&self, layout: &Layout, scene: &mut Scene) {
-        let _ = layout;
-        let _ = scene;
-    }
-
-    fn post_process(&self, layout: &Layout, scene: &mut Scene) {
-        let _ = layout;
-        let _ = scene;
-    }
-}
-
-pub struct DrawState<T> {
-    draw: Rc<T>,
-}
-
-impl<T> DrawState<T> {
-    pub fn new(draw: T) -> Self {
-        Self {
-            draw: Rc::new(draw),
-        }
-    }
-}
-
-unsafe impl<T: Data> Data for DrawState<T> {
-    type Id = DrawState<T::Id>;
-}
-
-impl<T: Draw + 'static> State for DrawState<T> {
-    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let canvas_cx = use_context::<CanvasContext>(&cx).unwrap();
-
-        let draw = self.draw.clone();
-        use_provider(cx, move || {
-            let canvas_cx = (*canvas_cx).clone();
-            canvas_cx.draws.borrow_mut().push(draw.clone());
-            canvas_cx
-        });
-    }
-}
-
-#[derive(Data)]
-pub struct BackgroundColor {
-    pub color: Color,
-}
-
-impl Draw for BackgroundColor {
-    fn pre_process(&self, layout: &Layout, scene: &mut Scene) {
-        scene.fill(
-            Fill::NonZero,
-            Affine::default(),
-            self.color,
-            None,
-            &Rect::new(0., 0., layout.size.width as _, layout.size.height as _),
-        );
-    }
 }
