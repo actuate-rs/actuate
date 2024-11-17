@@ -429,6 +429,7 @@ pub struct ScopeData<'a> {
     is_empty: Cell<bool>,
     is_container: Cell<bool>,
     contexts: RefCell<Contexts>,
+    child_contexts: RefCell<Contexts>,
     drops: RefCell<Vec<usize>>,
     generation: Cell<u64>,
     _marker: PhantomData<&'a fn(ScopeData<'a>) -> ScopeData<'a>>,
@@ -617,7 +618,7 @@ pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() ->
     // TODO
     let r = use_ref(cx, || {
         let value = Rc::new(make_value());
-        cx.contexts
+        cx.child_contexts
             .borrow_mut()
             .values
             .insert(TypeId::of::<T>(), value.clone());
@@ -910,7 +911,7 @@ impl Composer {
         let (task_tx, task_rx) = mpsc::channel();
 
         let scope_data = ScopeData::default();
-        scope_data.contexts.borrow_mut().values.insert(
+        scope_data.child_contexts.borrow_mut().values.insert(
             TypeId::of::<RuntimeContext>(),
             Rc::new(RuntimeContext {
                 rt: tokio::runtime::Runtime::new().unwrap(),
