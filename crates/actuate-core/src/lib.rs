@@ -106,22 +106,22 @@ impl<'a, T> From<Map<'a, T>> for Cow<'a, T> {
 }
 
 /// Immutable reference or mapped reference to a value.
-pub enum RefMap<'a, T: ?Sized> {
+pub enum RefMap<'a, T> {
     /// Reference to a value.
     Ref(Ref<'a, T>),
     /// Mapped reference to a value.
     Map(Map<'a, T>),
 }
 
-impl<T: ?Sized> Clone for RefMap<'_, T> {
+impl<T> Clone for RefMap<'_, T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T: ?Sized> Copy for RefMap<'_, T> {}
+impl<T> Copy for RefMap<'_, T> {}
 
-impl<T: ?Sized> Deref for RefMap<'_, T> {
+impl<T> Deref for RefMap<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -132,19 +132,19 @@ impl<T: ?Sized> Deref for RefMap<'_, T> {
     }
 }
 
-impl<T: Hash + ?Sized> Hash for RefMap<'_, T> {
+impl<T: Hash> Hash for RefMap<'_, T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (**self).hash(state);
     }
 }
 
-impl<'a, T: ?Sized> From<Ref<'a, T>> for RefMap<'a, T> {
+impl<'a, T> From<Ref<'a, T>> for RefMap<'a, T> {
     fn from(value: Ref<'a, T>) -> Self {
         RefMap::Ref(value)
     }
 }
 
-impl<'a, T: ?Sized> From<Map<'a, T>> for RefMap<'a, T> {
+impl<'a, T> From<Map<'a, T>> for RefMap<'a, T> {
     fn from(value: Map<'a, T>) -> Self {
         RefMap::Map(value)
     }
@@ -173,38 +173,20 @@ impl<C: Compose> Compose for RefMap<'_, C> {
 /// Mapped immutable reference to a value of type `T`.
 ///
 /// This can be created with [`Ref::map`].
-pub struct Map<'a, T: ?Sized> {
+pub struct Map<'a, T> {
     ptr: *const (),
     map_fn: *const (),
     deref_fn: fn(*const (), *const ()) -> &'a T,
     generation: *const Cell<u64>,
 }
 
-impl<T: ?Sized> Clone for Map<'_, T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T: ?Sized> Copy for Map<'_, T> {}
-
-impl<T: ?Sized> Deref for Map<'_, T> {
+impl<T> Deref for Map<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         (self.deref_fn)(self.ptr, self.map_fn)
     }
 }
-
-impl<T: Hash + ?Sized> Hash for Map<'_, T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        (**self).hash(state);
-    }
-}
-
-unsafe impl<T: Send> Send for Map<'_, T> {}
-
-unsafe impl<T: Sync> Sync for Map<'_, T> {}
 
 // Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
 // an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
@@ -229,20 +211,26 @@ impl<C: Compose> Compose for Map<'_, C> {
     }
 }
 
+impl<T> Hash for Map<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.ptr.hash(state);
+        self.generation.hash(state);
+    }
+}
+
 /// Immutable reference to a value of type `T`.
 ///
 /// Memoizing this value will use pointer-equality for higher-performance.
 ///
 /// This reference can be mapped to inner values with [`Ref::map`].
-#[derive(Hash)]
-pub struct Ref<'a, T: ?Sized> {
+pub struct Ref<'a, T> {
     value: &'a T,
     generation: *const Cell<u64>,
 }
 
 impl<'a, T> Ref<'a, T> {
     /// Map this reference to a value of type `U`.
-    pub fn map<U: ?Sized>(me: Self, f: fn(&T) -> &U) -> Map<'a, U> {
+    pub fn map<U>(me: Self, f: fn(&T) -> &U) -> Map<'a, U> {
         Map {
             ptr: me.value as *const _ as _,
             map_fn: f as _,
@@ -258,15 +246,7 @@ impl<'a, T> Ref<'a, T> {
     }
 }
 
-impl<T: ?Sized> Clone for Ref<'_, T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T: ?Sized> Copy for Ref<'_, T> {}
-
-impl<T: ?Sized> Deref for Ref<'_, T> {
+impl<T> Deref for Ref<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -274,9 +254,12 @@ impl<T: ?Sized> Deref for Ref<'_, T> {
     }
 }
 
-unsafe impl<T: Send> Send for Ref<'_, T> {}
-
-unsafe impl<T: Sync> Sync for Ref<'_, T> {}
+impl<T> Hash for Ref<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (self.value as *const T).hash(state);
+        self.generation.hash(state);
+    }
+}
 
 /// Mutable reference to a value of type `T`.
 pub struct Mut<'a, T> {
@@ -326,18 +309,6 @@ impl<'a, T: 'static> Mut<'a, T> {
     }
 }
 
-unsafe impl<T: Send> Send for Mut<'_, T> {}
-
-unsafe impl<T: Sync> Sync for Mut<'_, T> {}
-
-impl<T> Clone for Mut<'_, T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T> Copy for Mut<'_, T> {}
-
 impl<T> Deref for Mut<'_, T> {
     type Target = T;
 
@@ -346,28 +317,40 @@ impl<T> Deref for Mut<'_, T> {
     }
 }
 
-impl<T> Hash for Mut<'_, T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.ptr.hash(state);
-        self.generation.hash(state);
-    }
+macro_rules! impl_pointer {
+    ($($t:ident),*) => {
+        $(
+            impl<T> Clone for $t<'_, T> {
+                fn clone(&self) -> Self {
+                    *self
+                }
+            }
+
+            impl<T> Copy for $t<'_, T> {}
+
+            unsafe impl<T: Send> Send for $t<'_, T> {}
+
+            unsafe impl<T: Sync> Sync for $t<'_, T> {}
+
+            impl<'a, T: 'a> IntoIterator for $t<'a, T>
+            where
+                &'a T: IntoIterator,
+            {
+                type Item = <&'a T as IntoIterator>::Item;
+
+                type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+                fn into_iter(self) -> Self::IntoIter {
+                    let value: &T = &self;
+                    // Safety: the reference to `value` is guranteed to live as long as `self`.
+                    let value: &T = unsafe { mem::transmute(value) };
+                    value.into_iter()
+                }
+            }
+        )*
+    };
 }
-
-impl<'a, T: 'a> IntoIterator for Mut<'a, T>
-where
-    &'a T: IntoIterator,
-{
-    type Item = <&'a T as IntoIterator>::Item;
-
-    type IntoIter = <&'a T as IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        let value: &T = &self;
-        // Safety: the reference to `value` is guranteed to live as long as `self`.
-        let value: &T = unsafe { mem::transmute(value) };
-        value.into_iter()
-    }
-}
+impl_pointer!(Ref, Map, Mut);
 
 /// An update to apply to a composable.
 pub struct Update {
@@ -474,7 +457,7 @@ impl Drop for ScopeData<'_> {
 }
 
 /// Composable scope.
-pub struct Scope<'a, C: ?Sized> {
+pub struct Scope<'a, C> {
     me: &'a C,
     state: ScopeState<'a>,
 }
