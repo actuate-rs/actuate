@@ -111,13 +111,14 @@ impl<C: Compose> Compose for Window<C> {
 
                 match event {
                     WinitEvent::Resumed => {
-                        let surface = pollster::block_on(render_cx.borrow_mut().create_surface(
-                            window,
-                            window.inner_size().width,
-                            window.inner_size().height,
-                            PresentMode::AutoVsync,
-                        ))
-                        .unwrap();
+                        let surface: RenderSurface<'_> =
+                            pollster::block_on(render_cx.borrow_mut().create_surface(
+                                window,
+                                window.inner_size().width,
+                                window.inner_size().height,
+                                PresentMode::AutoVsync,
+                            ))
+                            .unwrap();
 
                         let renderer = Renderer::new(
                             &render_cx.borrow().devices[surface.dev_id].device,
@@ -130,8 +131,11 @@ impl<C: Compose> Compose for Window<C> {
                         )
                         .unwrap();
 
+                        // Safety: render_surface is valid for the lifetime of the window.
+                        let render_surface: RenderSurface<'static> =
+                            unsafe { mem::transmute(surface) };
                         *state.borrow_mut() = Some(State {
-                            render_surface: unsafe { mem::transmute(surface) },
+                            render_surface,
                             renderer,
                         })
                     }

@@ -11,10 +11,12 @@ pub(crate) struct CanvasContext {
     pub(crate) draws: RefCell<Vec<Rc<dyn Draw>>>,
 }
 
+type DrawFn<'a> = Box<dyn Fn(Layout, &mut Scene) + 'a>;
+
 #[derive(Data)]
 pub struct Canvas<'a> {
     style: Style,
-    f: Box<dyn Fn(Layout, &mut Scene) + 'a>,
+    f: DrawFn<'a>,
 }
 
 impl<'a> Canvas<'a> {
@@ -55,7 +57,7 @@ impl Compose for Canvas<'_> {
             });
 
             // Safety: `f` is removed from `canvas_update_fns` on drop.
-            let f = unsafe { mem::transmute(f) };
+            let f: Box<dyn Fn()> = unsafe { mem::transmute(f) };
 
             renderer_cx.canvas_update_fns.borrow_mut().insert(key, f);
 

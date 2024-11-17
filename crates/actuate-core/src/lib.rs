@@ -81,8 +81,8 @@ impl<T> Deref for Cow<'_, T> {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Cow::Borrowed(ref_map) => &*ref_map,
-            Cow::Owned(value) => &value,
+            Cow::Borrowed(ref_map) => ref_map,
+            Cow::Owned(value) => value,
         }
     }
 }
@@ -115,20 +115,19 @@ pub enum RefMap<'a, T: ?Sized> {
 
 impl<T: ?Sized> Clone for RefMap<'_, T> {
     fn clone(&self) -> Self {
-        match self {
-            RefMap::Ref(r) => RefMap::Ref(r.clone()),
-            RefMap::Map(map) => RefMap::Map(map.clone()),
-        }
+        *self
     }
 }
+
+impl<T: ?Sized> Copy for RefMap<'_, T> {}
 
 impl<T: ?Sized> Deref for RefMap<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         match self {
-            RefMap::Ref(r) => &*r,
-            RefMap::Map(map) => &*map,
+            RefMap::Ref(r) => r,
+            RefMap::Map(map) => map,
         }
     }
 }
@@ -183,12 +182,7 @@ pub struct Map<'a, T: ?Sized> {
 
 impl<T: ?Sized> Clone for Map<'_, T> {
     fn clone(&self) -> Self {
-        Self {
-            ptr: self.ptr,
-            map_fn: self.map_fn,
-            deref_fn: self.deref_fn,
-            generation: self.generation,
-        }
+        *self
     }
 }
 
@@ -266,10 +260,7 @@ impl<'a, T> Ref<'a, T> {
 
 impl<T: ?Sized> Clone for Ref<'_, T> {
     fn clone(&self) -> Self {
-        Self {
-            value: self.value,
-            generation: self.generation,
-        }
+        *self
     }
 }
 
@@ -341,12 +332,7 @@ unsafe impl<T: Sync> Sync for Mut<'_, T> {}
 
 impl<T> Clone for Mut<'_, T> {
     fn clone(&self) -> Self {
-        Self {
-            ptr: self.ptr,
-            scope_is_changed: self.scope_is_changed,
-            generation: self.generation,
-            phantom: self.phantom,
-        }
+        *self
     }
 }
 
@@ -376,7 +362,7 @@ where
     type IntoIter = <&'a T as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        let value: &T = &*self;
+        let value: &T = &self;
         // Safety: the reference to `value` is guranteed to live as long as `self`.
         let value: &T = unsafe { mem::transmute(value) };
         value.into_iter()
@@ -398,11 +384,13 @@ impl Update {
     }
 }
 
+type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
+
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
 pub struct Runtime {
     updater: Arc<dyn Updater>,
-    tasks: Rc<RefCell<SlotMap<DefaultKey, Pin<Box<dyn Future<Output = ()>>>>>>,
+    tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
     task_tx: mpsc::Sender<DefaultKey>,
     lock: Arc<RwLock<()>>,
 }
@@ -436,7 +424,7 @@ impl Runtime {
 }
 
 thread_local! {
-    static RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
+    static RUNTIME: RefCell<Option<Runtime>> = const { RefCell::new(None) };
 }
 
 /// Map of [`TypeId`] to context values.
@@ -508,10 +496,7 @@ impl<'a, C> Scope<'a, C> {
 
 impl<C> Clone for Scope<'_, C> {
     fn clone(&self) -> Self {
-        Self {
-            me: self.me,
-            state: self.state,
-        }
+        *self
     }
 }
 
@@ -642,7 +627,7 @@ pub fn use_context<T: 'static>(cx: &ScopeData) -> Result<Rc<T>, ContextError<T>>
 /// Provide a context value of type `T`.
 ///
 /// This value will be available to [`use_context`] to all children of this composable.
-pub fn use_provider<'a, T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> Rc<T> {
+pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> Rc<T> {
     // TODO
     let r = use_ref(cx, || {
         let value = Rc::new(make_value());
@@ -717,11 +702,7 @@ impl<T> Memoize for Mut<'_, T> {
 /// Use a memoized value of type `T` with a dependency of type `D`.
 ///
 /// `make_value` will update the returned value whenver `dependency` is changed.
-pub fn use_memo<'a, D, T>(
-    cx: ScopeState<'_>,
-    dependency: D,
-    make_value: impl FnOnce() -> T,
-) -> Ref<T>
+pub fn use_memo<D, T>(cx: ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
 where
     D: Memoize,
     T: 'static,
@@ -980,7 +961,7 @@ impl Composer {
             let _ = task.as_mut().poll(&mut cx);
         }
 
-        unsafe { self.compose.any_compose(&*self.scope_state) }
+        unsafe { self.compose.any_compose(&self.scope_state) }
     }
 }
 
