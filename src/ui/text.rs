@@ -96,6 +96,8 @@ where
 
         let text_layout = use_memo(&cx, (content.clone(), text_cx.clone()), || {
             let mut font_cx = font_cx.inner.borrow_mut();
+            
+            dbg!(text_cx.color);
 
             let mut layout_cx = LayoutContext::<Color>::new();
             let mut text_layout = layout_cx.ranged_builder(&mut font_cx, &content, 1.);
@@ -140,7 +142,7 @@ where
                                 .collect::<Vec<_>>();
                             scene
                                 .draw_glyphs(font)
-                                .brush(Color::BLACK)
+                                .brush(text_cx.color)
                                 .hint(true)
                                 .glyph_transform(glyph_xform)
                                 .font_size(font_size)

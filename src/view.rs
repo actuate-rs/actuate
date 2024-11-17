@@ -45,6 +45,10 @@ pub trait View: Compose {
         })
     }
 
+    fn color(self, color: Color) -> Modified<FontColor, Self> {
+        self.modify(FontColor { color })
+    }
+
     fn font_size(self, font_size: f32) -> Modified<FontSize, Self> {
         self.modify(FontSize { font_size })
     }
@@ -239,6 +243,23 @@ impl Handler for Clickable<'_> {
             }
             _ => {}
         }
+    }
+}
+
+#[derive(Data)]
+pub struct FontColor {
+    pub color: Color,
+}
+
+impl Modify for FontColor {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
+        let text_cx = use_context::<TextContext>(&cx).unwrap();
+
+        use_provider(&cx, || TextContext {
+            color: self.color,
+            font_size: text_cx.font_size,
+            font_stack: text_cx.font_stack.clone(),
+        });
     }
 }
 

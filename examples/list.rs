@@ -17,7 +17,9 @@ impl Compose for List {
                         items.pop();
                     })
                 }),
-            )),
+            ))
+            .color(Color::WHITE)
+            .background_color(Color::BLACK),
             compose::from_iter((*items).clone(), |label| Text::new(label)),
         ))
         .font_size(40.)

@@ -14,7 +14,7 @@ pub use actuate_core as core;
 pub mod draw;
 use self::draw::Draw;
 
-pub mod modify;
+pub mod view;
 
 pub mod ui;
 use self::ui::text::{FontContext, TextContext};
@@ -22,7 +22,7 @@ use self::ui::text::{FontContext, TextContext};
 pub mod prelude {
     pub use crate::core::prelude::*;
 
-    pub use crate::modify::View;
+    pub use crate::view::View;
 
     pub use crate::ui::{use_font, Canvas, Flex, Text, Window};
 
