@@ -1,4 +1,4 @@
-use crate::{LayoutContext, WindowContext};
+use crate::{LayoutContext, WindowContext, Event};
 use actuate_core::prelude::*;
 use parley::Rect;
 use std::{
@@ -7,7 +7,7 @@ use std::{
     num::NonZeroUsize,
     rc::Rc,
 };
-use taffy::{prelude::TaffyMaxContent, FlexDirection, Size, Style, TaffyTree};
+use taffy::{prelude::TaffyMaxContent, FlexDirection, NodeId, Size, Style, TaffyTree};
 use vello::{
     self,
     kurbo::{Affine, Vec2},
@@ -17,7 +17,7 @@ use vello::{
 };
 use wgpu::PresentMode;
 use winit::{
-    event::{Event, WindowEvent},
+    event::{Event as WinitEvent, WindowEvent},
     window::WindowAttributes,
 };
 
@@ -84,6 +84,7 @@ impl<C: Compose> Compose for Window<C> {
         let render_cx = use_ref(&cx, || RefCell::new(RenderContext::new()));
 
         let cursor_pos = use_ref(&cx, RefCell::default);
+        let target = use_ref(&cx, || Cell::new(None));
 
         let state = use_ref(&cx, || RefCell::new(None));
 
@@ -109,7 +110,7 @@ impl<C: Compose> Compose for Window<C> {
                 }
 
                 match event {
-                    Event::Resumed => {
+                    WinitEvent::Resumed => {
                         let surface = pollster::block_on(render_cx.borrow_mut().create_surface(
                             window,
                             window.inner_size().width,
@@ -134,9 +135,46 @@ impl<C: Compose> Compose for Window<C> {
                             renderer,
                         })
                     }
-                    Event::WindowEvent { event, .. } => match event {
+                    WinitEvent::WindowEvent { event, .. } => match event {
                         WindowEvent::CursorMoved { position, .. } => {
                             *cursor_pos.borrow_mut() = Vec2::new(position.x, position.y);
+
+                            let pos = *cursor_pos.borrow();
+                            let taffy = window_cx.taffy.borrow();
+
+                            if let Some(id) = hit_test(&taffy, pos, &layout_cx) {
+                                if let Some(last_id) = target.replace(Some(id)) {
+                                    if last_id != id {
+                                        if let Some(listeners) =
+                                            window_cx.listeners.borrow().get(&last_id)
+                                        {
+                                            for f in listeners {
+                                                f(Event::MouseOut)
+                                            }
+                                        }
+
+                                        if let Some(listeners) =
+                                            window_cx.listeners.borrow().get(&id)
+                                        {
+                                            for f in listeners {
+                                                f(Event::MouseIn)
+                                            }
+                                        }
+                                    }
+                                } else if let Some(listeners) =
+                                    window_cx.listeners.borrow().get(&id)
+                                {
+                                    for f in listeners {
+                                        f(Event::MouseIn)
+                                    }
+                                }
+
+                                if let Some(listeners) = window_cx.listeners.borrow().get(&id) {
+                                    for f in listeners {
+                                        f(Event::MouseMove { pos })
+                                    }
+                                }
+                            }
                         }
                         WindowEvent::MouseInput { button, state, .. } => {
                             let pos = *cursor_pos.borrow();
@@ -179,7 +217,11 @@ impl<C: Compose> Compose for Window<C> {
                             if let Some(key) = target {
                                 if let Some(listeners) = window_cx.listeners.borrow().get(&key) {
                                     for f in listeners {
-                                        f(*button, *state, *cursor_pos.borrow())
+                                        f(Event::MouseInput {
+                                            button: *button,
+                                            state: *state,
+                                            pos: *cursor_pos.borrow(),
+                                        })
                                     }
                                 }
                             }
@@ -255,4 +297,30 @@ impl<C: Compose> Compose for Window<C> {
             Ref::map(cx.me(), |me| &me.content),
         )
     }
+}
+
+fn hit_test(taffy: &TaffyTree, pos: Vec2, layout_cx: &LayoutContext) -> Option<NodeId> {
+    let mut keys = vec![(Vec2::default(), layout_cx.parent_id)];
+
+    let mut target = None;
+
+    while let Some((parent_pos, key)) = keys.pop() {
+        let layout = taffy.layout(key).unwrap();
+        if pos.x >= parent_pos.x + layout.location.x as f64
+            && pos.y >= parent_pos.y + layout.location.y as f64
+            && pos.x <= parent_pos.x + layout.location.x as f64 + layout.size.width as f64
+            && pos.y <= parent_pos.y + layout.location.y as f64 + layout.size.height as f64
+        {
+            target = Some(key);
+
+            keys.extend(taffy.children(key).unwrap().into_iter().map(|key| {
+                (
+                    parent_pos + Vec2::new(layout.location.x as _, layout.location.y as _),
+                    key,
+                )
+            }));
+        }
+    }
+
+    target
 }

@@ -39,14 +39,28 @@ pub struct LayoutContext {
     parent_id: NodeId,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Event {
+    MouseInput {
+        button: MouseButton,
+        state: ElementState,
+        pos: Vec2,
+    },
+    MouseIn,
+    MouseMove {
+        pos: Vec2,
+    },
+    MouseOut,
+}
+
 pub struct WindowContext {
     scene: RefCell<Scene>,
     taffy: RefCell<TaffyTree>,
     is_changed: Cell<bool>,
     is_layout_changed: Cell<bool>,
     canvas_update_fns: RefCell<HashMap<NodeId, Box<dyn Fn()>>>,
-    listeners: Rc<RefCell<HashMap<NodeId, Vec<Rc<dyn Fn(MouseButton, ElementState, Vec2)>>>>>,
-    pending_listeners: Rc<RefCell<Vec<Rc<dyn Fn(MouseButton, ElementState, Vec2)>>>>,
+    listeners: Rc<RefCell<HashMap<NodeId, Vec<Rc<dyn Fn(Event)>>>>>,
+    pending_listeners: Rc<RefCell<Vec<Rc<dyn Fn(Event)>>>>,
     base_color: Cell<Color>,
 }
 

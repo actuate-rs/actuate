@@ -78,7 +78,7 @@ pub unsafe trait FnField<Marker> {
 
 macro_rules! impl_data_for_fns {
     ($($t:tt),*) => {
-        unsafe impl<$($t,)* F: Fn($($t,)*)> FnField<fn($($t,)*)> for &FieldWrap<F> {}
+        unsafe impl<$($t,)* F: FnMut($($t,)*)> FnField<fn($($t,)*)> for &FieldWrap<F> {}
     }
 }
 

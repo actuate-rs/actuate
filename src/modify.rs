@@ -5,16 +5,33 @@ use crate::{
         canvas::CanvasContext,
         text::{IntoFontStack, TextContext},
     },
-    WindowContext,
+    Event, WindowContext,
 };
 use parley::FontStack;
-use std::{cell::Cell, mem, rc::Rc};
-use vello::kurbo::Vec2;
+use std::{cell::RefCell, mem, rc::Rc};
 use winit::event::{ElementState, MouseButton};
 
 pub trait View: Compose {
-    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Modified<Clickable<'a>, Self> {
-        Modified::new(Clickable::new(on_click), self)
+    fn on_event<H: Handler>(self, on_event: H) -> Modified<OnEvent<H>, Self> {
+        Modified::new(OnEvent::new(on_event), self)
+    }
+
+    fn on_mouse_in<'a>(
+        self,
+        on_mouse_in: impl Fn() + 'a,
+    ) -> Modified<OnEvent<OnMouseIn<'a>>, Self> {
+        Modified::new(OnEvent::new(OnMouseIn::new(on_mouse_in)), self)
+    }
+
+    fn on_mouse_out<'a>(
+        self,
+        on_mouse_out: impl Fn() + 'a,
+    ) -> Modified<OnEvent<OnMouseOut<'a>>, Self> {
+        Modified::new(OnEvent::new(OnMouseOut::new(on_mouse_out)), self)
+    }
+
+    fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Modified<OnEvent<Clickable<'a>>, Self> {
+        Modified::new(OnEvent::new(Clickable::new(on_click)), self)
     }
 
     fn with_state<T: Modify>(self, state: T) -> Modified<T, Self> {
@@ -69,6 +86,115 @@ impl<T: Modify + Data, C: Compose> Compose for Modified<T, C> {
     }
 }
 
+pub trait Handler {
+    type State: 'static;
+
+    fn build(&self) -> Self::State;
+
+    fn handle(&self, state: &mut Self::State, event: Event);
+}
+
+impl<F: Fn(Event)> Handler for F {
+    type State = ();
+
+    fn build(&self) -> Self::State {}
+
+    fn handle(&self, state: &mut Self::State, event: Event) {
+        let _ = state;
+
+        self(event)
+    }
+}
+
+pub struct OnEvent<H> {
+    on_event: RefCell<H>,
+}
+
+impl<H> OnEvent<H> {
+    pub fn new(on_event: H) -> Self {
+        Self {
+            on_event: RefCell::new(on_event),
+        }
+    }
+}
+
+unsafe impl<H: Data> Data for OnEvent<H> {
+    type Id = OnEvent<H::Id>;
+}
+
+impl<H: Handler> Modify for OnEvent<H> {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
+        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
+
+        let state = use_ref(cx, || RefCell::new(self.on_event.borrow_mut().build()));
+        use_ref(cx, || {
+            // Safety: `f` is removed from `canvas_update_fns` on drop.
+            let f: Rc<dyn Fn(Event)> = Rc::new(move |msg| {
+                self.on_event
+                    .borrow_mut()
+                    .handle(&mut state.borrow_mut(), msg)
+            });
+            let f: Rc<dyn Fn(Event)> = unsafe { mem::transmute(f) };
+
+            renderer_cx.pending_listeners.borrow_mut().push(f);
+        });
+    }
+}
+
+#[derive(Data)]
+pub struct OnMouseIn<'a> {
+    on_mouse_in: Box<dyn Fn() + 'a>,
+}
+
+impl<'a> OnMouseIn<'a> {
+    pub fn new(on_mouse_in: impl Fn() + 'a) -> Self {
+        Self {
+            on_mouse_in: Box::new(on_mouse_in),
+        }
+    }
+}
+
+impl Handler for OnMouseIn<'_> {
+    type State = ();
+
+    fn build(&self) -> Self::State {}
+
+    fn handle(&self, state: &mut Self::State, event: Event) {
+        let _ = state;
+
+        if let Event::MouseIn = event {
+            (self.on_mouse_in)()
+        }
+    }
+}
+
+#[derive(Data)]
+pub struct OnMouseOut<'a> {
+    on_mouse_out: Box<dyn Fn() + 'a>,
+}
+
+impl<'a> OnMouseOut<'a> {
+    pub fn new(on_mouse_out: impl Fn() + 'a) -> Self {
+        Self {
+            on_mouse_out: Box::new(on_mouse_out),
+        }
+    }
+}
+
+impl Handler for OnMouseOut<'_> {
+    type State = ();
+
+    fn build(&self) -> Self::State {}
+
+    fn handle(&self, state: &mut Self::State, event: Event) {
+        let _ = state;
+
+        if let Event::MouseOut = event {
+            (self.on_mouse_out)()
+        }
+    }
+}
+
 #[derive(Data)]
 pub struct Clickable<'a> {
     on_click: Box<dyn Fn() + 'a>,
@@ -82,31 +208,32 @@ impl<'a> Clickable<'a> {
     }
 }
 
-impl Modify for Clickable<'_> {
-    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
-        let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
+impl Handler for Clickable<'_> {
+    type State = bool;
 
-        use_ref(cx, || {
-            let is_pressed = Cell::new(false);
+    fn build(&self) -> Self::State {
+        false
+    }
 
-            // Safety: `f` is removed from `canvas_update_fns` on drop.
+    fn handle(&self, state: &mut Self::State, event: Event) {
+        match event {
+            Event::MouseInput {
+                button,
+                state: button_state,
+                ..
+            } => {
+                if button != MouseButton::Left {
+                    return;
+                }
 
-            let f: Rc<dyn Fn(MouseButton, ElementState, Vec2)> =
-                Rc::new(move |button, state, _| {
-                    if button != MouseButton::Left {
-                        return;
-                    }
-
-                    if state == ElementState::Pressed {
-                        is_pressed.set(true)
-                    } else if is_pressed.get() && state == ElementState::Released {
-                        (self.on_click)()
-                    }
-                });
-            let f: Rc<dyn Fn(MouseButton, ElementState, Vec2)> = unsafe { mem::transmute(f) };
-
-            renderer_cx.pending_listeners.borrow_mut().push(f);
-        });
+                if button_state == ElementState::Pressed {
+                    *state = true
+                } else if *state && button_state == ElementState::Released {
+                    (self.on_click)()
+                }
+            }
+            _ => {}
+        }
     }
 }
 
