@@ -356,6 +356,22 @@ impl<T> Hash for Mut<'_, T> {
     }
 }
 
+impl<'a, T: 'a> IntoIterator for Mut<'a, T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let value: &T = &*self;
+        // Safety: the reference to `value` is guranteed to live as long as `self`.
+        let value: &T = unsafe { mem::transmute(value) };
+        value.into_iter()
+    }
+}
+
 /// An update to apply to a composable.
 pub struct Update {
     f: Box<dyn FnOnce()>,

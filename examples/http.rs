@@ -28,9 +28,7 @@ impl Compose for App {
             }
         });
 
-        Window::new(compose::from_iter((*breeds).clone(), |breed| {
-            Text::new(breed)
-        }))
+        Window::new(compose::from_iter(breeds, |breed| Text::new(breed)))
     }
 }
 
