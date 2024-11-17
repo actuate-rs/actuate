@@ -36,7 +36,7 @@ dependencies = [
 
 [[package]]
 name = "actuate-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "actuate-macros",
  "thiserror 2.0.3",
@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "actuate-winit"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "actuate-core",
  "tracing",
