@@ -11,9 +11,10 @@ use std::{
     ops::Deref,
     pin::Pin,
     rc::Rc,
-    sync::{mpsc, Arc, Mutex, RwLock},
+    sync::{mpsc, Arc, Mutex},
     task::{Poll, Wake, Waker},
 };
+use tokio::sync::RwLock;
 use thiserror::Error;
 
 pub use actuate_macros::Data;
@@ -746,7 +747,7 @@ impl Future for WrappedFuture {
         if *guard {
             me.rt.enter();
 
-            let _guard = me.rt.lock.read().unwrap();
+            let _guard = Box::pin(me.rt.lock.read()).as_mut().poll(cx);
 
             me.task.as_mut().poll(cx)
         } else {
@@ -808,8 +809,13 @@ struct UpdateWrapper<U> {
 
 impl<U: Updater> Updater for UpdateWrapper<U> {
     fn update(&self, update: crate::Update) {
-        let _guard = self.lock.write().unwrap();
-        self.updater.update(update);
+        let lock = self.lock.clone();
+        self.updater.update(Update {
+            f: Box::new(move || {
+                let _guard = lock.blocking_write();
+                unsafe { update.apply() }
+            }),
+        });
     }
 }
 
