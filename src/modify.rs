@@ -1,8 +1,10 @@
 use crate::{
-    canvas::CanvasContext,
     draw::{BackgroundColor, Draw},
     prelude::*,
-    text::{IntoFontStack, TextContext},
+    ui::{
+        canvas::CanvasContext,
+        text::{IntoFontStack, TextContext},
+    },
     WindowContext,
 };
 use parley::FontStack;

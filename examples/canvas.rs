@@ -1,4 +1,4 @@
-use actuate::{prelude::*, Canvas};
+use actuate::prelude::*;
 use taffy::{Size, Style};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::FmtSubscriber;

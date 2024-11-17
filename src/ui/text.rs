@@ -1,4 +1,4 @@
-use crate::Canvas;
+use super::Canvas;
 use actuate_core::prelude::*;
 use parley::{
     Alignment, FontFamily, FontStack, GenericFamily, LayoutContext, PositionedLayoutItem,

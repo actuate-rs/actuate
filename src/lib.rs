@@ -1,39 +1,30 @@
 use actuate_core::prelude::*;
-use canvas::CanvasContext;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
 };
 use taffy::{NodeId, TaffyTree};
-use text::{FontContext, TextContext};
+use ui::canvas::CanvasContext;
 use vello::{kurbo::Vec2, peniko::Color, Scene};
 use winit::event::{ElementState, MouseButton};
 
 pub use actuate_core as core;
 
-mod canvas;
-pub use self::canvas::Canvas;
-
 pub mod draw;
 use self::draw::Draw;
 
 pub mod modify;
-pub use modify::View;
 
-mod flex;
-pub use self::flex::Flex;
-
-mod text;
-pub use self::text::{use_font, Text};
-
-mod window;
-pub use self::window::Window;
+pub mod ui;
+use self::ui::text::{FontContext, TextContext};
 
 pub mod prelude {
     pub use crate::core::prelude::*;
 
-    pub use crate::{use_font, Canvas, Flex, Text, View, Window};
+    pub use crate::modify::View;
+
+    pub use crate::ui::{use_font, Canvas, Flex, Text, Window};
 
     pub use parley::GenericFamily;
 
