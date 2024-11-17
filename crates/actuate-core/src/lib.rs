@@ -1,7 +1,7 @@
 //! # actuate-core
 //! Actuate-core provides a reactive framework for efficiently managing application state.
 //! This crate provides a generic library that can be used to build user interfaces, games, and other applications.
-//! 
+//!
 //! ## Hooks
 //! Functions that begin with `use_` are called `hooks` in Actuate.
 //! Hooks are used to manage state and side effects in composables.
@@ -26,8 +26,8 @@ use std::{
     sync::{mpsc, Arc, Mutex},
     task::{Poll, Wake, Waker},
 };
-use tokio::sync::RwLock;
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 pub use actuate_macros::Data;
 
@@ -161,10 +161,13 @@ impl<C: Compose> Compose for RefMap<'_, C> {
 }
 
 /// Mapped immutable reference to a value of type `T`.
+///
+/// This can be created with [`Ref::map`].
 pub struct Map<'a, T: ?Sized> {
     ptr: *const (),
     map_fn: *const (),
     deref_fn: fn(*const (), *const ()) -> &'a T,
+    generation: *const Cell<u64>,
 }
 
 impl<T: ?Sized> Clone for Map<'_, T> {
@@ -173,6 +176,7 @@ impl<T: ?Sized> Clone for Map<'_, T> {
             ptr: self.ptr,
             map_fn: self.map_fn,
             deref_fn: self.deref_fn,
+            generation: self.generation,
         }
     }
 }
@@ -192,6 +196,10 @@ impl<T: Hash + ?Sized> Hash for Map<'_, T> {
         (**self).hash(state);
     }
 }
+
+unsafe impl<T: Send> Send for Map<'_, T> {}
+
+unsafe impl<T: Sync> Sync for Map<'_, T> {}
 
 // Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
 // an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
@@ -217,6 +225,10 @@ impl<C: Compose> Compose for Map<'_, C> {
 }
 
 /// Immutable reference to a value of type `T`.
+///
+/// Memoizing this value will use pointer-equality for higher-performance.
+///
+/// This reference can be mapped to inner values with [`Ref::map`].
 #[derive(Hash)]
 pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
@@ -229,10 +241,14 @@ impl<'a, T> Ref<'a, T> {
         Map {
             ptr: me.value as *const _ as _,
             map_fn: f as _,
-            deref_fn: |ptr, g| unsafe {
-                let g: fn(&T) -> &U = mem::transmute(g);
-                g(&*(ptr as *const T))
+            deref_fn: |ptr, g| {
+                // Safety: `f` is guranteed to be a valid function pointer.
+                unsafe {
+                    let g: fn(&T) -> &U = mem::transmute(g);
+                    g(&*(ptr as *const T))
+                }
             },
+            generation: me.generation,
         }
     }
 }
@@ -256,13 +272,9 @@ impl<T: ?Sized> Deref for Ref<'_, T> {
     }
 }
 
-impl<T> Memoize for Ref<'_, T> {
-    type Value = u64;
+unsafe impl<T: Send> Send for Ref<'_, T> {}
 
-    fn memoized(self) -> Self::Value {
-        unsafe { &*self.generation }.get()
-    }
-}
+unsafe impl<T: Sync> Sync for Ref<'_, T> {}
 
 /// Mutable reference to a value of type `T`.
 pub struct Mut<'a, T> {
@@ -623,6 +635,33 @@ impl<T: PartialEq + 'static> Memoize for T {
 
     fn memoized(self) -> Self::Value {
         self
+    }
+}
+
+impl<T> Memoize for Ref<'_, T> {
+    type Value = u64;
+
+    fn memoized(self) -> Self::Value {
+        unsafe { &*self.generation }.get()
+    }
+}
+
+impl<T> Memoize for Map<'_, T> {
+    type Value = u64;
+
+    fn memoized(self) -> Self::Value {
+        unsafe { &*self.generation }.get()
+    }
+}
+
+impl<T> Memoize for RefMap<'_, T> {
+    type Value = u64;
+
+    fn memoized(self) -> Self::Value {
+        match self {
+            RefMap::Ref(r) => r.memoized(),
+            RefMap::Map(map) => map.memoized(),
+        }
     }
 }
 
