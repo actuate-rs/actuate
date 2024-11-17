@@ -11,45 +11,46 @@ use parley::FontStack;
 use std::{cell::RefCell, mem, rc::Rc};
 use winit::event::{ElementState, MouseButton};
 
+/// Composable view modifiers.
 pub trait View: Compose {
+    fn modify<T: Modify>(self, state: T) -> Modified<T, Self> {
+        Modified::new(state, self)
+    }
+
     fn on_event<H: Handler>(self, on_event: H) -> Modified<OnEvent<H>, Self> {
-        Modified::new(OnEvent::new(on_event), self)
+        self.modify(OnEvent::new(on_event))
     }
 
     fn on_mouse_in<'a>(
         self,
         on_mouse_in: impl Fn() + 'a,
     ) -> Modified<OnEvent<OnMouseIn<'a>>, Self> {
-        Modified::new(OnEvent::new(OnMouseIn::new(on_mouse_in)), self)
+        self.on_event(OnMouseIn::new(on_mouse_in))
     }
 
     fn on_mouse_out<'a>(
         self,
         on_mouse_out: impl Fn() + 'a,
     ) -> Modified<OnEvent<OnMouseOut<'a>>, Self> {
-        Modified::new(OnEvent::new(OnMouseOut::new(on_mouse_out)), self)
+        self.on_event(OnMouseOut::new(on_mouse_out))
     }
 
     fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Modified<OnEvent<Clickable<'a>>, Self> {
-        Modified::new(OnEvent::new(Clickable::new(on_click)), self)
-    }
-
-    fn with_state<T: Modify>(self, state: T) -> Modified<T, Self> {
-        Modified::new(state, self)
+        self.on_event(Clickable::new(on_click))
     }
 
     fn font(self, font_stack: impl IntoFontStack<'static>) -> Modified<Font, Self> {
-        self.with_state(Font {
+        self.modify(Font {
             font_stack: font_stack.into_font_stack(),
         })
     }
 
     fn font_size(self, font_size: f32) -> Modified<FontSize, Self> {
-        self.with_state(FontSize { font_size })
+        self.modify(FontSize { font_size })
     }
 
     fn draw<D: Draw + 'static>(self, draw: D) -> Modified<DrawModifier<D>, Self> {
-        self.with_state(DrawModifier::new(draw))
+        self.modify(DrawModifier::new(draw))
     }
 
     fn background_color(self, color: Color) -> Modified<DrawModifier<BackgroundColor>, Self> {
@@ -83,6 +84,10 @@ impl<T: Modify + Data, C: Compose> Compose for Modified<T, C> {
         unsafe { cx.me().state.use_state(mem::transmute(&**cx)) }
 
         Ref::map(cx.me(), |me| &me.content)
+    }
+
+    fn name() -> std::borrow::Cow<'static, str> {
+        C::name()
     }
 }
 

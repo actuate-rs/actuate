@@ -1,4 +1,4 @@
-use crate::{LayoutContext, WindowContext, Event};
+use crate::{Event, LayoutContext, WindowContext};
 use actuate_core::prelude::*;
 use parley::Rect;
 use std::{
