@@ -899,6 +899,17 @@ mod tests {
         }
     }
 
+    #[derive(Data)]
+    struct NonUpdateCounter {
+        x: Rc<Cell<i32>>,
+    }
+
+    impl Compose for NonUpdateCounter {
+        fn compose(cx: Scope<Self>) -> impl Compose {
+            cx.me().x.set(cx.me().x.get() + 1);
+        }
+    }
+
     #[test]
     fn it_composes() {
         #[derive(Data)]
@@ -922,6 +933,31 @@ mod tests {
 
         composer.compose();
         assert_eq!(x.get(), 2);
+    }
+
+    #[test]
+    fn it_skips_recomposes() {
+        #[derive(Data)]
+        struct Wrap {
+            x: Rc<Cell<i32>>,
+        }
+
+        impl Compose for Wrap {
+            fn compose(cx: Scope<Self>) -> impl Compose {
+                NonUpdateCounter {
+                    x: cx.me().x.clone(),
+                }
+            }
+        }
+
+        let x = Rc::new(Cell::new(0));
+        let mut composer = Composer::new(Wrap { x: x.clone() });
+
+        composer.compose();
+        assert_eq!(x.get(), 1);
+
+        composer.compose();
+        assert_eq!(x.get(), 1);
     }
 
     #[test]

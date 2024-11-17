@@ -1,5 +1,6 @@
 use std::{
     any::TypeId,
+    borrow::Cow,
     cell::{RefCell, UnsafeCell},
     mem,
 };
@@ -12,10 +13,16 @@ use crate::{prelude::*, Memoize, ScopeData};
 pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
 
-    #[cfg(feature = "tracing")]
     #[doc(hidden)]
-    fn name() -> std::borrow::Cow<'static, str> {
-        std::any::type_name::<Self>().into()
+    fn name() -> Cow<'static, str> {
+        let name = std::any::type_name::<Self>();
+        name.split('<')
+            .next()
+            .unwrap_or(name)
+            .split("::")
+            .last()
+            .unwrap_or(name)
+            .into()
     }
 }
 
@@ -154,8 +161,7 @@ where
         Ref::map(cx.me(), |me| &me.content)
     }
 
-    #[cfg(feature = "tracing")]
-    fn name() -> std::borrow::Cow<'static, str> {
+    fn name() -> Cow<'static, str> {
         format!("Memo<{}>", C::name()).into()
     }
 }
@@ -241,7 +247,7 @@ macro_rules! impl_tuples {
                 )*
             }
 
-            fn name() -> std::borrow::Cow<'static, str> {
+            fn name() -> Cow<'static, str> {
                 let mut s = String::from('(');
 
                 $(s.push_str(&$t::name());)*
@@ -271,8 +277,7 @@ pub(crate) trait AnyCompose {
 
     unsafe fn any_compose(&self, state: &ScopeData);
 
-    #[cfg(feature = "tracing")]
-    fn name(&self) -> std::borrow::Cow<'static, str>;
+    fn name(&self) -> Cow<'static, str>;
 }
 
 impl<C> AnyCompose for C
@@ -342,8 +347,7 @@ where
         (*child).any_compose(child_state);
     }
 
-    #[cfg(feature = "tracing")]
-    fn name(&self) -> std::borrow::Cow<'static, str> {
+    fn name(&self) -> Cow<'static, str> {
         C::name().into()
     }
 }
