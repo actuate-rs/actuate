@@ -14,11 +14,11 @@ pub use self::window::Window;
 
 /// Use a new layout node.
 pub fn use_layout(cx: ScopeState, style: Style) -> (NodeId, Layout) {
-    let layout_cx = use_context::<LayoutContext>(&cx).unwrap();
-    let renderer_cx = use_context::<WindowContext>(&cx).unwrap();
+    let layout_cx = use_context::<LayoutContext>(cx).unwrap();
+    let renderer_cx = use_context::<WindowContext>(cx).unwrap();
 
     let parent_key = layout_cx.parent_id;
-    let key = *use_ref(&cx, || {
+    let key = *use_ref(cx, || {
         let key = renderer_cx
             .taffy
             .borrow_mut()
@@ -35,7 +35,7 @@ pub fn use_layout(cx: ScopeState, style: Style) -> (NodeId, Layout) {
         key
     });
 
-    let last_style = use_ref(&cx, || style.clone());
+    let last_style = use_ref(cx, || style.clone());
     if style != *last_style {
         renderer_cx.is_layout_changed.set(true);
         renderer_cx
@@ -45,7 +45,7 @@ pub fn use_layout(cx: ScopeState, style: Style) -> (NodeId, Layout) {
             .unwrap();
     }
 
-    use_drop(&cx, move || {
+    use_drop(cx, move || {
         renderer_cx.taffy.borrow_mut().remove(key).unwrap();
         renderer_cx.listeners.borrow_mut().remove(&key);
     });
