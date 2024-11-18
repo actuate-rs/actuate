@@ -13,6 +13,7 @@ default = ["tracing"]
 [dependencies]
 actuate-core = { version = "0.4.0", path = "../actuate-core" }
 tracing = { version = "0.1.40", optional = true }
+tokio = { version = "1.41.1", features = ["full"] }
 winit = "0.30.5"
 
 [dev-dependencies]

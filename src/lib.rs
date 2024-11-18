@@ -9,7 +9,7 @@
 //! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
 //! Instead, always use hooks at the top level of your composable, before any early returns.
 
-use actuate_core::prelude::*;
+use actuate_core::{prelude::*, Executor};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -96,4 +96,8 @@ impl<C: Compose> Compose for RenderRoot<C> {
 
 pub fn run(content: impl Compose + 'static) {
     actuate_winit::run(RenderRoot { content });
+}
+
+pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
+    actuate_winit::run_with_executor(RenderRoot { content }, executor);
 }
