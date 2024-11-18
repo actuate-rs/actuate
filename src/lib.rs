@@ -295,7 +295,6 @@ impl<C: Compose> Compose for Map<'_, C> {
         unsafe { (**cx.me()).any_compose(state) }
     }
 
-    #[cfg(feature = "tracing")]
     fn name() -> std::borrow::Cow<'static, str> {
         C::name()
     }
@@ -424,6 +423,21 @@ macro_rules! impl_pointer {
             }
 
             impl<T> Copy for $t<'_, T> {}
+
+            impl<T: fmt::Debug> fmt::Debug for $t<'_, T> {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.debug_struct(stringify!($t))
+                        .field("value", &**self)
+                        .field("generation", &unsafe { &*self.generation }.get())
+                        .finish()
+                }
+            }
+
+            impl<T: fmt::Display> fmt::Display for $t<'_, T> {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    (&**self).fmt(f)
+                }
+            }
 
             unsafe impl<T: Send + Sync> Send for $t<'_, T> {}
 
@@ -707,7 +721,7 @@ pub struct ContextError<T> {
 }
 
 impl<T> fmt::Debug for ContextError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("ContextError")
             .field(&std::any::type_name::<T>())
             .finish()
@@ -715,7 +729,7 @@ impl<T> fmt::Debug for ContextError<T> {
 }
 
 impl<T> fmt::Display for ContextError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&format!(
             "Context value not found for type: {}",
             std::any::type_name::<T>()
