@@ -416,9 +416,9 @@ macro_rules! impl_pointer {
 
             impl<T> Copy for $t<'_, T> {}
 
-            unsafe impl<T: Send> Send for $t<'_, T> {}
+            unsafe impl<T: Send + Sync> Send for $t<'_, T> {}
 
-            unsafe impl<T: Sync> Sync for $t<'_, T> {}
+            unsafe impl<T: Sync + Sync> Sync for $t<'_, T> {}
 
             impl<'a, T: 'a> IntoIterator for $t<'a, T>
             where
