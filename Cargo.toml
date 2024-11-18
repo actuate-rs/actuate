@@ -7,29 +7,34 @@ description = "A reactive user-interface framework"
 repository = "https://github.com/actuate-rs/actuate"
 
 [features]
+event-loop = ["dep:winit"]
+rt = ["dep:tokio"]
 tracing = ["dep:tracing"]
-default = ["tracing"]
+default = ["event-loop", "tracing"]
 
 [workspace]
 members = [
     ".",
     "crates/actuate-core",
-    "crates/actuate-macros",
-    "crates/actuate-winit"
+    "crates/actuate-macros"
 ]
 
 [dependencies]
 actuate-core = { version = "0.4.0", path = "crates/actuate-core" }
-actuate-winit = { version = "0.1.5", path = "crates/actuate-winit" }
 parley = "0.2.0"
 peniko = "0.2.0"
 pollster = "0.4.0"
 taffy = "0.6.1"
 tracing = { version = "0.1.40", optional = true }
+tokio = { version = "1.41.1", features = ["rt-multi-thread"], optional = true }
 vello = "0.3.0"
-winit = "0.30.5"
+winit = { version = "0.30.5", optional = true }
 
 [dev-dependencies]
 reqwest = { version = "0.12.9", features = ["json"] }
 serde = { version = "1.0.215", features = ["derive"] }
 tracing-subscriber = "0.3.18"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

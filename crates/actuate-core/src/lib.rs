@@ -9,7 +9,7 @@
 //! Hooks must be used in the same order for every re-compose.
 //! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
 //! Instead, always use hooks at the top level of your composable, before any early returns.
-
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 
 use slotmap::{DefaultKey, SlotMap};

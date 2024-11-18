@@ -1,4 +1,4 @@
-use crate::{Event, LayoutContext, WindowContext};
+use crate::{event_loop, Event, LayoutContext, WindowContext};
 use actuate_core::prelude::*;
 use parley::Rect;
 use std::{
@@ -89,7 +89,7 @@ impl<C: Compose> Compose for Window<C> {
 
         let is_first = use_ref(&cx, || Cell::new(true));
 
-        actuate_winit::Window::new(
+        event_loop::Window::new(
             WindowAttributes::default(),
             move |window, event| {
                 if is_first.get() {

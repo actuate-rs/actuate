@@ -8,6 +8,7 @@
 //! Hooks must be used in the same order for every re-compose.
 //! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
 //! Instead, always use hooks at the top level of your composable, before any early returns.
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 use actuate_core::{prelude::*, Executor};
 use std::{
@@ -29,6 +30,11 @@ pub mod view;
 
 pub mod ui;
 use self::ui::text::{FontContext, TextContext};
+
+#[cfg(feature = "event-loop")]
+#[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
+/// System event loop for windowing.
+pub mod event_loop;
 
 pub mod prelude {
     pub use crate::core::prelude::*;
@@ -95,9 +101,9 @@ impl<C: Compose> Compose for RenderRoot<C> {
 }
 
 pub fn run(content: impl Compose + 'static) {
-    actuate_winit::run(RenderRoot { content });
+    event_loop::run(RenderRoot { content });
 }
 
 pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
-    actuate_winit::run_with_executor(RenderRoot { content }, executor);
+    event_loop::run_with_executor(RenderRoot { content }, executor);
 }
