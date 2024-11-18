@@ -67,15 +67,20 @@ pub use self::data::{Data, DataField, FieldWrap, FnField, StateField, StaticFiel
 /// System event loop for windowing.
 pub mod event_loop;
 
+#[cfg(feature = "ui")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
 pub mod ui;
-use self::ui::RenderRoot;
 
+#[cfg(all(feature = "rt", feature = "ui"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "rt", feature = "ui"))))]
 pub fn run(content: impl Compose + 'static) {
-    event_loop::run(RenderRoot { content });
+    event_loop::run(ui::RenderRoot { content });
 }
 
+#[cfg(feature = "ui")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
 pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
-    event_loop::run_with_executor(RenderRoot { content }, executor);
+    event_loop::run_with_executor(ui::RenderRoot { content }, executor);
 }
 
 /// Clone-on-write value.

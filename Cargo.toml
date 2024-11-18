@@ -8,9 +8,10 @@ repository = "https://github.com/actuate-rs/actuate"
 
 [features]
 event-loop = ["dep:winit"]
-rt = ["dep:tokio"]
+rt = ["tokio/rt-multi-thread"]
 tracing = ["dep:tracing"]
-default = ["event-loop", "rt", "tracing"]
+ui = []
+default = ["event-loop", "rt", "tracing", "ui"]
 
 [workspace]
 members = [
@@ -27,7 +28,7 @@ slotmap = "1.0.7"
 taffy = "0.6.1"
 thiserror = "2.0.3"
 tracing = { version = "0.1.40", optional = true }
-tokio = { version = "1.41.1", features = ["rt-multi-thread"], optional = true }
+tokio = { version = "1.41.1", features = ["sync"] }
 vello = "0.3.0"
 winit = { version = "0.30.5", optional = true }
 

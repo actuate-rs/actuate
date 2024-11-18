@@ -1,8 +1,8 @@
+use crate::prelude::*;
 use crate::{
     event_loop,
     ui::{Event, LayoutContext, WindowContext},
 };
-use crate::prelude::*;
 use parley::Rect;
 use std::{
     cell::{Cell, RefCell},
