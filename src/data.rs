@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::prelude::*;
 
 /// Composable data.
@@ -57,6 +59,10 @@ unsafe impl Data for &str {
 
 unsafe impl<T: Data> Data for Vec<T> {
     type Id = Vec<T::Id>;
+}
+
+unsafe impl<T: Data, U: Data> Data for HashMap<T, U> {
+    type Id = HashMap<T::Id, U::Id>;
 }
 
 unsafe impl<T: Data> Data for &T {
