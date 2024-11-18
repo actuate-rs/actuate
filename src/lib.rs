@@ -68,12 +68,22 @@ use std::{
     ptr::NonNull,
     rc::Rc,
     sync::{mpsc, Arc, Mutex},
-    task::{Poll, Wake, Waker},
+    task::{Context, Poll, Wake, Waker},
 };
 use thiserror::Error;
 use tokio::sync::RwLock;
 
 pub use actuate_macros::Data;
+
+macro_rules! cfg_ui {
+    ($($t:item)*) => {
+        $(
+            #[cfg(feature = "ui")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+            $t
+        )*
+    };
+}
 
 /// Prelude of commonly used items.
 pub mod prelude {
@@ -85,24 +95,18 @@ pub mod prelude {
 
     pub use crate::compose::{self, Compose, DynCompose, Memo};
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use crate::ui::{
-        view::{use_font, Canvas, Flex, Text, View, Window},
-        Draw,
-    };
+    cfg_ui!(
+        pub use crate::ui::{
+            view::{use_font, Canvas, Flex, Text, View, Window},
+            Draw,
+        };
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use parley::GenericFamily;
+        pub use parley::GenericFamily;
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use taffy::prelude::*;
+        pub use taffy::prelude::*;
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use vello::peniko::Color;
+        pub use vello::peniko::Color;
+    );
 
     #[cfg(feature = "event-loop")]
     #[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
@@ -121,11 +125,6 @@ pub use self::data::{Data, DataField, FieldWrap, FnField, StateField, StaticFiel
 /// System event loop for windowing.
 pub mod event_loop;
 
-#[cfg(feature = "ui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-/// User interface components.
-pub mod ui;
-
 #[cfg(all(feature = "rt", feature = "ui"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "rt", feature = "ui"))))]
 /// Run this content on the system event loop.
@@ -133,12 +132,15 @@ pub fn run(content: impl Compose + 'static) {
     event_loop::run(ui::RenderRoot { content });
 }
 
-#[cfg(feature = "ui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-/// Run this content on the system event loop with a provided task executor.
-pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
-    event_loop::run_with_executor(ui::RenderRoot { content }, executor);
-}
+cfg_ui!(
+    /// User interface components.
+    pub mod ui;
+
+    /// Run this content on the system event loop with a provided task executor.
+    pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
+        event_loop::run_with_executor(ui::RenderRoot { content }, executor);
+    }
+);
 
 /// Clone-on-write value.
 ///
@@ -351,9 +353,16 @@ impl<T> Hash for Ref<'_, T> {
 
 /// Mutable reference to a value of type `T`.
 pub struct Mut<'a, T> {
+    /// Pointer to the boxed value.
     ptr: NonNull<T>,
+
+    /// Pointer to the scope's `is_changed` flag.
     scope_is_changed: *const Cell<bool>,
+
+    /// Pointer to this value's generation.
     generation: *const Cell<u64>,
+
+    /// Marker for the lifetime of this immutable reference.
     phantom: PhantomData<&'a ()>,
 }
 
@@ -435,6 +444,10 @@ macro_rules! impl_pointer {
                     value.into_iter()
                 }
             }
+
+            unsafe impl<T: Data> Data for $t<'_, T> {
+                type Id = $t<'static, T::Id>;
+            }
         )*
     };
 }
@@ -460,9 +473,16 @@ type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
 pub struct Runtime {
+    /// Updater for this runtime.
     updater: Arc<dyn Updater>,
+
+    /// Local task stored on this runtime.
     tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
+
+    /// Waker for local tasks.
     task_tx: mpsc::Sender<DefaultKey>,
+
+    /// Update lock for shared tasks.
     lock: Arc<RwLock<()>>,
 }
 
@@ -510,16 +530,37 @@ pub type ScopeState<'a> = &'a ScopeData<'a>;
 /// State of a composable.
 #[derive(Default)]
 pub struct ScopeData<'a> {
+    /// Hook values stored in this scope.
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
+
+    /// Current hook index.
     hook_idx: Cell<usize>,
+
+    /// `true` if this scope is changed.
     is_changed: Cell<bool>,
+
+    /// `true` if an ancestor to this scope is changed.
     is_parent_changed: Cell<bool>,
+
+    /// `true` if this scope contains an empty composable.
     is_empty: Cell<bool>,
+
+    /// `true` if this scope contains a container composable.
     is_container: Cell<bool>,
+
+    /// Context values stored in this scope.
     contexts: RefCell<Contexts>,
+
+    /// Context values for child composables.
     child_contexts: RefCell<Contexts>,
+
+    /// Drop functions to run just before this scope is dropped.
     drops: RefCell<Vec<usize>>,
+
+    /// Current generation of this scope.
     generation: Cell<u64>,
+
+    /// Marker for the invariant lifetime of this scope.
     _marker: PhantomData<&'a fn(ScopeData<'a>) -> ScopeData<'a>>,
 }
 
@@ -888,10 +929,7 @@ struct WrappedFuture {
 impl Future for WrappedFuture {
     type Output = ();
 
-    fn poll(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = &mut *self;
         let guard = me.lock.lock().unwrap();
 
@@ -964,7 +1002,7 @@ impl RuntimeContext {
 
 /// Use a multi-threaded task that runs on a separate thread.
 ///
-/// This will run on the Tokio runtime, polling the task until it completes.
+/// This will run on the [Tokio](https://docs.rs/tokio/latest/tokio/) runtime, polling the task until it completes.
 pub fn use_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + Send + 'a,
@@ -973,6 +1011,7 @@ where
     let lock = use_ref(cx, || {
         let lock = Arc::new(Mutex::new(true));
 
+        // Safety: `task`` is guaranteed to live as long as `cx`, and is disabled after the scope is dropped.
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(make_task());
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
 
@@ -985,6 +1024,7 @@ where
         lock
     });
 
+    // Disable this task after the scope is dropped.
     use_drop(cx, || {
         *lock.lock().unwrap() = false;
     });
@@ -1084,13 +1124,14 @@ impl Composer {
                 updater: Runtime::current().updater.clone(),
                 tx: self.rt.task_tx.clone(),
             }));
-            let mut cx = std::task::Context::from_waker(&waker);
+            let mut cx = Context::from_waker(&waker);
 
             let mut tasks = self.rt.tasks.borrow_mut();
             let task = tasks.get_mut(key).unwrap();
             let _ = task.as_mut().poll(&mut cx);
         }
 
+        // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
         unsafe { self.compose.any_compose(&self.scope_state) }
     }
 }

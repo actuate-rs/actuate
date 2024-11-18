@@ -20,18 +20,36 @@ pub unsafe trait Data: Sized {
     }
 }
 
-unsafe impl Data for () {
-    type Id = ();
+macro_rules! impl_data_for_std {
+    ($($t:ty),*) => {
+        $(
+            unsafe impl Data for $t {
+                type Id = $t;
+            }
+        )*
+    }
 }
 
-// TODO
-unsafe impl Data for i32 {
-    type Id = i32;
-}
-
-unsafe impl Data for String {
-    type Id = Self;
-}
+impl_data_for_std!(
+    (),
+    bool,
+    char,
+    f32,
+    f64,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    isize,
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    usize,
+    String
+);
 
 unsafe impl Data for &str {
     type Id = &'static str;
@@ -47,18 +65,6 @@ unsafe impl<T: Data> Data for &T {
 
 unsafe impl<T: Data> Data for Option<T> {
     type Id = Option<T::Id>;
-}
-
-unsafe impl<T: Data> Data for Ref<'_, T> {
-    type Id = Ref<'static, T::Id>;
-}
-
-unsafe impl<T: Data> Data for Map<'_, T> {
-    type Id = Map<'static, T::Id>;
-}
-
-unsafe impl<T: Data> Data for Mut<'_, T> {
-    type Id = Mut<'static, T::Id>;
 }
 
 unsafe impl Data for DynCompose<'_> {
