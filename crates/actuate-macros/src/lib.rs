@@ -65,6 +65,7 @@ pub fn data(input: TokenStream) -> TokenStream {
         #[doc(hidden)]
         pub struct #data_ident;
 
+        #[doc(hidden)]
         unsafe impl <#generic_params> Data for #ident <#generic_ty_params> {
             type Id = #data_ident;
         }

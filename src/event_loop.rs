@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, Composer, Executor, Update, Updater};
+use crate::{prelude::*, Composer, Executor, Update, Updater};
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::mpsc, thread};
 use winit::{
     application::ApplicationHandler,
@@ -6,6 +6,47 @@ use winit::{
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window as RawWindow, WindowAttributes, WindowId},
 };
+
+#[cfg(feature = "rt")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
+pub fn run(content: impl Compose + 'static) {
+    run_with_executor(content, tokio::runtime::Runtime::new().unwrap())
+}
+
+pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
+    let event_loop = EventLoop::with_user_event().build().unwrap();
+
+    let proxy = event_loop.create_proxy();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        while let Ok(update) = rx.recv() {
+            let mut updates = vec![update];
+            while let Ok(next_update) = rx.try_recv() {
+                updates.push(next_update);
+            }
+
+            if proxy.send_event(updates).is_err() {
+                panic!("Failed to send update to event loop.");
+            }
+        }
+    });
+
+    let cx = EventLoopContext::default();
+
+    let mut handler = Handler {
+        composer: Composer::with_updater(
+            HandlerRoot {
+                content,
+                event_loop_cx: cx.clone(),
+            },
+            EventLoopUpdater { tx },
+            executor,
+        ),
+        cx,
+    };
+
+    event_loop.run_app(&mut handler).unwrap();
+}
 
 struct UnsafeUpdate(Update);
 
@@ -101,45 +142,6 @@ impl ApplicationHandler<Vec<UnsafeUpdate>> for Handler {
     }
 }
 
-pub fn run(content: impl Compose + 'static) {
-    run_with_executor(content, tokio::runtime::Runtime::new().unwrap())
-}
-
-pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
-    let event_loop = EventLoop::with_user_event().build().unwrap();
-
-    let proxy = event_loop.create_proxy();
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        while let Ok(update) = rx.recv() {
-            let mut updates = vec![update];
-            while let Ok(next_update) = rx.try_recv() {
-                updates.push(next_update);
-            }
-
-            if proxy.send_event(updates).is_err() {
-                panic!("Failed to send update to event loop.");
-            }
-        }
-    });
-
-    let cx = EventLoopContext::default();
-
-    let mut handler = Handler {
-        composer: Composer::with_updater(
-            HandlerRoot {
-                content,
-                event_loop_cx: cx.clone(),
-            },
-            EventLoopUpdater { tx },
-            executor,
-        ),
-        cx,
-    };
-
-    event_loop.run_app(&mut handler).unwrap();
-}
-
 #[derive(Default)]
 struct Inner {
     handler_fns: HashMap<WindowId, ListenerFn<'static>>,
@@ -155,6 +157,7 @@ type ListenerFn<'a> = Rc<dyn Fn(&Event<()>) + 'a>;
 
 type EventFn<'a> = Box<dyn Fn(&RawWindow, &Event<()>) + 'a>;
 
+/// Base window composable.
 #[derive(Data)]
 pub struct Window<'a, C> {
     window_attributes: WindowAttributes,

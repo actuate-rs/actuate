@@ -1,12 +1,11 @@
-use crate::{prelude::*, Draw, ListenerFn, WindowContext};
+use crate::prelude::*;
+use crate::ui::{use_layout, ListenerFn, WindowContext};
 use std::{cell::RefCell, mem, rc::Rc};
 use taffy::{Layout, Style};
 use vello::{
     kurbo::{Affine, Vec2},
     Scene,
 };
-
-use super::use_layout;
 
 #[derive(Clone, Default)]
 pub(crate) struct CanvasContext {

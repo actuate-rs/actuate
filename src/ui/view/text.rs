@@ -1,5 +1,5 @@
 use super::Canvas;
-use actuate_core::prelude::*;
+use crate::prelude::*;
 use parley::{
     Alignment, FontFamily, FontStack, GenericFamily, LayoutContext, PositionedLayoutItem,
     StyleProperty,
