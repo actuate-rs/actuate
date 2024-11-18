@@ -7,7 +7,7 @@ use crate::{
     },
 };
 use parley::FontStack;
-use std::{cell::RefCell, mem, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, mem, rc::Rc};
 use winit::event::{ElementState, MouseButton};
 
 pub(crate) mod canvas;
@@ -93,6 +93,7 @@ pub trait Modify {
 }
 
 /// Modified view.
+#[derive(Data)]
 pub struct Modified<T, C> {
     modify: T,
     content: C,
@@ -105,11 +106,11 @@ impl<T, C> Modified<T, C> {
     }
 }
 
-unsafe impl<T: Data, C: Data> Data for Modified<T, C> {
-    type Id = Modified<T::Id, C::Id>;
-}
-
-impl<T: Modify + Data, C: Compose> Compose for Modified<T, C> {
+impl<T, C> Compose for Modified<T, C>
+where
+    T: Modify + Data,
+    C: Compose,
+{
     fn compose(cx: Scope<Self>) -> impl Compose {
         // Safety: `state` is guranteed to live as long as `cx`.
         let state_cx: ScopeState = unsafe { mem::transmute(&**cx) };
@@ -119,7 +120,7 @@ impl<T: Modify + Data, C: Compose> Compose for Modified<T, C> {
         Ref::map(cx.me(), |me| &me.content)
     }
 
-    fn name() -> std::borrow::Cow<'static, str> {
+    fn name() -> Cow<'static, str> {
         C::name()
     }
 }
