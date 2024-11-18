@@ -22,30 +22,20 @@ checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 name = "actuate"
 version = "0.4.0"
 dependencies = [
- "actuate-core",
+ "actuate-macros",
  "parley",
  "peniko",
  "pollster",
  "reqwest",
  "serde",
+ "slotmap",
  "taffy",
+ "thiserror 2.0.3",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "vello",
  "winit",
-]
-
-[[package]]
-name = "actuate-core"
-version = "0.4.0"
-dependencies = [
- "actuate-macros",
- "slotmap",
- "thiserror 2.0.3",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

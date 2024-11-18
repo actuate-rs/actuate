@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, Composer};
+use actuate::{prelude::*, Composer};
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::FmtSubscriber;
 

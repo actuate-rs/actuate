@@ -15,16 +15,17 @@ default = ["event-loop", "rt", "tracing"]
 [workspace]
 members = [
     ".",
-    "crates/actuate-core",
     "crates/actuate-macros"
 ]
 
 [dependencies]
-actuate-core = { version = "0.4.0", path = "crates/actuate-core" }
+actuate-macros = { version = "0.1.3", path = "crates/actuate-macros" }
 parley = "0.2.0"
 peniko = "0.2.0"
 pollster = "0.4.0"
+slotmap = "1.0.7"
 taffy = "0.6.1"
+thiserror = "2.0.3"
 tracing = { version = "0.1.40", optional = true }
 tokio = { version = "1.41.1", features = ["rt-multi-thread"], optional = true }
 vello = "0.3.0"
