@@ -216,6 +216,9 @@ impl Composer {
 
     /// Compose the content of this composer.
     pub fn compose(&mut self) {
+        #[cfg(feature = "tracing")]
+        tracing::trace!("Composer::compose");
+
         self.rt.enter();
 
         while let Ok(key) = self.task_rx.try_recv() {

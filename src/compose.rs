@@ -317,8 +317,6 @@ pub(crate) trait AnyCompose {
     unsafe fn reborrow(&mut self, ptr: *mut ());
 
     unsafe fn any_compose(&self, state: &ScopeData);
-
-    fn name(&self) -> Cow<'static, str>;
 }
 
 impl<C> AnyCompose for C
@@ -364,7 +362,7 @@ where
 
             #[cfg(feature = "tracing")]
             if !cx.is_container.get() {
-                tracing::trace!("Compose::compose: {}", self.name());
+                tracing::trace!("Compose::compose: {}", C::name());
             }
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
@@ -391,9 +389,5 @@ where
 
         let child = cell.as_mut().unwrap();
         (*child).any_compose(child_state);
-    }
-
-    fn name(&self) -> Cow<'static, str> {
-        C::name()
     }
 }

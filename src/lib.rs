@@ -300,10 +300,6 @@ impl<C: Compose> Compose for Map<'_, C> {
 
         unsafe { (**cx.me()).any_compose(state) }
     }
-
-    fn name() -> std::borrow::Cow<'static, str> {
-        C::name()
-    }
 }
 
 impl<T> Hash for Map<'_, T> {

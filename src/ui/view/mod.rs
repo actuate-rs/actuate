@@ -121,7 +121,7 @@ where
     }
 
     fn name() -> Cow<'static, str> {
-        C::name()
+        format!("Modified<{}, {}>", std::any::type_name::<T>(), C::name()).into()
     }
 }
 
