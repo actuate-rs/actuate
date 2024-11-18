@@ -29,14 +29,19 @@ struct State {
     render_surface: RenderSurface<'static>,
 }
 
+/// Window composable.
 #[derive(Data)]
 pub struct Window<C> {
+    /// Window attributes.
     pub attributes: WindowAttributes,
+    /// Composable content.
     pub content: C,
+    /// Background color.
     pub background_color: Color,
 }
 
 impl<C> Window<C> {
+    /// Create a new window from its content.
     pub fn new(content: C) -> Self {
         Self {
             attributes: WindowAttributes::default(),

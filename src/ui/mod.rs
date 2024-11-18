@@ -11,9 +11,11 @@ use view::{
 };
 use winit::event::{ElementState, MouseButton};
 
+/// Drawable modifiers.
 pub mod draw;
 pub use self::draw::Draw;
 
+/// View modifiers.
 pub mod view;
 
 /// Use a new layout node.
@@ -58,27 +60,36 @@ pub fn use_layout(cx: ScopeState, style: Style) -> (NodeId, Layout) {
     (key, layout)
 }
 
-pub struct LayoutContext {
+struct LayoutContext {
     parent_id: NodeId,
 }
 
+/// User interface event.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
+    /// Mouse input event.
     MouseInput {
+        /// Mouse button.
         button: MouseButton,
+        /// Element state.
         state: ElementState,
+        /// Cursor position.
         pos: Vec2,
     },
+    /// Mouse in event.
     MouseIn,
+    /// Mouse move event.
     MouseMove {
+        /// Cursor position.
         pos: Vec2,
     },
+    /// Mouse out event.
     MouseOut,
 }
 
 type ListenerFn = Rc<dyn Fn(Event)>;
 
-pub struct WindowContext {
+pub(crate) struct WindowContext {
     scene: RefCell<Scene>,
     taffy: RefCell<TaffyTree>,
     is_changed: Cell<bool>,
@@ -89,8 +100,8 @@ pub struct WindowContext {
 }
 
 #[derive(Data)]
-pub struct RenderRoot<C> {
-    pub content: C,
+pub(crate) struct RenderRoot<C> {
+    pub(crate) content: C,
 }
 
 impl<C: Compose> Compose for RenderRoot<C> {

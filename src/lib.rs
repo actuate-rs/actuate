@@ -50,6 +50,7 @@
 //! - `tracing`: Enables the `tracing` module for logging.
 //! - `ui`: Enables the `ui` module for building user interfaces.
 
+#![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 use slotmap::{DefaultKey, SlotMap};
@@ -74,6 +75,7 @@ use tokio::sync::RwLock;
 
 pub use actuate_macros::Data;
 
+/// Prelude of commonly used items.
 pub mod prelude {
     pub use crate::{
         use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, use_task,
@@ -121,16 +123,19 @@ pub mod event_loop;
 
 #[cfg(feature = "ui")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+/// User interface components.
 pub mod ui;
 
 #[cfg(all(feature = "rt", feature = "ui"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "rt", feature = "ui"))))]
+/// Run this content on the system event loop.
 pub fn run(content: impl Compose + 'static) {
     event_loop::run(ui::RenderRoot { content });
 }
 
 #[cfg(feature = "ui")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+/// Run this content on the system event loop with a provided task executor.
 pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
     event_loop::run_with_executor(ui::RenderRoot { content }, executor);
 }

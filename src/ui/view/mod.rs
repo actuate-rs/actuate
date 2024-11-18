@@ -24,14 +24,17 @@ pub use self::window::Window;
 
 /// Composable view modifiers.
 pub trait View: Compose {
-    fn modify<T: Modify>(self, state: T) -> Modified<T, Self> {
-        Modified::new(state, self)
+    /// Modify this view with the provided modifier.
+    fn modify<T: Modify>(self, modify: T) -> Modified<T, Self> {
+        Modified::new(modify, self)
     }
 
+    /// Add an event handler to this view.
     fn on_event<H: Handler>(self, on_event: H) -> Modified<OnEvent<H>, Self> {
         self.modify(OnEvent::new(on_event))
     }
 
+    /// Add an event handler for mouse-in events to this view.
     fn on_mouse_in<'a>(
         self,
         on_mouse_in: impl Fn() + 'a,
@@ -39,6 +42,7 @@ pub trait View: Compose {
         self.on_event(OnMouseIn::new(on_mouse_in))
     }
 
+    /// Add an event handler for mouse-out events to this view.
     fn on_mouse_out<'a>(
         self,
         on_mouse_out: impl Fn() + 'a,
@@ -46,28 +50,34 @@ pub trait View: Compose {
         self.on_event(OnMouseOut::new(on_mouse_out))
     }
 
+    /// Add an event handler for click events to this view.
     fn on_click<'a>(self, on_click: impl Fn() + 'a) -> Modified<OnEvent<Clickable<'a>>, Self> {
         self.on_event(Clickable::new(on_click))
     }
 
+    /// Set the font for this view.
     fn font(self, font_stack: impl IntoFontStack<'static>) -> Modified<Font, Self> {
         self.modify(Font {
             font_stack: font_stack.into_font_stack(),
         })
     }
 
+    /// Set the text color for this view.
     fn color(self, color: Color) -> Modified<FontColor, Self> {
         self.modify(FontColor { color })
     }
 
+    /// Set the font size for this view.
     fn font_size(self, font_size: f32) -> Modified<FontSize, Self> {
         self.modify(FontSize { font_size })
     }
 
+    /// Add a drawable modifier to this view.
     fn draw<D: Draw + 'static>(self, draw: D) -> Modified<DrawModifier<D>, Self> {
         self.modify(DrawModifier::new(draw))
     }
 
+    /// Set the background color for this view.
     fn background_color(self, color: Color) -> Modified<DrawModifier<BackgroundColor>, Self> {
         self.draw(BackgroundColor { color })
     }
@@ -75,18 +85,22 @@ pub trait View: Compose {
 
 impl<C: Compose> View for C {}
 
+/// Modifier.
 pub trait Modify {
+    /// Use the state of this modifier.
     fn use_state<'a>(&'a self, cx: ScopeState<'a>);
 }
 
+/// Modified view.
 pub struct Modified<T, C> {
-    state: T,
+    modify: T,
     content: C,
 }
 
 impl<T, C> Modified<T, C> {
-    pub fn new(state: T, content: C) -> Self {
-        Self { state, content }
+    /// Create a new modified view from the given modifier and `content`.
+    pub fn new(modify: T, content: C) -> Self {
+        Self { modify, content }
     }
 }
 
@@ -99,7 +113,7 @@ impl<T: Modify + Data, C: Compose> Compose for Modified<T, C> {
         // Safety: `state` is guranteed to live as long as `cx`.
         let state_cx: ScopeState = unsafe { mem::transmute(&**cx) };
 
-        cx.me().state.use_state(state_cx);
+        cx.me().modify.use_state(state_cx);
 
         Ref::map(cx.me(), |me| &me.content)
     }
@@ -109,11 +123,15 @@ impl<T: Modify + Data, C: Compose> Compose for Modified<T, C> {
     }
 }
 
+/// Event handler.
 pub trait Handler {
+    /// State of this handler.
     type State: 'static;
 
+    /// Build the initial state.
     fn build(&self) -> Self::State;
 
+    /// Handle an event with the current state.
     fn handle(&self, state: &mut Self::State, event: Event);
 }
 
@@ -129,11 +147,13 @@ impl<F: Fn(Event)> Handler for F {
     }
 }
 
+/// Event handler modifier.
 pub struct OnEvent<H> {
     on_event: RefCell<H>,
 }
 
 impl<H> OnEvent<H> {
+    /// Create a new event handler modifier from the given event handler.
     pub fn new(on_event: H) -> Self {
         Self {
             on_event: RefCell::new(on_event),
@@ -170,12 +190,14 @@ impl<H: Handler> Modify for OnEvent<H> {
     }
 }
 
+/// Mouse-in event handler.
 #[derive(Data)]
 pub struct OnMouseIn<'a> {
     on_mouse_in: Box<dyn Fn() + 'a>,
 }
 
 impl<'a> OnMouseIn<'a> {
+    /// Create a new mouse-in event handler from the provided function.
     pub fn new(on_mouse_in: impl Fn() + 'a) -> Self {
         Self {
             on_mouse_in: Box::new(on_mouse_in),
@@ -197,12 +219,14 @@ impl Handler for OnMouseIn<'_> {
     }
 }
 
+/// Mouse-out event handler.
 #[derive(Data)]
 pub struct OnMouseOut<'a> {
     on_mouse_out: Box<dyn Fn() + 'a>,
 }
 
 impl<'a> OnMouseOut<'a> {
+    /// Create a new mouse-out event handler from the provided function.
     pub fn new(on_mouse_out: impl Fn() + 'a) -> Self {
         Self {
             on_mouse_out: Box::new(on_mouse_out),
@@ -224,12 +248,14 @@ impl Handler for OnMouseOut<'_> {
     }
 }
 
+/// Click event handler.
 #[derive(Data)]
 pub struct Clickable<'a> {
     on_click: Box<dyn Fn() + 'a>,
 }
 
 impl<'a> Clickable<'a> {
+    /// Create a new click event handler from the provided function.
     pub fn new(on_click: impl Fn() + 'a) -> Self {
         Self {
             on_click: Box::new(on_click),
@@ -264,8 +290,10 @@ impl Handler for Clickable<'_> {
     }
 }
 
+/// Font color modifier.
 #[derive(Data)]
 pub struct FontColor {
+    /// Font color.
     pub color: Color,
 }
 
@@ -281,8 +309,10 @@ impl Modify for FontColor {
     }
 }
 
+/// Font size modifier.
 #[derive(Data)]
 pub struct FontSize {
+    /// Font size.
     pub font_size: f32,
 }
 
@@ -298,8 +328,10 @@ impl Modify for FontSize {
     }
 }
 
+/// Font modifier.
 #[derive(Data)]
 pub struct Font {
+    /// Font stack.
     pub font_stack: FontStack<'static>,
 }
 
@@ -315,11 +347,13 @@ impl Modify for Font {
     }
 }
 
+/// Drawable modifier.
 pub struct DrawModifier<T> {
     draw: Rc<T>,
 }
 
 impl<T> DrawModifier<T> {
+    /// Create a new drawable modifier from the provided drawable.
     pub fn new(draw: T) -> Self {
         Self {
             draw: Rc::new(draw),

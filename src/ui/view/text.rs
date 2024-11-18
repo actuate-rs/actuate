@@ -18,6 +18,7 @@ pub struct FontContext {
     inner: RefCell<parley::FontContext>,
 }
 
+/// Use a new font.
 pub fn use_font<R>(cx: ScopeState, make_font: impl FnOnce() -> R)
 where
     R: Into<Vec<u8>>,
@@ -74,12 +75,14 @@ impl Default for TextContext {
     }
 }
 
+/// Text composable.
 #[derive(Data)]
 pub struct Text<T> {
     content: T,
 }
 
 impl<T> Text<T> {
+    /// Create a new text from the given `content`.
     pub fn new(content: T) -> Self {
         Self { content }
     }

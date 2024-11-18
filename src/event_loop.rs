@@ -9,10 +9,12 @@ use winit::{
 
 #[cfg(feature = "rt")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
+/// Run this content on the system event loop.
 pub fn run(content: impl Compose + 'static) {
     run_with_executor(content, tokio::runtime::Runtime::new().unwrap())
 }
 
+/// Run this content on the system event loop with a provided task executor.
 pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
     let event_loop = EventLoop::with_user_event().build().unwrap();
 
@@ -149,7 +151,7 @@ struct Inner {
 }
 
 #[derive(Clone, Default)]
-pub struct EventLoopContext {
+struct EventLoopContext {
     inner: Rc<RefCell<Inner>>,
 }
 
@@ -166,6 +168,7 @@ pub struct Window<'a, C> {
 }
 
 impl<'a, C> Window<'a, C> {
+    /// Create a new window from its attributes, event handler, and content.
     pub fn new(
         window_attributes: WindowAttributes,
         on_event: impl Fn(&RawWindow, &Event<()>) + 'a,

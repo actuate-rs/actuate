@@ -15,6 +15,7 @@ pub(crate) struct CanvasContext {
 
 type DrawFn<'a> = Box<dyn Fn(Layout, &mut Scene) + 'a>;
 
+/// Canvas composable.
 #[derive(Data)]
 pub struct Canvas<'a> {
     style: Style,
@@ -22,6 +23,7 @@ pub struct Canvas<'a> {
 }
 
 impl<'a> Canvas<'a> {
+    /// Create a new canvas from its style and draw function.
     pub fn new(style: Style, draw_fn: impl Fn(Layout, &mut Scene) + 'a) -> Self {
         Self {
             style,

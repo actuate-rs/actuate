@@ -4,6 +4,7 @@ use crate::{
 };
 use taffy::{FlexDirection, Style};
 
+/// Flex composable.
 #[derive(Data)]
 pub struct Flex<C> {
     style: Style,
@@ -11,10 +12,12 @@ pub struct Flex<C> {
 }
 
 impl<C> Flex<C> {
+    /// Create a new flex from its style and the given `content`.
     pub fn new(style: Style, content: C) -> Self {
         Self { style, content }
     }
 
+    /// Create a new flex column from the given `content`.
     pub fn column(content: C) -> Self {
         Self::new(
             Style {
@@ -25,6 +28,7 @@ impl<C> Flex<C> {
         )
     }
 
+    /// Create a new flex row from the given `content`.
     pub fn row(content: C) -> Self {
         Self::new(
             Style {
