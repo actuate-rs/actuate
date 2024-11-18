@@ -8,6 +8,12 @@
 //! Hooks must be used in the same order for every re-compose.
 //! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
 //! Instead, always use hooks at the top level of your composable, before any early returns.
+//!
+//! ## Features
+//! - `event-loop`: Enables the `event_loop` module for access to the system event loop.
+//! - `rt`: Enables the `rt` module for running async tasks on the Tokio runtime.
+//! - `tracing`: Enables the `tracing` module for logging.
+//! - `ui`: Enables the `ui` module for building user interfaces.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -41,17 +47,27 @@ pub mod prelude {
 
     pub use crate::compose::{self, Compose, DynCompose, Memo};
 
+    #[cfg(feature = "ui")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
     pub use crate::ui::{
         view::{use_font, Canvas, Flex, Text, View, Window},
         Draw,
     };
 
+    #[cfg(feature = "ui")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
     pub use parley::GenericFamily;
 
+    #[cfg(feature = "ui")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
     pub use taffy::prelude::*;
 
+    #[cfg(feature = "ui")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
     pub use vello::peniko::Color;
 
+    #[cfg(feature = "event-loop")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
     pub use winit::window::WindowAttributes;
 }
 
