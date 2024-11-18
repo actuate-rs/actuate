@@ -1,4 +1,7 @@
-use crate::{prelude::*, Composer, Executor, Update, Updater};
+use crate::{
+    composer::{Composer, Executor, Update, Updater},
+    prelude::*,
+};
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::mpsc, thread};
 use winit::{
     application::ApplicationHandler,

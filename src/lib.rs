@@ -53,7 +53,8 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use slotmap::{DefaultKey, SlotMap};
+use composer::{ExecutorContext, Runtime, Update, Updater};
+use slotmap::DefaultKey;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
@@ -68,12 +69,21 @@ use std::{
     ptr::NonNull,
     rc::Rc,
     sync::{mpsc, Arc, Mutex},
-    task::{Poll, Wake, Waker},
+    task::{Context, Poll, Wake},
 };
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 pub use actuate_macros::Data;
+
+macro_rules! cfg_ui {
+    ($($t:item)*) => {
+        $(
+            #[cfg(feature = "ui")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+            $t
+        )*
+    };
+}
 
 /// Prelude of commonly used items.
 pub mod prelude {
@@ -85,24 +95,18 @@ pub mod prelude {
 
     pub use crate::compose::{self, Compose, DynCompose, Memo};
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use crate::ui::{
-        view::{Canvas, Flex, Text, View, Window},
-        Draw,
-    };
+    cfg_ui!(
+        pub use crate::ui::{
+            view::{Canvas, Flex, Text, View, Window},
+            Draw,
+        };
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use parley::GenericFamily;
+        pub use parley::GenericFamily;
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use taffy::prelude::*;
+        pub use taffy::prelude::*;
 
-    #[cfg(feature = "ui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-    pub use vello::peniko::Color;
+        pub use vello::peniko::Color;
+    );
 
     #[cfg(feature = "event-loop")]
     #[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
@@ -113,6 +117,9 @@ pub mod prelude {
 pub mod compose;
 use self::compose::{AnyCompose, Compose};
 
+/// Low-level composer.
+pub mod composer;
+
 mod data;
 pub use self::data::{Data, DataField, FieldWrap, FnField, StateField, StaticField};
 
@@ -121,11 +128,6 @@ pub use self::data::{Data, DataField, FieldWrap, FnField, StateField, StaticFiel
 /// System event loop for windowing.
 pub mod event_loop;
 
-#[cfg(feature = "ui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-/// User interface components.
-pub mod ui;
-
 #[cfg(all(feature = "rt", feature = "ui"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "rt", feature = "ui"))))]
 /// Run this content on the system event loop.
@@ -133,12 +135,18 @@ pub fn run(content: impl Compose + 'static) {
     event_loop::run(ui::RenderRoot { content });
 }
 
-#[cfg(feature = "ui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-/// Run this content on the system event loop with a provided task executor.
-pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
-    event_loop::run_with_executor(ui::RenderRoot { content }, executor);
-}
+cfg_ui!(
+    /// User interface components.
+    pub mod ui;
+
+    /// Run this content on the system event loop with a provided task executor.
+    pub fn run_with_executor(
+        content: impl Compose + 'static,
+        executor: impl composer::Executor + 'static,
+    ) {
+        event_loop::run_with_executor(ui::RenderRoot { content }, executor);
+    }
+);
 
 /// Clone-on-write value.
 ///
@@ -293,7 +301,6 @@ impl<C: Compose> Compose for Map<'_, C> {
         unsafe { (**cx.me()).any_compose(state) }
     }
 
-    #[cfg(feature = "tracing")]
     fn name() -> std::borrow::Cow<'static, str> {
         C::name()
     }
@@ -351,9 +358,16 @@ impl<T> Hash for Ref<'_, T> {
 
 /// Mutable reference to a value of type `T`.
 pub struct Mut<'a, T> {
+    /// Pointer to the boxed value.
     ptr: NonNull<T>,
+
+    /// Pointer to the scope's `is_changed` flag.
     scope_is_changed: *const Cell<bool>,
+
+    /// Pointer to this value's generation.
     generation: *const Cell<u64>,
+
+    /// Marker for the lifetime of this immutable reference.
     phantom: PhantomData<&'a ()>,
 }
 
@@ -416,6 +430,21 @@ macro_rules! impl_pointer {
 
             impl<T> Copy for $t<'_, T> {}
 
+            impl<T: fmt::Debug> fmt::Debug for $t<'_, T> {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.debug_struct(stringify!($t))
+                        .field("value", &**self)
+                        .field("generation", &unsafe { &*self.generation }.get())
+                        .finish()
+                }
+            }
+
+            impl<T: fmt::Display> fmt::Display for $t<'_, T> {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    (&**self).fmt(f)
+                }
+            }
+
             unsafe impl<T: Send + Sync> Send for $t<'_, T> {}
 
             unsafe impl<T: Sync + Sync> Sync for $t<'_, T> {}
@@ -435,68 +464,14 @@ macro_rules! impl_pointer {
                     value.into_iter()
                 }
             }
+
+            unsafe impl<T: Data> Data for $t<'_, T> {
+                type Id = $t<'static, T::Id>;
+            }
         )*
     };
 }
 impl_pointer!(Ref, Map, Mut);
-
-/// An update to apply to a composable.
-pub struct Update {
-    f: Box<dyn FnOnce()>,
-}
-
-impl Update {
-    /// Apply this update.
-    ///
-    /// # Safety
-    /// The caller must ensure the composable triggering this update still exists.
-    pub unsafe fn apply(self) {
-        (self.f)();
-    }
-}
-
-type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
-
-/// Runtime for a [`Composer`].
-#[derive(Clone)]
-pub struct Runtime {
-    updater: Arc<dyn Updater>,
-    tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
-    task_tx: mpsc::Sender<DefaultKey>,
-    lock: Arc<RwLock<()>>,
-}
-
-impl Runtime {
-    /// Get the current [`Runtime`].
-    ///
-    /// # Panics
-    /// Panics if called outside of a runtime.
-    pub fn current() -> Self {
-        RUNTIME.with(|runtime| {
-            runtime
-                .borrow()
-                .as_ref()
-                .expect("Runtime::current() called outside of a runtime")
-                .clone()
-        })
-    }
-
-    /// Enter this runtime, making it available to [`Runtime::current`].
-    pub fn enter(&self) {
-        RUNTIME.with(|runtime| {
-            *runtime.borrow_mut() = Some(self.clone());
-        });
-    }
-
-    /// Queue an update to run after [`Composer::compose`].
-    pub fn update(&self, f: impl FnOnce() + 'static) {
-        self.updater.update(Update { f: Box::new(f) });
-    }
-}
-
-thread_local! {
-    static RUNTIME: RefCell<Option<Runtime>> = const { RefCell::new(None) };
-}
 
 /// Map of [`TypeId`] to context values.
 #[derive(Clone, Default)]
@@ -510,16 +485,37 @@ pub type ScopeState<'a> = &'a ScopeData<'a>;
 /// State of a composable.
 #[derive(Default)]
 pub struct ScopeData<'a> {
+    /// Hook values stored in this scope.
     hooks: UnsafeCell<Vec<Box<dyn Any>>>,
+
+    /// Current hook index.
     hook_idx: Cell<usize>,
+
+    /// `true` if this scope is changed.
     is_changed: Cell<bool>,
+
+    /// `true` if an ancestor to this scope is changed.
     is_parent_changed: Cell<bool>,
+
+    /// `true` if this scope contains an empty composable.
     is_empty: Cell<bool>,
+
+    /// `true` if this scope contains a container composable.
     is_container: Cell<bool>,
+
+    /// Context values stored in this scope.
     contexts: RefCell<Contexts>,
+
+    /// Context values for child composables.
     child_contexts: RefCell<Contexts>,
+
+    /// Drop functions to run just before this scope is dropped.
     drops: RefCell<Vec<usize>>,
+
+    /// Current generation of this scope.
     generation: Cell<u64>,
+
+    /// Marker for the invariant lifetime of this scope.
     _marker: PhantomData<&'a fn(ScopeData<'a>) -> ScopeData<'a>>,
 }
 
@@ -666,7 +662,7 @@ pub struct ContextError<T> {
 }
 
 impl<T> fmt::Debug for ContextError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("ContextError")
             .field(&std::any::type_name::<T>())
             .finish()
@@ -674,7 +670,7 @@ impl<T> fmt::Debug for ContextError<T> {
 }
 
 impl<T> fmt::Display for ContextError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&format!(
             "Context value not found for type: {}",
             std::any::type_name::<T>()
@@ -888,10 +884,7 @@ struct WrappedFuture {
 impl Future for WrappedFuture {
     type Output = ();
 
-    fn poll(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = &mut *self;
         let guard = me.lock.lock().unwrap();
 
@@ -909,70 +902,18 @@ impl Future for WrappedFuture {
 
 unsafe impl Send for WrappedFuture {}
 
-/// Executor for async tasks.
-pub trait Executor {
-    /// Spawn a future on this executor.
-    fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static;
-}
-
-impl<T: Executor> Executor for Box<T> {
-    fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        (**self).spawn(future);
-    }
-}
-
-#[cfg(feature = "rt")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
-impl Executor for tokio::runtime::Runtime {
-    fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        self.spawn(future);
-    }
-}
-
-trait AnyExecutor {
-    fn spawn_any(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>);
-}
-
-impl<E: Executor> AnyExecutor for E {
-    fn spawn_any(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        self.spawn(future);
-    }
-}
-
-/// Context for the Tokio runtime.
-pub struct RuntimeContext {
-    rt: Box<dyn AnyExecutor>,
-}
-
-impl RuntimeContext {
-    /// Spawn a future on the current runtime.
-    pub fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        self.rt.spawn_any(Box::pin(future));
-    }
-}
-
 /// Use a multi-threaded task that runs on a separate thread.
 ///
-/// This will run on the Tokio runtime, polling the task until it completes.
+/// This will run on the [Tokio](https://docs.rs/tokio/latest/tokio/) runtime, polling the task until it completes.
 pub fn use_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + Send + 'a,
 {
-    let runtime_cx = use_context::<RuntimeContext>(cx).unwrap();
+    let runtime_cx = use_context::<ExecutorContext>(cx).unwrap();
     let lock = use_ref(cx, || {
         let lock = Arc::new(Mutex::new(true));
 
+        // Safety: `task`` is guaranteed to live as long as `cx`, and is disabled after the scope is dropped.
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(make_task());
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
 
@@ -985,255 +926,8 @@ where
         lock
     });
 
+    // Disable this task after the scope is dropped.
     use_drop(cx, || {
         *lock.lock().unwrap() = false;
     });
-}
-
-/// Updater for a [`Composer`].
-pub trait Updater: Send + Sync {
-    /// Update the content of a [`Composer`].
-    fn update(&self, update: Update);
-}
-
-struct DefaultUpdater;
-
-impl Updater for DefaultUpdater {
-    fn update(&self, update: crate::Update) {
-        unsafe {
-            update.apply();
-        }
-    }
-}
-
-struct UpdateWrapper<U> {
-    updater: U,
-    lock: Arc<RwLock<()>>,
-}
-
-impl<U: Updater> Updater for UpdateWrapper<U> {
-    fn update(&self, update: crate::Update) {
-        let lock = self.lock.clone();
-        self.updater.update(Update {
-            f: Box::new(move || {
-                let _guard = lock.blocking_write();
-                unsafe { update.apply() }
-            }),
-        });
-    }
-}
-
-/// Composer for composable content.
-pub struct Composer {
-    compose: Box<dyn AnyCompose>,
-    scope_state: Box<ScopeData<'static>>,
-    rt: Runtime,
-    task_rx: mpsc::Receiver<DefaultKey>,
-}
-
-impl Composer {
-    /// Create a new [`Composer`] with the given content and default updater.
-    #[cfg(feature = "rt")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
-    pub fn new(content: impl Compose + 'static) -> Self {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        Self::with_updater(content, DefaultUpdater, rt)
-    }
-
-    /// Create a new [`Composer`] with the given content, updater, and task executor.
-    pub fn with_updater(
-        content: impl Compose + 'static,
-        updater: impl Updater + 'static,
-        executor: impl Executor + 'static,
-    ) -> Self {
-        let lock = Arc::new(RwLock::new(()));
-        let updater = Arc::new(UpdateWrapper {
-            updater,
-            lock: lock.clone(),
-        });
-        let (task_tx, task_rx) = mpsc::channel();
-
-        let scope_data = ScopeData::default();
-        scope_data.child_contexts.borrow_mut().values.insert(
-            TypeId::of::<RuntimeContext>(),
-            Rc::new(RuntimeContext {
-                rt: Box::new(executor),
-            }),
-        );
-
-        Self {
-            compose: Box::new(content),
-            scope_state: Box::new(scope_data),
-            rt: Runtime {
-                updater: updater.clone(),
-                tasks: Rc::new(RefCell::new(SlotMap::new())),
-                task_tx,
-                lock,
-            },
-            task_rx,
-        }
-    }
-
-    /// Compose the content of this composer.
-    pub fn compose(&mut self) {
-        self.rt.enter();
-
-        while let Ok(key) = self.task_rx.try_recv() {
-            let waker = Waker::from(Arc::new(TaskWaker {
-                key,
-                updater: Runtime::current().updater.clone(),
-                tx: self.rt.task_tx.clone(),
-            }));
-            let mut cx = std::task::Context::from_waker(&waker);
-
-            let mut tasks = self.rt.tasks.borrow_mut();
-            let task = tasks.get_mut(key).unwrap();
-            let _ = task.as_mut().poll(&mut cx);
-        }
-
-        unsafe { self.compose.any_compose(&self.scope_state) }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{prelude::*, Composer};
-    use std::{
-        cell::{Cell, RefCell},
-        rc::Rc,
-    };
-
-    #[derive(Data)]
-    struct Counter {
-        x: Rc<Cell<i32>>,
-    }
-
-    impl Compose for Counter {
-        fn compose(cx: Scope<Self>) -> impl Compose {
-            cx.me().x.set(cx.me().x.get() + 1);
-
-            cx.set_changed();
-        }
-    }
-
-    #[derive(Data)]
-    struct NonUpdateCounter {
-        x: Rc<Cell<i32>>,
-    }
-
-    impl Compose for NonUpdateCounter {
-        fn compose(cx: Scope<Self>) -> impl Compose {
-            cx.me().x.set(cx.me().x.get() + 1);
-        }
-    }
-
-    #[test]
-    fn it_composes() {
-        #[derive(Data)]
-        struct Wrap {
-            x: Rc<Cell<i32>>,
-        }
-
-        impl Compose for Wrap {
-            fn compose(cx: Scope<Self>) -> impl Compose {
-                Counter {
-                    x: cx.me().x.clone(),
-                }
-            }
-        }
-
-        let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() });
-
-        composer.compose();
-        assert_eq!(x.get(), 1);
-
-        composer.compose();
-        assert_eq!(x.get(), 2);
-    }
-
-    #[test]
-    fn it_skips_recomposes() {
-        #[derive(Data)]
-        struct Wrap {
-            x: Rc<Cell<i32>>,
-        }
-
-        impl Compose for Wrap {
-            fn compose(cx: Scope<Self>) -> impl Compose {
-                NonUpdateCounter {
-                    x: cx.me().x.clone(),
-                }
-            }
-        }
-
-        let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() });
-
-        composer.compose();
-        assert_eq!(x.get(), 1);
-
-        composer.compose();
-        assert_eq!(x.get(), 1);
-    }
-
-    #[test]
-    fn it_composes_any_compose() {
-        #[derive(Data)]
-        struct Wrap {
-            x: Rc<Cell<i32>>,
-        }
-
-        impl Compose for Wrap {
-            fn compose(cx: crate::Scope<Self>) -> impl Compose {
-                DynCompose::new(Counter {
-                    x: cx.me().x.clone(),
-                })
-            }
-        }
-
-        let x = Rc::new(Cell::new(0));
-        let mut composer = Composer::new(Wrap { x: x.clone() });
-
-        composer.compose();
-        assert_eq!(x.get(), 1);
-
-        composer.compose();
-        assert_eq!(x.get(), 2);
-    }
-
-    #[test]
-    fn it_memoizes_composables() {
-        #[derive(Data)]
-        struct B {
-            x: Rc<RefCell<i32>>,
-        }
-
-        impl Compose for B {
-            fn compose(cx: Scope<Self>) -> impl Compose {
-                *cx.me().x.borrow_mut() += 1;
-            }
-        }
-
-        #[derive(Data)]
-        struct A {
-            x: Rc<RefCell<i32>>,
-        }
-
-        impl Compose for A {
-            fn compose(cx: Scope<Self>) -> impl Compose {
-                let x = cx.me().x.clone();
-                Memo::new((), B { x })
-            }
-        }
-
-        let x = Rc::new(RefCell::new(0));
-        let mut compsoer = Composer::new(A { x: x.clone() });
-
-        compsoer.compose();
-        assert_eq!(*x.borrow(), 1);
-
-        compsoer.compose();
-        assert_eq!(*x.borrow(), 1);
-    }
 }
