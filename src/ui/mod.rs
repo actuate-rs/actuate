@@ -1,16 +1,20 @@
-use crate::{prelude::*, LayoutContext, WindowContext};
+use crate::prelude::*;
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    rc::Rc,
+};
+use vello::{kurbo::Vec2, Scene};
+use view::{
+    canvas::CanvasContext,
+    text::{FontContext, TextContext},
+};
+use winit::event::{ElementState, MouseButton};
 
-pub(crate) mod canvas;
-pub use self::canvas::Canvas;
+pub mod draw;
+pub use self::draw::Draw;
 
-mod flex;
-pub use self::flex::Flex;
-
-pub(crate) mod text;
-pub use self::text::{use_font, Text};
-
-mod window;
-pub use self::window::Window;
+pub mod view;
 
 /// Use a new layout node.
 pub fn use_layout(cx: ScopeState, style: Style) -> (NodeId, Layout) {
@@ -52,4 +56,52 @@ pub fn use_layout(cx: ScopeState, style: Style) -> (NodeId, Layout) {
 
     let layout = *renderer_cx.taffy.borrow().layout(key).unwrap();
     (key, layout)
+}
+
+pub struct LayoutContext {
+    parent_id: NodeId,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Event {
+    MouseInput {
+        button: MouseButton,
+        state: ElementState,
+        pos: Vec2,
+    },
+    MouseIn,
+    MouseMove {
+        pos: Vec2,
+    },
+    MouseOut,
+}
+
+type ListenerFn = Rc<dyn Fn(Event)>;
+
+pub struct WindowContext {
+    scene: RefCell<Scene>,
+    taffy: RefCell<TaffyTree>,
+    is_changed: Cell<bool>,
+    is_layout_changed: Cell<bool>,
+    canvas_update_fns: RefCell<HashMap<NodeId, Box<dyn Fn()>>>,
+    listeners: Rc<RefCell<HashMap<NodeId, Vec<ListenerFn>>>>,
+    base_color: Cell<Color>,
+}
+
+#[derive(Data)]
+pub struct RenderRoot<C> {
+    pub content: C,
+}
+
+impl<C: Compose> Compose for RenderRoot<C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        use_provider(&cx, CanvasContext::default);
+
+        use_provider(&cx, FontContext::default);
+
+        let text_context = use_context::<TextContext>(&cx).map(|rc| (*rc).clone());
+        use_provider(&cx, || text_context.unwrap_or_default());
+
+        Ref::map(cx.me(), |me| &me.content)
+    }
 }

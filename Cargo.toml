@@ -10,7 +10,7 @@ repository = "https://github.com/actuate-rs/actuate"
 event-loop = ["dep:winit"]
 rt = ["dep:tokio"]
 tracing = ["dep:tracing"]
-default = ["event-loop", "tracing"]
+default = ["event-loop", "rt", "tracing"]
 
 [workspace]
 members = [

@@ -1,4 +1,7 @@
-use crate::{event_loop, Event, LayoutContext, WindowContext};
+use crate::{
+    event_loop,
+    ui::{Event, LayoutContext, WindowContext},
+};
 use actuate_core::prelude::*;
 use parley::Rect;
 use std::{

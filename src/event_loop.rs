@@ -7,8 +7,8 @@ use winit::{
     window::{Window as RawWindow, WindowAttributes, WindowId},
 };
 
-#[cfg(feature = "event-loop")]
-#[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
+#[cfg(feature = "rt")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
 pub fn run(content: impl Compose + 'static) {
     run_with_executor(content, tokio::runtime::Runtime::new().unwrap())
 }
