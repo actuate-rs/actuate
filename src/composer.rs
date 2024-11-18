@@ -196,12 +196,20 @@ impl Composer {
         let (task_tx, task_rx) = mpsc::channel();
 
         let scope_data = ScopeData::default();
-        scope_data.child_contexts.borrow_mut().values.insert(
-            TypeId::of::<ExecutorContext>(),
-            Rc::new(ExecutorContext {
-                rt: Box::new(executor),
-            }),
-        );
+
+        let executor_cx = Rc::new(ExecutorContext {
+            rt: Box::new(executor),
+        });
+        scope_data
+            .contexts
+            .borrow_mut()
+            .values
+            .insert(TypeId::of::<ExecutorContext>(), executor_cx.clone());
+        scope_data
+            .child_contexts
+            .borrow_mut()
+            .values
+            .insert(TypeId::of::<ExecutorContext>(), executor_cx);
 
         Self {
             compose: Box::new(content),
