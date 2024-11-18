@@ -64,6 +64,7 @@ use std::{
     mem,
     ops::Deref,
     pin::Pin,
+    ptr::NonNull,
     rc::Rc,
     sync::{mpsc, Arc, Mutex},
     task::{Poll, Wake, Waker},
@@ -345,7 +346,7 @@ impl<T> Hash for Ref<'_, T> {
 
 /// Mutable reference to a value of type `T`.
 pub struct Mut<'a, T> {
-    ptr: *mut T,
+    ptr: NonNull<T>,
     scope_is_changed: *const Cell<bool>,
     generation: *const Cell<u64>,
     phantom: PhantomData<&'a ()>,
@@ -354,12 +355,12 @@ pub struct Mut<'a, T> {
 impl<'a, T: 'static> Mut<'a, T> {
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(self, f: impl FnOnce(&mut T) + 'static) {
-        let ptr = self.ptr;
+        let mut ptr = self.ptr;
         let is_changed = self.scope_is_changed;
         let generation = self.generation;
 
         Runtime::current().update(move || {
-            let value = unsafe { &mut *ptr };
+            let value = unsafe { ptr.as_mut() };
             f(value);
 
             unsafe {
@@ -374,10 +375,10 @@ impl<'a, T: 'static> Mut<'a, T> {
     /// Queue an update to this value wtihout triggering an update.
     pub fn with(self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
-        let ptr = self.ptr;
+        let mut ptr = self.ptr;
 
         Runtime::current().update(move || {
-            let value = unsafe { &mut *ptr };
+            let value = unsafe { ptr.as_mut() };
             cell.take().unwrap()(value);
         });
     }
@@ -385,7 +386,7 @@ impl<'a, T: 'static> Mut<'a, T> {
     /// Convert this mutable reference to an immutable reference.
     pub fn as_ref(self) -> Ref<'a, T> {
         Ref {
-            value: unsafe { &*self.ptr },
+            value: unsafe { self.ptr.as_ref() },
             generation: self.generation,
         }
     }
@@ -395,7 +396,7 @@ impl<T> Deref for Mut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.ptr }
+        unsafe { self.ptr.as_ref() }
     }
 }
 
@@ -621,7 +622,7 @@ pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Mu
     let state: &mut MutState<T> = any.downcast_mut().unwrap();
 
     Mut {
-        ptr: &mut state.value as *mut T,
+        ptr: unsafe { NonNull::new_unchecked(&mut state.value as *mut _) },
         scope_is_changed: &cx.is_changed,
         generation: &state.generation,
         phantom: PhantomData::<&()>,
