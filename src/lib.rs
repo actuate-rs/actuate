@@ -1,6 +1,9 @@
 //! # Actuate
 //! Actuate is a native, declarative, and friendly user-interface (UI) framework.
-//!
+//! This crate provides a library with components to build a reactive user-interface.
+//! 
+//! With only default features this crate can be used as a general-purpose reactive hierarchy.
+//! 
 //! ```no_run
 //! use actuate::prelude::*;
 //!
@@ -75,11 +78,18 @@
 //! Don’t use hooks inside loops, conditions, nested functions, or match blocks.
 //! Instead, always use hooks at the top level of your composable, before any early returns.
 //!
+//! ## Installation
+//! To add this crate to your project:
+//! ```sh
+//! cargo add actuate --features full
+//! ```
+//! 
 //! ## Features
 //! - `event-loop`: Enables the `event_loop` module for access to the system event loop.
 //! - `rt`: Enables the `rt` module for running async tasks on the Tokio runtime.
 //! - `tracing`: Enables the `tracing` module for logging.
 //! - `ui`: Enables the `ui` module for building user interfaces.
+//! - `full`: Enables all features above.
 
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]

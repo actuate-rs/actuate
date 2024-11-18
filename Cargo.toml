@@ -11,7 +11,8 @@ event-loop = ["dep:winit"]
 rt = ["tokio/rt-multi-thread"]
 tracing = ["dep:tracing"]
 ui = ["event-loop", "dep:parley", "dep:peniko", "dep:pollster", "dep:taffy", "dep:vello"]
-default = ["event-loop", "rt", "tracing", "ui"]
+full = ["event-loop", "rt", "tracing", "ui"]
+default = []
 
 [workspace]
 members = [
