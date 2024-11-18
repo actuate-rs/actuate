@@ -1,4 +1,4 @@
-use actuate_core::{prelude::*, Composer, Update, Updater};
+use actuate_core::{prelude::*, Composer, Executor, Update, Updater};
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::mpsc, thread};
 use winit::{
     application::ApplicationHandler,
@@ -102,6 +102,10 @@ impl ApplicationHandler<Vec<UnsafeUpdate>> for Handler {
 }
 
 pub fn run(content: impl Compose + 'static) {
+    run_with_executor(content, tokio::runtime::Runtime::new().unwrap())
+}
+
+pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
     let event_loop = EventLoop::with_user_event().build().unwrap();
 
     let proxy = event_loop.create_proxy();
@@ -128,6 +132,7 @@ pub fn run(content: impl Compose + 'static) {
                 event_loop_cx: cx.clone(),
             },
             EventLoopUpdater { tx },
+            executor,
         ),
         cx,
     };

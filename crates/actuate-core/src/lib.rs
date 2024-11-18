@@ -821,9 +821,57 @@ impl Future for WrappedFuture {
 
 unsafe impl Send for WrappedFuture {}
 
+/// Executor for async tasks.
+pub trait Executor {
+    /// Spawn a future on this executor.
+    fn spawn<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static;
+}
+
+impl<T: Executor> Executor for Box<T> {
+    fn spawn<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        (**self).spawn(future);
+    }
+}
+
+#[cfg(feature = "rt")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
+impl Executor for tokio::runtime::Runtime {
+    fn spawn<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        self.spawn(future);
+    }
+}
+
+trait AnyExecutor {
+    fn spawn_any(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>);
+}
+
+impl<E: Executor> AnyExecutor for E {
+    fn spawn_any(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
+        self.spawn(future);
+    }
+}
+
 /// Context for the Tokio runtime.
 pub struct RuntimeContext {
-    rt: tokio::runtime::Runtime,
+    rt: Box<dyn AnyExecutor>,
+}
+
+impl RuntimeContext {
+    /// Spawn a future on the current runtime.
+    pub fn spawn<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        self.rt.spawn_any(Box::pin(future));
+    }
 }
 
 /// Use a multi-threaded task that runs on a separate thread.
@@ -840,11 +888,11 @@ where
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(make_task());
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
 
-        runtime_cx.rt.spawn(WrappedFuture {
+        runtime_cx.rt.spawn_any(Box::pin(WrappedFuture {
             lock: lock.clone(),
             task,
             rt: Runtime::current(),
-        });
+        }));
 
         lock
     });
@@ -897,12 +945,19 @@ pub struct Composer {
 
 impl Composer {
     /// Create a new [`Composer`] with the given content and default updater.
+    #[cfg(feature = "rt")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
     pub fn new(content: impl Compose + 'static) -> Self {
-        Self::with_updater(content, DefaultUpdater)
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        Self::with_updater(content, DefaultUpdater, rt)
     }
 
-    /// Create a new [`Composer`] with the given content and default updater.
-    pub fn with_updater(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
+    /// Create a new [`Composer`] with the given content, updater, and task executor.
+    pub fn with_updater(
+        content: impl Compose + 'static,
+        updater: impl Updater + 'static,
+        executor: impl Executor + 'static,
+    ) -> Self {
         let lock = Arc::new(RwLock::new(()));
         let updater = Arc::new(UpdateWrapper {
             updater,
@@ -914,7 +969,7 @@ impl Composer {
         scope_data.child_contexts.borrow_mut().values.insert(
             TypeId::of::<RuntimeContext>(),
             Rc::new(RuntimeContext {
-                rt: tokio::runtime::Runtime::new().unwrap(),
+                rt: Box::new(executor),
             }),
         );
 
