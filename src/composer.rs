@@ -10,7 +10,7 @@ use std::{
     sync::{mpsc, Arc},
     task::{Context, Waker},
 };
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockWriteGuard};
 
 /// An update to apply to a composable.
 pub struct Update {
@@ -238,6 +238,11 @@ impl Composer {
 
         // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
         unsafe { self.compose.any_compose(&self.scope_state) }
+    }
+
+    /// Lock updates to the content of this composer.
+    pub fn lock(&self) -> RwLockWriteGuard<()> {
+        self.rt.lock.blocking_write()
     }
 }
 
