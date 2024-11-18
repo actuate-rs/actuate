@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0...actuate-v0.5.0) - 2024-11-18
+
+### Other
+
+- Add deny_missing_docs
+- Move macros crate to root and refactor Mut to use NonNull
+- Merge workspace into main crate ([#55](https://github.com/actuate-rs/actuate/pull/55))
+- Allow alternate task executors with new Executor trait ([#54](https://github.com/actuate-rs/actuate/pull/54))
+- Update FUNDING.yml
+- Create `use_layout` hook and refactor `Canvas` ([#50](https://github.com/actuate-rs/actuate/pull/50))
+- Add clippy lints ([#48](https://github.com/actuate-rs/actuate/pull/48))
+- Cache FromIter and export task hooks from prelude
+- Make compose::from_iter more general
+- Add crate-level docs
+- Create `use task` and `use_local_task` hooks ([#44](https://github.com/actuate-rs/actuate/pull/44))
+- Rename modify module to view and refactor
+- Refactor View trait
+- Create Handler trait and Event enum
+- Restructure core
+- Create ui module
+- Create draw and modify modules in actuate crate
+
 ## [0.4.0-alpha.7](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0-alpha.6...actuate-v0.4.0-alpha.7) - 2024-11-16
 
 ### Other
