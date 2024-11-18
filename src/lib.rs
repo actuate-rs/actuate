@@ -679,9 +679,6 @@ impl<T> fmt::Display for ContextError<T> {
 }
 
 /// Use a context value of type `T`.
-///
-/// # Panics
-/// Panics if the context value is not found.
 pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a T, ContextError<T>> {
     let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
         return Err(ContextError {
