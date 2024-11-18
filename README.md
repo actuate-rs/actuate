@@ -101,8 +101,13 @@ impl Compose for App {
 actuate::run(App { name: String::from("Matt") })
 ```
 
-## Inspiration
+## Installation
+To add this crate to your project:
+```
+cargo add actuate --features full
+```
 
+## Inspiration
 This crate is inspired by [Xilem](https://github.com/linebender/xilem) and uses a similar approach to type-safe reactivity. The main difference with this crate is the concept of scopes, components store their state in their own scope and updates to that scope re-render the component.
 
 State management is inspired by React and [Dioxus](https://github.com/DioxusLabs/dioxus).

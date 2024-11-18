@@ -83,8 +83,10 @@ pub trait Updater: Send + Sync {
     fn update(&self, update: Update);
 }
 
+#[cfg(feature = "rt")]
 struct DefaultUpdater;
 
+#[cfg(feature = "rt")]
 impl Updater for DefaultUpdater {
     fn update(&self, update: Update) {
         unsafe {
@@ -239,7 +241,7 @@ impl Composer {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rt"))]
 mod tests {
     use crate::{composer::Composer, prelude::*};
     use std::{
