@@ -16,8 +16,9 @@ pub use self::canvas::Canvas;
 mod flex;
 pub use self::flex::Flex;
 
-pub(crate) mod text;
-pub use self::text::{use_font, Text};
+/// Text composable.
+pub mod text;
+pub use self::text::Text;
 
 mod window;
 pub use self::window::Window;

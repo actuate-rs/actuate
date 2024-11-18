@@ -88,7 +88,7 @@ pub mod prelude {
     #[cfg(feature = "ui")]
     #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
     pub use crate::ui::{
-        view::{use_font, Canvas, Flex, Text, View, Window},
+        view::{Canvas, Flex, Text, View, Window},
         Draw,
     };
 

@@ -14,7 +14,7 @@ use vello::{
 };
 
 #[derive(Default)]
-pub struct FontContext {
+pub(crate) struct FontContext {
     inner: RefCell<parley::FontContext>,
 }
 
@@ -34,7 +34,9 @@ where
     });
 }
 
+/// Convert a type to a [`FontStack`].
 pub trait IntoFontStack<'a> {
+    /// Convert this type to a [`FontStack`].
     fn into_font_stack(self) -> FontStack<'a>;
 }
 
@@ -57,7 +59,7 @@ impl<'a> IntoFontStack<'a> for GenericFamily {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct TextContext {
+pub(crate) struct TextContext {
     pub color: Color,
     pub font_size: f32,
     pub font_stack: FontStack<'static>,
