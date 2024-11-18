@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/actuate-rs/actuate/compare/actuate-macros-v0.1.3...actuate-macros-v0.1.4) - 2024-11-18
+
+### Other
+
+- Move macros crate to root and refactor Mut to use NonNull
+
 ## [0.1.3](https://github.com/actuate-rs/actuate/compare/actuate-macros-v0.1.2...actuate-macros-v0.1.3) - 2024-11-16
 
 ### Other
