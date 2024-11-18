@@ -974,7 +974,7 @@ unsafe impl Send for WrappedFuture {}
 
 /// Use a multi-threaded task that runs on a separate thread.
 ///
-/// This will run on the [Tokio](https://docs.rs/tokio/latest/tokio/) runtime, polling the task until it completes.
+/// This will run on the current [`Executor`](`self::composer::Executor`), polling the task until it completes.
 pub fn use_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + Send + 'a,
