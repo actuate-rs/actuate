@@ -18,20 +18,21 @@ jobs:
     - uses: actions/checkout@v3
     - uses: Swatinem/rust-cache@v2
     - name: Build core
-      run: cargo build --no-default-features --workspace --verbose
-    - name: Build
       run: cargo build --workspace --verbose
+    - name: Build
+      run: cargo build --workspace --features full --verbose
     - name: Clippy
       run: |
           rustup toolchain install nightly --component clippy
           rustup override set nightly
           cargo clippy --workspace -- -D warnings
+          cargo clippy --workspace --features full -- -D warnings
     - name: Run tests
-      run: cargo test --workspace --verbose
+      run: cargo test --workspace --features full --verbose
     - name: Install Miri
       run: |
         rustup toolchain install nightly --component miri
         rustup override set nightly
         cargo miri setup
     - name: Test with Miri
-      run: cargo miri test --workspace
+      run: cargo miri test --workspace --features full --verbose

@@ -1,9 +1,9 @@
 //! # Actuate
 //! Actuate is a native, declarative, and friendly user-interface (UI) framework.
 //! This crate provides a library with components to build a reactive user-interface.
-//! 
+//!
 //! With only default features this crate can be used as a general-purpose reactive hierarchy.
-//! 
+//!
 //! ```no_run
 //! use actuate::prelude::*;
 //!
@@ -83,7 +83,7 @@
 //! ```sh
 //! cargo add actuate --features full
 //! ```
-//! 
+//!
 //! ## Features
 //! - `event-loop`: Enables the `event_loop` module for access to the system event loop.
 //! - `rt`: Enables the `rt` module for running async tasks on the Tokio runtime.
