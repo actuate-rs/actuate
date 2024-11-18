@@ -41,3 +41,27 @@ tracing-subscriber = "0.3.18"
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[[example]]
+name = "canvas"
+required-features = ["rt", "ui"]
+
+[[example]]
+name = "core"
+required-features = ["rt"]
+
+[[example]]
+name = "counter"
+required-features = ["rt", "ui"]
+
+[[example]]
+name = "http"
+required-features = ["rt", "ui"]
+
+[[example]]
+name = "list"
+required-features = ["rt", "ui"]
+
+[[example]]
+name = "multi_window"
+required-features = ["rt", "ui"]

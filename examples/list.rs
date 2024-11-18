@@ -1,6 +1,4 @@
 use actuate::prelude::*;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::FmtSubscriber;
 
 #[derive(Data)]
 struct List;
@@ -27,9 +25,10 @@ impl Compose for List {
 }
 
 fn main() {
+    #[cfg(feature = "tracing")]
     tracing::subscriber::set_global_default(
-        FmtSubscriber::builder()
-            .with_max_level(LevelFilter::TRACE)
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::level_filters::LevelFilter::TRACE)
             .finish(),
     )
     .unwrap();

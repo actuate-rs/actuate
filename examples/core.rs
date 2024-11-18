@@ -1,13 +1,10 @@
 use actuate::{composer::Composer, prelude::*};
-use tracing::{info, level_filters::LevelFilter};
-use tracing_subscriber::FmtSubscriber;
-
 #[derive(Data)]
 struct A;
 
 impl Compose for A {
     fn compose(_cx: Scope<Self>) -> impl Compose {
-        info!("A")
+        dbg!("A");
     }
 }
 
@@ -16,16 +13,17 @@ struct App;
 
 impl Compose for App {
     fn compose(_cx: Scope<Self>) -> impl Compose {
-        info!("App!");
+        dbg!("App!");
 
         A
     }
 }
 
 fn main() {
+    #[cfg(feature = "tracing")]
     tracing::subscriber::set_global_default(
-        FmtSubscriber::builder()
-            .with_max_level(LevelFilter::TRACE)
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::level_filters::LevelFilter::TRACE)
             .finish(),
     )
     .unwrap();

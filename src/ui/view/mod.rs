@@ -120,8 +120,8 @@ where
         Ref::map(cx.me(), |me| &me.content)
     }
 
-    fn name() -> Cow<'static, str> {
-        format!("Modified<{}, {}>", std::any::type_name::<T>(), C::name()).into()
+    fn name() -> Option<Cow<'static, str>> {
+        None
     }
 }
 

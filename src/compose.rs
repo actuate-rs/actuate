@@ -14,15 +14,17 @@ pub trait Compose: Data {
     fn compose(cx: Scope<Self>) -> impl Compose;
 
     #[doc(hidden)]
-    fn name() -> Cow<'static, str> {
+    fn name() -> Option<Cow<'static, str>> {
         let name = std::any::type_name::<Self>();
-        name.split('<')
-            .next()
-            .unwrap_or(name)
-            .split("::")
-            .last()
-            .unwrap_or(name)
-            .into()
+        Some(
+            name.split('<')
+                .next()
+                .unwrap_or(name)
+                .split("::")
+                .last()
+                .unwrap_or(name)
+                .into(),
+        )
     }
 }
 
@@ -189,8 +191,12 @@ where
         Ref::map(cx.me(), |me| &me.content)
     }
 
-    fn name() -> Cow<'static, str> {
-        format!("Memo<{}>", C::name()).into()
+    fn name() -> Option<Cow<'static, str>> {
+        Some(
+            C::name()
+                .map(|name| format!("Memo<{}>", name).into())
+                .unwrap_or("Memo".into()),
+        )
     }
 }
 
@@ -287,15 +293,6 @@ macro_rules! impl_tuples {
                     unsafe { cx.me().$idx.any_compose(state) }
                 )*
             }
-
-            fn name() -> Cow<'static, str> {
-                let mut s = String::from('(');
-
-                $(s.push_str(&$t::name());)*
-
-                s.push(')');
-                s.into()
-            }
         }
     };
 }
@@ -362,7 +359,9 @@ where
 
             #[cfg(feature = "tracing")]
             if !cx.is_container.get() {
-                tracing::trace!("Compose::compose: {}", C::name());
+                if let Some(name) = C::name() {
+                    tracing::trace!("Compose: {}", name);
+                }
             }
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();

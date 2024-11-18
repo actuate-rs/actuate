@@ -1,7 +1,5 @@
 use actuate::prelude::*;
 use taffy::{Size, Style};
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::FmtSubscriber;
 use vello::{
     kurbo::{self, Affine},
     peniko::Fill,
@@ -52,9 +50,10 @@ impl Compose for App {
 }
 
 fn main() {
+    #[cfg(feature = "tracing")]
     tracing::subscriber::set_global_default(
-        FmtSubscriber::builder()
-            .with_max_level(LevelFilter::TRACE)
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::level_filters::LevelFilter::TRACE)
             .finish(),
     )
     .unwrap();
