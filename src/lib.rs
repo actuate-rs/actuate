@@ -36,6 +36,37 @@
 //! actuate::run(Counter { start: 0 })
 //! ```
 //!
+//! ## Borrowing
+//! Composables can borrow from their ancestors, as well as state.
+//! ```no_run
+//! use actuate::prelude::*;
+//!
+//! #[derive(Data)]
+//! struct User<'a> {
+//!     // `actuate::Cow` allows for either a borrowed or owned value.
+//!     name: Cow<'a, String>,
+//! }
+//!
+//! impl Compose for User<'_> {
+//!     fn compose(cx: Scope<Self>) -> impl Compose {
+//!         Text::new(Ref::map(cx.me(), |me| &me.name))
+//!     }
+//! }
+//!
+//! #[derive(Data)]
+//! struct App {
+//!     name: String
+//! }
+//!
+//! impl Compose for App {
+//!     fn compose(cx: Scope<Self>) -> impl Compose {
+//!         User { name: Ref::map(cx.me(), |me| &me.name).into() }
+//!     }
+//! }
+//!
+//! actuate::run(App { name: String::from("Matt") })
+//! ```
+//!
 //! ## Hooks
 //! Functions that begin with `use_` are called `hooks` in Actuate.
 //! Hooks are used to manage state and side effects in composables.
@@ -152,6 +183,7 @@ cfg_ui!(
 ///
 /// This represents either a borrowed or owned value.
 /// A borrowed value is stored as a [`RefMap`], which can be either a reference or a mapped reference.
+#[derive(Debug)]
 pub enum Cow<'a, T> {
     /// Borrowed value, contained inside either a [`Ref`] or [`Map`].
     Borrowed(RefMap<'a, T>),
@@ -168,6 +200,18 @@ impl<T> Cow<'_, T> {
         match self {
             Cow::Borrowed(value) => (*value).clone(),
             Cow::Owned(value) => value,
+        }
+    }
+}
+
+impl<T> Clone for Cow<'_, T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Cow::Borrowed(value) => Cow::Borrowed(*value),
+            Cow::Owned(value) => Cow::Owned(value.clone()),
         }
     }
 }
@@ -201,7 +245,21 @@ impl<'a, T> From<Map<'a, T>> for Cow<'a, T> {
     }
 }
 
+impl<T: fmt::Display> fmt::Display for Cow<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Cow::Borrowed(value) => value.fmt(f),
+            Cow::Owned(value) => value.fmt(f),
+        }
+    }
+}
+
+unsafe impl<T: Data> Data for Cow<'_, T> {
+    type Id = Cow<'static, T::Id>;
+}
+
 /// Immutable reference or mapped reference to a value.
+#[derive(Debug)]
 pub enum RefMap<'a, T> {
     /// Reference to a value.
     Ref(Ref<'a, T>),
@@ -243,6 +301,15 @@ impl<'a, T> From<Ref<'a, T>> for RefMap<'a, T> {
 impl<'a, T> From<Map<'a, T>> for RefMap<'a, T> {
     fn from(value: Map<'a, T>) -> Self {
         RefMap::Map(value)
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for RefMap<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RefMap::Ref(r) => r.fmt(f),
+            RefMap::Map(map) => map.fmt(f),
+        }
     }
 }
 

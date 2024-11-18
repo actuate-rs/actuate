@@ -70,6 +70,37 @@ fn main() {
 }
 ```
 
+## Borrowing
+Composables can borrow from their ancestors, as well as state.
+```rs
+use actuate::prelude::*;
+
+#[derive(Data)]
+struct User<'a> {
+    // `actuate::Cow` allows for either a borrowed or owned value.
+    name: Cow<'a, String>,
+}
+
+impl Compose for User<'_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        Text::new(Ref::map(cx.me(), |me| &me.name))
+    }
+}
+
+#[derive(Data)]
+struct App {
+    name: String
+}
+
+impl Compose for App {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        User { name: Ref::map(cx.me(), |me| &me.name).into() }
+    }
+}
+
+actuate::run(App { name: String::from("Matt") })
+```
+
 ## Inspiration
 
 This crate is inspired by [Xilem](https://github.com/linebender/xilem) and uses a similar approach to type-safe reactivity. The main difference with this crate is the concept of scopes, components store their state in their own scope and updates to that scope re-render the component.
