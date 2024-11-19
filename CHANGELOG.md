@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.6.0...actuate-v0.6.1) - 2024-11-19
+
+### Other
+
+- Hide inner data traits
+- Update docs
+- Update docs
+- Update README.md
+
 ## [0.6.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.5.0...actuate-v0.6.0) - 2024-11-19
 
 ### Other
