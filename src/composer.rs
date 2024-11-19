@@ -161,7 +161,12 @@ impl ExecutorContext {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        self.rt.spawn_any(Box::pin(future));
+        self.spawn_boxed(Box::pin(future))
+    }
+
+    /// Spawn a boxed future on the current runtime.
+    pub fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
+        self.rt.spawn_any(future);
     }
 }
 

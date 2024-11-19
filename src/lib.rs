@@ -747,6 +747,9 @@ impl<T> fmt::Display for ContextError<T> {
 }
 
 /// Use a context value of type `T`.
+/// 
+/// This context must have already been provided by a parent composable with [`use_provider`],
+/// otherwise this function will return a [`ContextError`].
 pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a T, ContextError<T>> {
     let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
         return Err(ContextError {
@@ -968,18 +971,21 @@ where
     })
 }
 
-type TaskFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+type BoxedFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-struct WrappedFuture {
-    task: Arc<Mutex<Option<TaskFuture>>>,
+struct TaskFuture {
+    task: Arc<Mutex<Option<BoxedFuture>>>,
     rt: Runtime,
 }
 
-impl Future for WrappedFuture {
+impl Future for TaskFuture {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = &mut *self;
+
+        // Lock the guard on this task.
+        // This is to ensure the scope for this task is not dropped while polling.
         let mut guard = me.task.lock().unwrap();
 
         if let Some(task) = &mut *guard {
@@ -989,12 +995,13 @@ impl Future for WrappedFuture {
 
             task.as_mut().poll(cx)
         } else {
+            // The scope is dropped, we must complete this task early.
             Poll::Ready(())
         }
     }
 }
 
-unsafe impl Send for WrappedFuture {}
+unsafe impl Send for TaskFuture {}
 
 /// Use a multi-threaded task that runs on a separate thread.
 ///
@@ -1010,7 +1017,7 @@ where
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
         let task_lock = Arc::new(Mutex::new(Some(task)));
 
-        runtime_cx.rt.spawn_any(Box::pin(WrappedFuture {
+        runtime_cx.rt.spawn_any(Box::pin(TaskFuture {
             task: task_lock.clone(),
             rt: Runtime::current(),
         }));
