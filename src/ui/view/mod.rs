@@ -94,6 +94,7 @@ pub trait Modify {
 
 /// Modified view.
 #[derive(Data)]
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct Modified<T, C> {
     modify: T,
     content: C,

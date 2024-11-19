@@ -162,6 +162,7 @@ type EventFn<'a> = Box<dyn Fn(&RawWindow, &Event<()>) + 'a>;
 
 /// Base window composable.
 #[derive(Data)]
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct Window<'a, C> {
     window_attributes: WindowAttributes,
     on_event: EventFn<'a>,

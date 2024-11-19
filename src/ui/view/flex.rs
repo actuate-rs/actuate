@@ -6,6 +6,7 @@ use taffy::{FlexDirection, Style};
 
 /// Flex composable.
 #[derive(Data)]
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct Flex<C> {
     style: Style,
     content: C,
@@ -39,6 +40,7 @@ impl<C> Flex<C> {
         )
     }
 }
+
 
 impl<C: Compose> Compose for Flex<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {

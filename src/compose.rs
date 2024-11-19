@@ -9,6 +9,7 @@ use std::{
 /// A composable function.
 ///
 /// For a dynamically-typed composable, see [`DynCompose`].
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub trait Compose: Data {
     /// Compose this function.
     fn compose(cx: Scope<Self>) -> impl Compose;
@@ -86,6 +87,7 @@ where
 }
 
 /// Composable from an iterator, created with [`from_iter`].
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
     f: Box<dyn Fn(&'a Item) -> C + 'a>,
@@ -154,6 +156,7 @@ where
 ///
 /// Children of this `Memo` may still be re-composed if their state has changed.
 #[derive(Data)]
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct Memo<T, C> {
     dependency: T,
     content: C,
@@ -202,6 +205,7 @@ where
 }
 
 /// Dynamically-typed composable.
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct DynCompose<'a> {
     compose: UnsafeCell<Option<Box<dyn AnyCompose + 'a>>>,
 }

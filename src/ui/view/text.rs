@@ -79,6 +79,7 @@ impl Default for TextContext {
 
 /// Text composable.
 #[derive(Data)]
+#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct Text<T> {
     content: T,
 }

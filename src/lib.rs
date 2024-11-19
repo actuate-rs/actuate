@@ -747,7 +747,7 @@ impl<T> fmt::Display for ContextError<T> {
 }
 
 /// Use a context value of type `T`.
-/// 
+///
 /// This context must have already been provided by a parent composable with [`use_provider`],
 /// otherwise this function will return a [`ContextError`].
 pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a T, ContextError<T>> {
