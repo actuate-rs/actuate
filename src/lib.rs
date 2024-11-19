@@ -945,9 +945,10 @@ where
     })
 }
 
+type TaskFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
 struct WrappedFuture {
-    lock: Arc<Mutex<bool>>,
-    task: Pin<Box<dyn Future<Output = ()> + Send>>,
+    task: Arc<Mutex<Option<TaskFuture>>>,
     rt: Runtime,
 }
 
@@ -956,14 +957,14 @@ impl Future for WrappedFuture {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = &mut *self;
-        let guard = me.lock.lock().unwrap();
+        let mut guard = me.task.lock().unwrap();
 
-        if *guard {
+        if let Some(task) = &mut *guard {
             me.rt.enter();
 
             let _guard = Box::pin(me.rt.lock.read()).as_mut().poll(cx);
 
-            me.task.as_mut().poll(cx)
+            task.as_mut().poll(cx)
         } else {
             Poll::Ready(())
         }
@@ -980,24 +981,22 @@ where
     F: Future<Output = ()> + Send + 'a,
 {
     let runtime_cx = use_context::<ExecutorContext>(cx).unwrap();
-    let lock = use_ref(cx, || {
-        let lock = Arc::new(Mutex::new(true));
-
+    let task_lock = use_ref(cx, || {
         // Safety: `task`` is guaranteed to live as long as `cx`, and is disabled after the scope is dropped.
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(make_task());
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
+        let task_lock = Arc::new(Mutex::new(Some(task)));
 
         runtime_cx.rt.spawn_any(Box::pin(WrappedFuture {
-            lock: lock.clone(),
-            task,
+            task: task_lock.clone(),
             rt: Runtime::current(),
         }));
 
-        lock
+        task_lock
     });
 
     // Disable this task after the scope is dropped.
     use_drop(cx, || {
-        *lock.lock().unwrap() = false;
+        *task_lock.lock().unwrap() = None;
     });
 }
