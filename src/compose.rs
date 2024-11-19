@@ -73,7 +73,7 @@ impl<C: Compose> Compose for Option<C> {
 /// Create a composable from an iterator.
 pub fn from_iter<'a, I, C>(
     iter: I,
-    f: impl Fn(&'a I::Item) -> C + 'a,
+    f: impl Fn(Ref<'a, I::Item>) -> C + 'a,
 ) -> FromIter<'a, I, I::Item, C>
 where
     I: IntoIterator + Clone + Data,
@@ -90,7 +90,7 @@ where
 #[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
-    f: Box<dyn Fn(&'a Item) -> C + 'a>,
+    f: Box<dyn Fn(Ref<'a, Item>) -> C + 'a>,
 }
 
 unsafe impl<I, Item, C> Data for FromIter<'_, I, Item, C>
@@ -145,7 +145,13 @@ where
                 .extend(cx.child_contexts.borrow().values.clone());
             state.is_parent_changed.set(cx.is_parent_changed.get());
 
-            unsafe { (cx.me().f)(item).any_compose(state) }
+            unsafe {
+                (cx.me().f)(Ref {
+                    value: item,
+                    generation: &cx.generation as _,
+                })
+                .any_compose(state)
+            }
         }
     }
 }
@@ -316,6 +322,7 @@ pub(crate) trait AnyCompose {
 
     unsafe fn reborrow(&mut self, ptr: *mut ());
 
+    /// Safety: The caller must ensure `&self` is valid for the lifetime of `state`.
     unsafe fn any_compose(&self, state: &ScopeData);
 }
 
@@ -336,16 +343,24 @@ where
     }
 
     unsafe fn any_compose(&self, state: &ScopeData) {
+        // Reset the hook index.
         state.hook_idx.set(0);
 
+        // Increment the scope's current generation.
+        state.generation.set(state.generation.get() + 1);
+
         // Transmute the lifetime of `&Self`, `&ScopeData`, and the `Scope` containing both to the same`'a`.
+        // Safety: `self` and `state` are guranteed to have the same lifetime..
         let state: ScopeState = unsafe { mem::transmute(state) };
         let cx: Scope<'_, C> = Scope { me: self, state };
         let cx: Scope<'_, C> = unsafe { mem::transmute(cx) };
 
+        // Cell for the Box used to re-allocate this composable.
         let cell: &UnsafeCell<Option<Box<dyn AnyCompose>>> = use_ref(&cx, || UnsafeCell::new(None));
+        // Safety: This cell is only accessed by this composable.
         let cell = unsafe { &mut *cell.get() };
 
+        // Scope for this composable's content.
         let child_state = use_ref(&cx, ScopeData::default);
 
         if cell.is_none()
