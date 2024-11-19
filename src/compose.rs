@@ -9,6 +9,21 @@ use std::{
 /// A composable function.
 ///
 /// For a dynamically-typed composable, see [`DynCompose`].
+/// 
+/// Composables are the building blocks of reactivity in Actuate.
+/// A composable is essentially a function that is re-run whenever its state (or its parent state) is changed.
+/// Composables may return one or more children, that run after their parent.
+/// 
+/// When a composable is re-run, we call that "recomposition".
+/// For example, on the initial composition, hooks may initialize their state.
+/// Then on recomposition, hooks update their state from the last set value.
+/// 
+/// Triggering a state update will recompose each parent, and then each child,
+/// until either a [`Memo`] is reached or the composition is complete.
+/// 
+/// [`Memo`] is special in that it will only recompose in two cases:
+/// 1. It's provided dependencies have changed (see [`Memo::new`] for more)
+/// 2. Its own state has changed, which will then trigger the above parent-to-child process for its children.
 #[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
 pub trait Compose: Data {
     /// Compose this function.
