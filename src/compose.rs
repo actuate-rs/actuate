@@ -97,7 +97,6 @@ where
     Item: Data,
     C: Data,
 {
-    type Id = FromIter<'static, I::Id, Item::Id, C::Id>;
 }
 
 impl<I, Item, C> Compose for FromIter<'_, I, Item, C>
@@ -270,9 +269,7 @@ impl Compose for DynCompose<'_> {
 
 macro_rules! impl_tuples {
     ($($t:tt : $idx:tt),*) => {
-        unsafe impl<$($t: Data),*> Data for ($($t,)*) {
-            type Id = ($($t::Id,)*);
-        }
+        unsafe impl<$($t: Data),*> Data for ($($t,)*) {}
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
@@ -323,7 +320,7 @@ where
     C: Compose + Data,
 {
     fn data_id(&self) -> TypeId {
-        TypeId::of::<C::Id>()
+        typeid::of::<C>()
     }
 
     fn as_ptr_mut(&mut self) -> *mut () {

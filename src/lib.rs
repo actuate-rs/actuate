@@ -265,9 +265,7 @@ impl<T: fmt::Display> fmt::Display for Cow<'_, T> {
     }
 }
 
-unsafe impl<T: Data> Data for Cow<'_, T> {
-    type Id = Cow<'static, T::Id>;
-}
+unsafe impl<T: Data> Data for Cow<'_, T> {}
 
 /// Immutable reference or mapped reference to a value.
 #[derive(Debug)]
@@ -324,9 +322,7 @@ impl<T: fmt::Display> fmt::Display for RefMap<'_, T> {
     }
 }
 
-unsafe impl<T: Data> Data for RefMap<'_, T> {
-    type Id = RefMap<'static, T::Id>;
-}
+unsafe impl<T: Data> Data for RefMap<'_, T> {}
 
 impl<C: Compose> Compose for RefMap<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
@@ -539,9 +535,7 @@ macro_rules! impl_pointer {
                 }
             }
 
-            unsafe impl<T: Data> Data for $t<'_, T> {
-                type Id = $t<'static, T::Id>;
-            }
+            unsafe impl<T: Data> Data for $t<'_, T> {}
         )*
     };
 }
