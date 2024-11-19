@@ -31,7 +31,7 @@ This crate provides a generic library that lets you define UI using declarative,
 - High-performance multi-platform rendering with [Vello](https://github.com/linebender/vello)
 - CSS Block, Flex, and Grid layout support with [Taffy](https://github.com/DioxusLabs/taffy)
 - Built-in accessibility via [Accesskit](https://github.com/AccessKit/accesskit)
-- Generic core crate for custom use-cases
+- Generic core crate for custom use-cases (such as [`bevy_mod_actuate`](https://github.com/actuate-rs/bevy_mod_actuate))
 
 ```rust
 use actuate::prelude::*;
