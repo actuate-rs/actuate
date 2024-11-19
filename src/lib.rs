@@ -65,7 +65,7 @@
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
 //!         // Get a mapped reference to the app's `name` field.
 //!         let name = Ref::map(cx.me(), |me| &me.name).into();
-//! 
+//!
 //!         User { name }
 //!     }
 //! }
@@ -786,12 +786,15 @@ pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() ->
 
 /// Memoize a value, caching it until the dependency changes.
 ///
+/// This is used in [`Memo`](crate::compose::Memo) and [`use_memo`] to cache composables.
+///
 /// This is implemented for `T: PartialEq + 'static` by default.
 /// As well as:
 /// - [`Ref`]
+/// - [`Mut`]
 /// - [`Map`]
 /// - [`RefMap`]
-/// - [`Mut`]
+/// - [`Cow`]
 pub trait Memoize {
     /// Inner value to store and compare.
     type Value: PartialEq + 'static;
@@ -840,6 +843,31 @@ impl<T> Memoize for Mut<'_, T> {
 
     fn memoized(self) -> Self::Value {
         unsafe { &*self.generation }.get()
+    }
+}
+
+/// Memoized value for [`Cow`].
+///
+/// For more see [`Memoize`].
+#[derive(PartialEq)]
+pub enum MemoizedCow<T> {
+    /// Generation of a borrowed value.
+    Generation(u64),
+    /// Owned value.
+    Owned(T),
+}
+
+impl<T> Memoize for Cow<'_, T>
+where
+    T: PartialEq + 'static,
+{
+    type Value = MemoizedCow<T>;
+
+    fn memoized(self) -> Self::Value {
+        match self {
+            Cow::Borrowed(value) => MemoizedCow::Generation(value.memoized()),
+            Cow::Owned(owned) => MemoizedCow::Owned(owned),
+        }
     }
 }
 

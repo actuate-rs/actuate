@@ -152,6 +152,8 @@ where
 /// Memoized composable.
 ///
 /// The content of the memoized composable is only re-composed when the dependency changes.
+///
+/// Children of this `Memo` may still be re-composed if their state has changed.
 #[derive(Data)]
 pub struct Memo<T, C> {
     dependency: T,
