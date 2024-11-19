@@ -13,9 +13,6 @@ pub use actuate_macros::Data;
 /// For example, a `RefCell<&'a T>` is unsafe because the compiler will infer the lifetime of a child composable's lifetime (e.g. `'a`)
 /// as this struct's lifetime (e.g. `'a`).
 pub unsafe trait Data: Sized {
-    /// Static, typed ID for this data.
-    type Id: 'static;
-
     #[doc(hidden)]
     unsafe fn reborrow(self, ptr: *mut ()) {
         let x = ptr as *mut Self;
@@ -26,9 +23,7 @@ pub unsafe trait Data: Sized {
 macro_rules! impl_data_for_std {
     ($($t:ty),*) => {
         $(
-            unsafe impl Data for $t {
-                type Id = $t;
-            }
+            unsafe impl Data for $t {}
         )*
     }
 }
@@ -54,29 +49,17 @@ impl_data_for_std!(
     String
 );
 
-unsafe impl Data for &str {
-    type Id = &'static str;
-}
+unsafe impl Data for &str {}
 
-unsafe impl<T: Data> Data for Vec<T> {
-    type Id = Vec<T::Id>;
-}
+unsafe impl<T: Data> Data for Vec<T> {}
 
-unsafe impl<T: Data, U: Data> Data for HashMap<T, U> {
-    type Id = HashMap<T::Id, U::Id>;
-}
+unsafe impl<T: Data, U: Data> Data for HashMap<T, U> {}
 
-unsafe impl<T: Data> Data for &T {
-    type Id = &'static T::Id;
-}
+unsafe impl<T: Data> Data for &T {}
 
-unsafe impl<T: Data> Data for Option<T> {
-    type Id = Option<T::Id>;
-}
+unsafe impl<T: Data> Data for Option<T> {}
 
-unsafe impl Data for DynCompose<'_> {
-    type Id = DynCompose<'static>;
-}
+unsafe impl Data for DynCompose<'_> {}
 
 #[doc(hidden)]
 pub struct FieldWrap<T>(pub T);

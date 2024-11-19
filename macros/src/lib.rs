@@ -57,18 +57,11 @@ pub fn data(input: TokenStream) -> TokenStream {
         }
     });
 
-    let data_ident = format_ident!("__{}Data", ident);
-
     let gen = quote! {
         #( #checks )*
 
         #[doc(hidden)]
-        pub struct #data_ident;
-
-        #[doc(hidden)]
-        unsafe impl <#generic_params> Data for #ident <#generic_ty_params> {
-            type Id = #data_ident;
-        }
+        unsafe impl <#generic_params> Data for #ident <#generic_ty_params> {}
     };
     gen.into()
 }

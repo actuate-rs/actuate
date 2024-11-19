@@ -74,9 +74,7 @@ struct HandlerRoot<C> {
     event_loop_cx: EventLoopContext,
 }
 
-unsafe impl<C: Data> Data for HandlerRoot<C> {
-    type Id = HandlerRoot<C::Id>;
-}
+unsafe impl<C: Data> Data for HandlerRoot<C> {}
 
 impl<C: Compose> Compose for HandlerRoot<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {

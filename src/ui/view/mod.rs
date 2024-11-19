@@ -163,9 +163,7 @@ impl<H> OnEvent<H> {
     }
 }
 
-unsafe impl<H: Data> Data for OnEvent<H> {
-    type Id = OnEvent<H::Id>;
-}
+unsafe impl<H: Data> Data for OnEvent<H> {}
 
 impl<H: Handler> Modify for OnEvent<H> {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
@@ -363,9 +361,7 @@ impl<T> DrawModifier<T> {
     }
 }
 
-unsafe impl<T: Data> Data for DrawModifier<T> {
-    type Id = DrawModifier<T::Id>;
-}
+unsafe impl<T: Data> Data for DrawModifier<T> {}
 
 impl<T: Draw + 'static> Modify for DrawModifier<T> {
     fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
