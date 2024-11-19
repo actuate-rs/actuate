@@ -94,7 +94,10 @@ struct App {
 
 impl Compose for App {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        User { name: Ref::map(cx.me(), |me| &me.name).into() }
+        // Get a mapped reference to the app's `name` field.
+        let name = Ref::map(cx.me(), |me| &me.name).into();
+
+        User { name }
     }
 }
 
