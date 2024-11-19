@@ -1,6 +1,7 @@
+use crate::prelude::*;
 use std::collections::HashMap;
 
-use crate::prelude::*;
+pub use actuate_macros::Data;
 
 /// Composable data.
 ///

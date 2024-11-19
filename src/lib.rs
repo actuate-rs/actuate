@@ -117,8 +117,6 @@ use std::{
 };
 use thiserror::Error;
 
-pub use actuate_macros::Data;
-
 macro_rules! cfg_ui {
     ($($t:item)*) => {
         $(
@@ -132,12 +130,11 @@ macro_rules! cfg_ui {
 /// Prelude of commonly used items.
 pub mod prelude {
     pub use crate::{
+        compose::{self, Compose, DynCompose, Memo},
+        data::{Data, DataField, FieldWrap, FnField, StateField, StaticField},
         use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, use_task,
-        Cow, Data, DataField, FieldWrap, FnField, Map, Mut, Ref, RefMap, Scope, ScopeState,
-        StateField, StaticField,
+        Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
     };
-
-    pub use crate::compose::{self, Compose, DynCompose, Memo};
 
     cfg_ui!(
         pub use crate::ui::{
@@ -164,8 +161,9 @@ use self::compose::{AnyCompose, Compose};
 /// Low-level composer.
 pub mod composer;
 
-mod data;
-pub use self::data::{Data, DataField, FieldWrap, FnField, StateField, StaticField};
+/// Data trait and derive macro.
+pub mod data;
+pub use crate::data::Data;
 
 #[cfg(feature = "event-loop")]
 #[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
