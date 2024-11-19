@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.5.0...actuate-v0.6.0) - 2024-11-19
+
+### Other
+
+- Drop tasks before scope
+- Impl Data for HashMap
+- Quick fix for executor context
+- Add Composer::lock
+- Fix docs for use_task
+- Update examples
+- Update examples
+- Update CI
+- Use additive features by default
+- Impl more std traits for Cow and RefMap and add borrowing example
+- Update tracing
+- Clean up
+- Update docs for use_context
+- Merge with main
+- Export text module
+- Require Sync for pointers to impl Send
+
 ## [0.5.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.4.0...actuate-v0.5.0) - 2024-11-18
 
 ### Other
