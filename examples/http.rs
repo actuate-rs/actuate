@@ -32,13 +32,5 @@ impl Compose for App {
 }
 
 fn main() {
-    #[cfg(feature = "tracing")]
-    tracing::subscriber::set_global_default(
-        tracing_subscriber::FmtSubscriber::builder()
-            .with_max_level(tracing::level_filters::LevelFilter::TRACE)
-            .finish(),
-    )
-    .unwrap();
-
     actuate::run(App)
 }

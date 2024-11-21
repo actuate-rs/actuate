@@ -1,7 +1,7 @@
 use crate::{prelude::*, Memoize, ScopeData};
 use std::{
     any::TypeId,
-    borrow::Cow,
+    borrow::{Borrow, BorrowMut, Cow},
     cell::{RefCell, UnsafeCell},
     mem,
 };
@@ -125,15 +125,50 @@ where
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_container.set(true);
 
-        let items_cell = use_ref(&cx, || RefCell::new(None));
+        let items_cell: &RefCell<Option<Vec<Box<()>>>> = use_ref(&cx, || RefCell::new(None));
         let mut items_cell = items_cell.borrow_mut();
 
         let states = use_ref(&cx, || RefCell::new(Vec::new()));
         let mut states = states.borrow_mut();
 
         if cx.is_parent_changed() || items_cell.is_none() {
-            let items: Vec<I::Item> = cx.me().iter.clone().into_iter().collect();
-            let items: Vec<()> = unsafe { mem::transmute(items) };
+            let mut items: Vec<_> = cx.me().iter.clone().into_iter().collect();
+
+            if let Some(last_items) = &mut **items_cell.borrow_mut() {
+                if items.len() >= last_items.len() {
+                    for idx in last_items.len()..items.len() {
+                        let boxed: Box<Item> = Box::new(items.remove(idx));
+                        let boxed = unsafe { mem::transmute(boxed) };
+                        last_items.push(boxed);
+
+                        states.push(ScopeData::default());
+                    }
+                } else {
+                    for _ in items.len()..last_items.len() {
+                        last_items.pop();
+                    }
+                }
+
+                for (src, dst) in items.into_iter().zip(last_items) {
+                    unsafe { Item::reborrow(src, (&mut **dst) as _) }
+                }
+            } else {
+                **items_cell.borrow_mut() = Some(
+                    cx.me()
+                        .iter
+                        .clone()
+                        .into_iter()
+                        .map(|item| {
+                            states.push(ScopeData::default());
+
+                            let boxed: Box<Item> = Box::new(item);
+                            unsafe { mem::transmute(boxed) }
+                        })
+                        .collect(),
+                )
+            }
+
+            let items = items_cell.borrow().as_ref().unwrap();
 
             if items.len() >= states.len() {
                 for _ in states.len()..items.len() {
@@ -144,8 +179,6 @@ where
                     states.pop();
                 }
             }
-
-            *items_cell = Some(items);
         }
 
         let items: &Vec<_> = items_cell.as_ref().unwrap();
