@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/actuate-rs/actuate/compare/actuate-macros-v0.1.4...actuate-macros-v0.1.5) - 2024-11-21
+
+### Other
+
+- Remove Data::Id in favor of typeid crate ([#65](https://github.com/actuate-rs/actuate/pull/65))
+
 ## [0.1.4](https://github.com/actuate-rs/actuate/compare/actuate-macros-v0.1.3...actuate-macros-v0.1.4) - 2024-11-18
 
 ### Other

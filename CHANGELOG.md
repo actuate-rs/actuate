@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.6.1...actuate-v0.7.0) - 2024-11-21
+
+### Other
+
+- Pass lints
+- Return reference from use_provider (to match use_context)
+- Reborrow composables in FromIter
+- Make Data for FnMut more strict as Fn
+- Add docs to Compose trait
+- Pass Ref in FromIter and add docs
+- Add must_use lints
+- Add docs and ExecutorContext::spawn_boxed
+- Remove Data::Id in favor of typeid crate ([#65](https://github.com/actuate-rs/actuate/pull/65))
+
 ## [0.6.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.6.0...actuate-v0.6.1) - 2024-11-19
 
 ### Other
