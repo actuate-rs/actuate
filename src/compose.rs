@@ -138,7 +138,8 @@ where
                 if items.len() >= last_items.len() {
                     for idx in last_items.len()..items.len() {
                         let boxed: Box<Item> = Box::new(items.remove(idx));
-                        let boxed = unsafe { mem::transmute(boxed) };
+                        // Safety: This type is converted back to `Item` before ever being used.
+                        let boxed: Box<()> = unsafe { mem::transmute(boxed) };
                         last_items.push(boxed);
 
                         states.push(ScopeData::default());

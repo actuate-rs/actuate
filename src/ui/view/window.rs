@@ -154,7 +154,7 @@ impl<C: Compose> Compose for Window<C> {
                             let pos = *cursor_pos.borrow();
                             let taffy = window_cx.taffy.borrow();
 
-                            if let Some(id) = hit_test(&taffy, pos, &layout_cx) {
+                            if let Some(id) = hit_test(&taffy, pos, layout_cx) {
                                 if let Some(last_id) = target.replace(Some(id)) {
                                     if last_id != id {
                                         if let Some(listeners) =
