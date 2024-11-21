@@ -766,17 +766,15 @@ pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a T, ContextE
 /// Provide a context value of type `T`.
 ///
 /// This value will be available to [`use_context`] to all children of this composable.
-pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> Rc<T> {
-    // TODO
-    let r = use_ref(cx, || {
+pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> &Rc<T> {
+    use_ref(cx, || {
         let value = Rc::new(make_value());
         cx.child_contexts
             .borrow_mut()
             .values
             .insert(TypeId::of::<T>(), value.clone());
         value
-    });
-    (*r).clone()
+    })
 }
 
 /// Memoize a value, caching it until the dependency changes.
