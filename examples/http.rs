@@ -23,7 +23,7 @@ impl Compose for App {
                 .unwrap();
 
             for (name, _) in json.message {
-                breeds.update(|breeds| breeds.push(name));
+                Mut::update(breeds, |breeds| breeds.push(name));
             }
         });
 

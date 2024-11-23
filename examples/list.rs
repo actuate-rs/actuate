@@ -9,9 +9,9 @@ impl Compose for List {
 
         Window::new((
             Flex::row((
-                Text::new("Push!").on_click(move || items.update(|items| items.push("item"))),
+                Text::new("Push!").on_click(move || Mut::update(items, |items| items.push("item"))),
                 Text::new("Pop!").on_click(move || {
-                    items.update(|items| {
+                    Mut::update(items, |items| {
                         items.pop();
                     })
                 }),

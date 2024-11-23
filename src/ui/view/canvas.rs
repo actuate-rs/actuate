@@ -70,7 +70,7 @@ impl Compose for Canvas<'_> {
 
         let last_layout = use_mut(&cx, || None);
         if Some(layout) != *last_layout {
-            last_layout.with(move |dst| *dst = Some(layout));
+            Mut::with(last_layout, move |dst| *dst = Some(layout));
             renderer_cx.is_changed.set(true);
             if last_layout.is_none() {
                 return;

@@ -14,10 +14,10 @@ impl Compose for Counter {
                 .font(GenericFamily::Cursive)
                 .font_size(60.),
             Text::new("Up high!")
-                .on_click(move || count.update(|x| *x += 1))
+                .on_click(move || Mut::update(count, |x| *x += 1))
                 .background_color(Color::BLUE),
             Text::new("Down low!")
-                .on_click(move || count.update(|x| *x -= 1))
+                .on_click(move || Mut::update(count, |x| *x -= 1))
                 .background_color(Color::RED),
         )
             .font_size(40.)

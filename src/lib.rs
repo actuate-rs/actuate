@@ -443,10 +443,10 @@ pub struct Mut<'a, T> {
 
 impl<'a, T: 'static> Mut<'a, T> {
     /// Queue an update to this value, triggering an update to the component owning this value.
-    pub fn update(self, f: impl FnOnce(&mut T) + 'static) {
-        let mut ptr = self.ptr;
-        let is_changed = self.scope_is_changed;
-        let generation = self.generation;
+    pub fn update(me: Self, f: impl FnOnce(&mut T) + 'static) {
+        let mut ptr = me.ptr;
+        let is_changed = me.scope_is_changed;
+        let generation = me.generation;
 
         Runtime::current().update(move || {
             let value = unsafe { ptr.as_mut() };
@@ -461,10 +461,15 @@ impl<'a, T: 'static> Mut<'a, T> {
         });
     }
 
+    /// Queue an update to this value, triggering an update to the component owning this value.
+    pub fn set(me: Self, value: T) {
+        Mut::update(me, |x| *x = value)
+    }
+
     /// Queue an update to this value wtihout triggering an update.
-    pub fn with(self, f: impl FnOnce(&mut T) + 'static) {
+    pub fn with(me: Self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
-        let mut ptr = self.ptr;
+        let mut ptr = me.ptr;
 
         Runtime::current().update(move || {
             let value = unsafe { ptr.as_mut() };
@@ -473,10 +478,10 @@ impl<'a, T: 'static> Mut<'a, T> {
     }
 
     /// Convert this mutable reference to an immutable reference.
-    pub fn as_ref(self) -> Ref<'a, T> {
+    pub fn as_ref(me: Self) -> Ref<'a, T> {
         Ref {
-            value: unsafe { self.ptr.as_ref() },
-            generation: self.generation,
+            value: unsafe { me.ptr.as_ref() },
+            generation: me.generation,
         }
     }
 }
@@ -883,14 +888,14 @@ where
         if let Some(dependency) = dependency_cell.take() {
             if dependency != *hash_mut {
                 let value = make_value();
-                value_mut.with(move |update| *update = value);
+                Mut::with(value_mut, move |update| *update = value);
 
-                hash_mut.with(move |dst| *dst = dependency);
+                Mut::with(hash_mut, move |dst| *dst = dependency);
             }
         }
     }
 
-    value_mut.as_ref()
+    Mut::as_ref(value_mut)
 }
 
 /// Use a function that will be called when this scope is dropped.
