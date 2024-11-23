@@ -1023,7 +1023,7 @@ where
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
         let task_lock = Arc::new(Mutex::new(Some(task)));
 
-        runtime_cx.rt.spawn_any(Box::pin(TaskFuture {
+        runtime_cx.rt.spawn(Box::pin(TaskFuture {
             task: task_lock.clone(),
             rt: Runtime::current(),
         }));

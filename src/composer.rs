@@ -114,20 +114,23 @@ impl<U: Updater> Updater for UpdateWrapper<U> {
 
 /// Executor for async tasks.
 pub trait Executor {
-    /// Spawn a future on this executor.
-    fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static;
+    /// Spawn a boxed future on this executor.
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>);
+}
+
+#[cfg(feature = "rt")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
+impl Executor for tokio::runtime::Runtime {
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
+        self.spawn(future);
+    }
 }
 
 macro_rules! impl_executor {
     ($($t:tt),*) => {
         $(
             impl<T: Executor> Executor for $t<T> {
-                fn spawn<F>(&self, future: F)
-                where
-                    F: Future<Output = ()> + Send + 'static,
-                {
+                fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
                     (**self).spawn(future);
                 }
             }
@@ -137,32 +140,9 @@ macro_rules! impl_executor {
 
 impl_executor!(Box, Rc, Arc);
 
-#[cfg(feature = "rt")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
-impl Executor for tokio::runtime::Runtime {
-    fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        self.spawn(future);
-    }
-}
-
-/// Dynamically-dispatched [`Executor`] trait object.
-pub trait AnyExecutor {
-    /// Spawn a boxed future on this executor.
-    fn spawn_any(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>);
-}
-
-impl<E: Executor> AnyExecutor for E {
-    fn spawn_any(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        self.spawn(future);
-    }
-}
-
 /// Context that contains the current [`Executor`].
 pub struct ExecutorContext {
-    pub(crate) rt: Box<dyn AnyExecutor>,
+    pub(crate) rt: Box<dyn Executor>,
 }
 
 impl ExecutorContext {
@@ -176,7 +156,7 @@ impl ExecutorContext {
 
     /// Spawn a boxed future on the current runtime.
     pub fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        self.rt.spawn_any(future);
+        self.rt.spawn(future);
     }
 }
 
