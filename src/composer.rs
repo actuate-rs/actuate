@@ -148,7 +148,9 @@ impl Executor for tokio::runtime::Runtime {
     }
 }
 
-pub(crate) trait AnyExecutor {
+/// Dynamically-dispatched [`Executor`] trait object.
+pub trait AnyExecutor {
+    /// Spawn a boxed future on this executor.
     fn spawn_any(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>);
 }
 
