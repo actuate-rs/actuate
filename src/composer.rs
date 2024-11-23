@@ -129,7 +129,7 @@ impl Executor for tokio::runtime::Runtime {
 macro_rules! impl_executor {
     ($($t:tt),*) => {
         $(
-            impl<T: Executor> Executor for $t<T> {
+            impl<T: Executor + ?Sized> Executor for $t<T> {
                 fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
                     (**self).spawn(future);
                 }
