@@ -21,10 +21,10 @@
 //!                 .font(GenericFamily::Cursive)
 //!                 .font_size(60.),
 //!             Text::new("Up high")
-//!                 .on_click(move || count.update(|x| *x += 1))
+//!                 .on_click(move ||Mut::update(count, |x| *x += 1))
 //!                 .background_color(Color::BLUE),
 //!             Text::new("Down low")
-//!                 .on_click(move || count.update(|x| *x -= 1))
+//!                 .on_click(move || Mut::update(count, |x| *x -= 1))
 //!                 .background_color(Color::RED),
 //!             if *count == 0 {
 //!                 Some(Text::new("Gimme five!"))
@@ -52,7 +52,10 @@
 //!
 //! impl Compose for User<'_> {
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
-//!         Text::new(Ref::map(cx.me(), |me| &me.name))
+//!         // Get a mapped reference to the user's `name` field.
+//!         let name = Ref::map(cx.me(), |me| &me.name);
+//!
+//!         Text::new(name)
 //!     }
 //! }
 //!
