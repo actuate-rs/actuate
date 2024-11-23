@@ -120,14 +120,22 @@ pub trait Executor {
         F: Future<Output = ()> + Send + 'static;
 }
 
-impl<T: Executor> Executor for Box<T> {
-    fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        (**self).spawn(future);
-    }
+macro_rules! impl_executor {
+    ($($t:tt),*) => {
+        $(
+            impl<T: Executor> Executor for $t<T> {
+                fn spawn<F>(&self, future: F)
+                where
+                    F: Future<Output = ()> + Send + 'static,
+                {
+                    (**self).spawn(future);
+                }
+            }
+        )*
+    };
 }
+
+impl_executor!(Box, Rc, Arc);
 
 #[cfg(feature = "rt")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
