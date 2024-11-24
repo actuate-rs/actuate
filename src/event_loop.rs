@@ -1,5 +1,5 @@
 use crate::{
-    composer::{Composer, Executor, Update, Updater},
+    composer::{Composer, Update, Updater},
     prelude::*,
 };
 use std::{cell::RefCell, collections::HashMap, mem, rc::Rc, sync::mpsc, thread};
@@ -10,15 +10,8 @@ use winit::{
     window::{Window as RawWindow, WindowAttributes, WindowId},
 };
 
-#[cfg(feature = "rt")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
-/// Run this content on the system event loop.
-pub fn run(content: impl Compose + 'static) {
-    run_with_executor(content, tokio::runtime::Runtime::new().unwrap())
-}
-
 /// Run this content on the system event loop with a provided task executor.
-pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executor + 'static) {
+pub fn run(content: impl Compose + 'static) {
     let event_loop = EventLoop::with_user_event().build().unwrap();
 
     let proxy = event_loop.create_proxy();
@@ -45,7 +38,6 @@ pub fn run_with_executor(content: impl Compose + 'static, executor: impl Executo
                 event_loop_cx: cx.clone(),
             },
             EventLoopUpdater { tx },
-            executor,
         ),
         cx,
     };

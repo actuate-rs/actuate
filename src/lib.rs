@@ -185,11 +185,8 @@ cfg_ui!(
     pub mod ui;
 
     /// Run this content on the system event loop with a provided task executor.
-    pub fn run_with_executor(
-        content: impl Compose + 'static,
-        executor: impl composer::Executor + 'static,
-    ) {
-        event_loop::run_with_executor(ui::RenderRoot { content }, executor);
+    pub fn run_with_executor(content: impl Compose + 'static) {
+        event_loop::run(ui::RenderRoot { content });
     }
 );
 
@@ -1023,7 +1020,7 @@ where
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
         let task_lock = Arc::new(Mutex::new(Some(task)));
 
-        runtime_cx.rt.spawn(Box::pin(TaskFuture {
+        runtime_cx.executor.spawn(Box::pin(TaskFuture {
             task: task_lock.clone(),
             rt: Runtime::current(),
         }));
