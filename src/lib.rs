@@ -100,7 +100,7 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use composer::{ExecutorContext, Runtime, Update, Updater};
+use composer::{Runtime, Update, Updater};
 use slotmap::DefaultKey;
 use std::{
     any::{Any, TypeId},
@@ -115,8 +115,8 @@ use std::{
     pin::Pin,
     ptr::NonNull,
     rc::Rc,
-    sync::{mpsc, Arc, Mutex},
-    task::{Context, Poll, Wake},
+    sync::{mpsc, Arc},
+    task::Wake,
 };
 use thiserror::Error;
 
@@ -135,9 +135,13 @@ pub mod prelude {
     pub use crate::{
         compose::{self, Compose, DynCompose, Memo},
         data::{Data, DataField, FieldWrap, FnField, StateField, StaticField},
-        use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, use_task,
-        Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
+        use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, Cow, Map,
+        Mut, Ref, RefMap, Scope, ScopeState,
     };
+
+    #[cfg(feature = "executor")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
+    pub use crate::use_task;
 
     cfg_ui!(
         pub use crate::ui::{
@@ -173,6 +177,11 @@ pub use crate::data::Data;
 /// System event loop for windowing.
 pub mod event_loop;
 
+#[cfg(feature = "executor")]
+#[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
+/// Task execution context.
+pub mod executor;
+
 #[cfg(all(feature = "rt", feature = "ui"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "rt", feature = "ui"))))]
 /// Run this content on the system event loop.
@@ -185,11 +194,8 @@ cfg_ui!(
     pub mod ui;
 
     /// Run this content on the system event loop with a provided task executor.
-    pub fn run_with_executor(
-        content: impl Compose + 'static,
-        executor: impl composer::Executor + 'static,
-    ) {
-        event_loop::run_with_executor(ui::RenderRoot { content }, executor);
+    pub fn run_with_executor(content: impl Compose + 'static) {
+        event_loop::run(ui::RenderRoot { content });
     }
 );
 
@@ -977,17 +983,23 @@ where
     })
 }
 
+#[cfg(feature = "executor")]
 type BoxedFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
+#[cfg(feature = "executor")]
 struct TaskFuture {
-    task: Arc<Mutex<Option<BoxedFuture>>>,
+    task: Arc<std::sync::Mutex<Option<BoxedFuture>>>,
     rt: Runtime,
 }
 
+#[cfg(feature = "executor")]
 impl Future for TaskFuture {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context,
+    ) -> std::task::Poll<Self::Output> {
         let me = &mut *self;
 
         // Lock the guard on this task.
@@ -1002,13 +1014,16 @@ impl Future for TaskFuture {
             task.as_mut().poll(cx)
         } else {
             // The scope is dropped, we must complete this task early.
-            Poll::Ready(())
+            std::task::Poll::Ready(())
         }
     }
 }
 
+#[cfg(feature = "executor")]
 unsafe impl Send for TaskFuture {}
 
+#[cfg(feature = "executor")]
+#[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
 /// Use a multi-threaded task that runs on a separate thread.
 ///
 /// This will run on the current [`Executor`](`self::composer::Executor`), polling the task until it completes.
@@ -1016,14 +1031,14 @@ pub fn use_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + Send + 'a,
 {
-    let runtime_cx = use_context::<ExecutorContext>(cx).unwrap();
+    let runtime_cx = use_context::<executor::ExecutorContext>(cx).unwrap();
     let task_lock = use_ref(cx, || {
         // Safety: `task`` is guaranteed to live as long as `cx`, and is disabled after the scope is dropped.
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(make_task());
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
-        let task_lock = Arc::new(Mutex::new(Some(task)));
+        let task_lock = Arc::new(std::sync::Mutex::new(Some(task)));
 
-        runtime_cx.rt.spawn(Box::pin(TaskFuture {
+        runtime_cx.executor.spawn(Box::pin(TaskFuture {
             task: task_lock.clone(),
             rt: Runtime::current(),
         }));

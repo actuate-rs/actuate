@@ -2,7 +2,6 @@ use crate::{prelude::*, ScopeData, TaskWaker};
 use compose::AnyCompose;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
-    any::TypeId,
     cell::RefCell,
     future::Future,
     pin::Pin,
@@ -112,54 +111,6 @@ impl<U: Updater> Updater for UpdateWrapper<U> {
     }
 }
 
-/// Executor for async tasks.
-pub trait Executor {
-    /// Spawn a boxed future on this executor.
-    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>);
-}
-
-#[cfg(feature = "rt")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
-impl Executor for tokio::runtime::Runtime {
-    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        self.spawn(future);
-    }
-}
-
-macro_rules! impl_executor {
-    ($($t:tt),*) => {
-        $(
-            impl<T: Executor + ?Sized> Executor for $t<T> {
-                fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-                    (**self).spawn(future);
-                }
-            }
-        )*
-    };
-}
-
-impl_executor!(Box, Rc, Arc);
-
-/// Context that contains the current [`Executor`].
-pub struct ExecutorContext {
-    pub(crate) rt: Box<dyn Executor>,
-}
-
-impl ExecutorContext {
-    /// Spawn a future on the current runtime.
-    pub fn spawn<F>(&self, future: F)
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        self.spawn_boxed(Box::pin(future))
-    }
-
-    /// Spawn a boxed future on the current runtime.
-    pub fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        self.rt.spawn(future);
-    }
-}
-
 /// Composer for composable content.
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
@@ -173,16 +124,11 @@ impl Composer {
     #[cfg(feature = "rt")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
     pub fn new(content: impl Compose + 'static) -> Self {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        Self::with_updater(content, DefaultUpdater, rt)
+        Self::with_updater(content, DefaultUpdater)
     }
 
     /// Create a new [`Composer`] with the given content, updater, and task executor.
-    pub fn with_updater(
-        content: impl Compose + 'static,
-        updater: impl Updater + 'static,
-        executor: impl Executor + 'static,
-    ) -> Self {
+    pub fn with_updater(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
         let lock = Arc::new(RwLock::new(()));
         let updater = Arc::new(UpdateWrapper {
             updater,
@@ -191,21 +137,6 @@ impl Composer {
         let (task_tx, task_rx) = mpsc::channel();
 
         let scope_data = ScopeData::default();
-
-        let executor_cx = Rc::new(ExecutorContext {
-            rt: Box::new(executor),
-        });
-        scope_data
-            .contexts
-            .borrow_mut()
-            .values
-            .insert(TypeId::of::<ExecutorContext>(), executor_cx.clone());
-        scope_data
-            .child_contexts
-            .borrow_mut()
-            .values
-            .insert(TypeId::of::<ExecutorContext>(), executor_cx);
-
         Self {
             compose: Box::new(content),
             scope_state: Box::new(scope_data),

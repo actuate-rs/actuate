@@ -8,7 +8,8 @@ repository = "https://github.com/actuate-rs/actuate"
 
 [features]
 event-loop = ["dep:winit"]
-rt = ["tokio/rt-multi-thread"]
+executor = []
+rt = ["executor", "tokio/rt-multi-thread"]
 tracing = ["dep:tracing"]
 ui = ["event-loop", "dep:parley", "dep:peniko", "dep:pollster", "dep:taffy", "dep:vello"]
 full = ["event-loop", "rt", "tracing", "ui"]
