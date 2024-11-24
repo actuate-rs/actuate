@@ -1,9 +1,10 @@
 use crate::prelude::*;
 use crate::ui::{use_layout, ListenerFn, WindowContext};
+use peniko::Mix;
 use std::{cell::RefCell, mem, rc::Rc};
 use taffy::{Layout, Style};
 use vello::{
-    kurbo::{Affine, Vec2},
+    kurbo::{Affine, RoundedRect, Vec2},
     Scene,
 };
 
@@ -11,6 +12,7 @@ use vello::{
 pub(crate) struct CanvasContext {
     pub(crate) draws: RefCell<Vec<Rc<dyn Draw>>>,
     pub(crate) pending_listeners: Rc<RefCell<Vec<ListenerFn>>>,
+    pub(crate) border_radius: f64,
 }
 
 type DrawFn<'a> = Box<dyn Fn(Layout, &mut Scene) + 'a>;
@@ -78,6 +80,20 @@ impl Compose for Canvas<'_> {
         }
 
         scene.borrow_mut().reset();
+
+        scene.borrow_mut().push_layer(
+            Mix::Clip,
+            1.0,
+            Affine::default(),
+            &RoundedRect::new(
+                0.,
+                0.,
+                layout.size.width as _,
+                layout.size.height as _,
+                canvas_cx.border_radius,
+            ),
+        );
+
         for draw in &*canvas_cx.draws.borrow() {
             draw.pre_process(&layout, &mut scene.borrow_mut());
         }
@@ -87,6 +103,8 @@ impl Compose for Canvas<'_> {
         for draw in &*canvas_cx.draws.borrow() {
             draw.post_process(&layout, &mut scene.borrow_mut());
         }
+
+        scene.borrow_mut().pop_layer();
 
         parent_scene.append(
             &scene.borrow(),

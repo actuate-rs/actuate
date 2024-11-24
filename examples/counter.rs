@@ -15,10 +15,12 @@ impl Compose for Counter {
                 .font_size(60.),
             Text::new("Up high")
                 .on_click(move || Mut::update(count, |x| *x += 1))
-                .background_color(Color::BLUE),
+                .background_color(Color::BLUE)
+                .border_radius(8.),
             Text::new("Down low")
                 .on_click(move || Mut::update(count, |x| *x -= 1))
-                .background_color(Color::RED),
+                .background_color(Color::RED)
+                .border_radius(8.),
             if *count == 0 {
                 Some(Text::new("Gimme five!"))
             } else {

@@ -73,6 +73,11 @@ pub trait View: Compose {
         self.modify(FontSize { font_size })
     }
 
+    /// Set the border radius for this view.
+    fn border_radius(self, border_radius: f64) -> Modified<BorderRadius, Self> {
+        self.modify(BorderRadius { border_radius })
+    }
+
     /// Add a drawable modifier to this view.
     fn draw<D: Draw + 'static>(self, draw: D) -> Modified<DrawModifier<D>, Self> {
         self.modify(DrawModifier::new(draw))
@@ -186,6 +191,7 @@ impl<H: Handler> Modify for OnEvent<H> {
             CanvasContext {
                 draws: canvas_cx.draws.clone(),
                 pending_listeners: Rc::new(RefCell::new(pending_listeners)),
+                border_radius: canvas_cx.border_radius,
             }
         });
     }
@@ -344,6 +350,25 @@ impl Modify for Font {
             color: text_cx.color,
             font_size: text_cx.font_size,
             font_stack: self.font_stack.clone(),
+        });
+    }
+}
+
+/// Border radius modifier.
+#[derive(Data)]
+pub struct BorderRadius {
+    /// Border radius.
+    pub border_radius: f64,
+}
+
+impl Modify for BorderRadius {
+    fn use_state<'a>(&'a self, cx: ScopeState<'a>) {
+        let canvas_cx = use_context::<CanvasContext>(cx).unwrap();
+
+        use_provider(cx, || CanvasContext {
+            draws: canvas_cx.draws.clone(),
+            pending_listeners: canvas_cx.pending_listeners.clone(),
+            border_radius: self.border_radius,
         });
     }
 }
