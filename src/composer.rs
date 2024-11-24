@@ -1,4 +1,4 @@
-use crate::{prelude::*, ScopeData, TaskWaker};
+use crate::{prelude::*, ScopeData};
 use compose::AnyCompose;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
@@ -7,7 +7,7 @@ use std::{
     pin::Pin,
     rc::Rc,
     sync::{mpsc, Arc},
-    task::{Context, Waker},
+    task::{Context, Wake, Waker},
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
 
@@ -106,6 +106,24 @@ impl<U: Updater> Updater for UpdateWrapper<U> {
             f: Box::new(move || {
                 let _guard = lock.blocking_write();
                 unsafe { update.apply() }
+            }),
+        });
+    }
+}
+
+struct TaskWaker {
+    key: DefaultKey,
+    updater: Arc<dyn Updater>,
+    tx: mpsc::Sender<DefaultKey>,
+}
+
+impl Wake for TaskWaker {
+    fn wake(self: Arc<Self>) {
+        let key = self.key;
+        let pending = self.tx.clone();
+        self.updater.update(Update {
+            f: Box::new(move || {
+                pending.send(key).unwrap();
             }),
         });
     }

@@ -100,8 +100,7 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use composer::{Runtime, Update, Updater};
-use slotmap::DefaultKey;
+use composer::Runtime;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
@@ -115,8 +114,7 @@ use std::{
     pin::Pin,
     ptr::NonNull,
     rc::Rc,
-    sync::{mpsc, Arc},
-    task::Wake,
+    sync::Arc,
 };
 use thiserror::Error;
 
@@ -940,24 +938,6 @@ pub fn use_drop<'a>(cx: ScopeState<'a>, f: impl FnOnce() + 'a) {
         let f: Box<dyn FnOnce()> = unsafe { mem::transmute(f) };
 
         *cell.borrow_mut() = Some(f);
-    }
-}
-
-struct TaskWaker {
-    key: DefaultKey,
-    updater: Arc<dyn Updater>,
-    tx: mpsc::Sender<DefaultKey>,
-}
-
-impl Wake for TaskWaker {
-    fn wake(self: Arc<Self>) {
-        let key = self.key;
-        let pending = self.tx.clone();
-        self.updater.update(Update {
-            f: Box::new(move || {
-                pending.send(key).unwrap();
-            }),
-        });
     }
 }
 
