@@ -179,8 +179,8 @@ pub mod event_loop;
 /// Task execution context.
 pub mod executor;
 
-#[cfg(all(feature = "rt", feature = "ui"))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "rt", feature = "ui"))))]
+#[cfg(all(feature = "ui"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "ui"))))]
 /// Run this content on the system event loop.
 pub fn run(content: impl Compose + 'static) {
     event_loop::run(ui::RenderRoot { content });

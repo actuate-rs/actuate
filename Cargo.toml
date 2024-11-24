@@ -46,15 +46,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [[example]]
 name = "canvas"
-required-features = ["rt", "ui"]
+required-features = ["ui"]
 
 [[example]]
 name = "core"
-required-features = ["rt"]
+required-features = ["ui"]
 
 [[example]]
 name = "counter"
-required-features = ["rt", "ui"]
+required-features = ["ui"]
 
 [[example]]
 name = "http"
@@ -62,8 +62,8 @@ required-features = ["rt", "ui"]
 
 [[example]]
 name = "list"
-required-features = ["rt", "ui"]
+required-features = ["ui"]
 
 [[example]]
 name = "multi_window"
-required-features = ["rt", "ui"]
+required-features = ["ui"]

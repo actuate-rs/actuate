@@ -1,4 +1,4 @@
-use actuate::prelude::*;
+use actuate::{executor::ExecutorContext, prelude::*};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -8,9 +8,9 @@ struct Response {
 }
 
 #[derive(Data)]
-struct App;
+struct BreedList;
 
-impl Compose for App {
+impl Compose for BreedList {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let breeds = use_mut(&cx, Vec::new);
 
@@ -28,6 +28,17 @@ impl Compose for App {
         });
 
         Window::new(compose::from_iter(breeds, |breed| Text::new(breed)))
+    }
+}
+
+#[derive(Data)]
+struct App;
+
+impl Compose for App {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        use_provider(&cx, ExecutorContext::default);
+
+        BreedList
     }
 }
 
