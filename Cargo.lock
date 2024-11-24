@@ -20,7 +20,7 @@ checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 
 [[package]]
 name = "actuate"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "actuate-macros",
  "parley",
