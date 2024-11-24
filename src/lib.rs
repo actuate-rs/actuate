@@ -114,7 +114,6 @@ use std::{
     pin::Pin,
     ptr::NonNull,
     rc::Rc,
-    sync::Arc,
 };
 use thiserror::Error;
 
@@ -968,7 +967,7 @@ type BoxedFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 #[cfg(feature = "executor")]
 struct TaskFuture {
-    task: Arc<std::sync::Mutex<Option<BoxedFuture>>>,
+    task: std::sync::Arc<std::sync::Mutex<Option<BoxedFuture>>>,
     rt: Runtime,
 }
 
@@ -1016,7 +1015,7 @@ where
         // Safety: `task`` is guaranteed to live as long as `cx`, and is disabled after the scope is dropped.
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(make_task());
         let task: Pin<Box<dyn Future<Output = ()> + Send>> = unsafe { mem::transmute(task) };
-        let task_lock = Arc::new(std::sync::Mutex::new(Some(task)));
+        let task_lock = std::sync::Arc::new(std::sync::Mutex::new(Some(task)));
 
         runtime_cx.executor.spawn(Box::pin(TaskFuture {
             task: task_lock.clone(),
