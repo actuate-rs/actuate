@@ -1,3 +1,5 @@
+// Counter UI example.
+
 use actuate::prelude::*;
 
 // Counter composable.

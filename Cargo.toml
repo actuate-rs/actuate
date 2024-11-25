@@ -39,13 +39,24 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[example]]
+name = "composer"
+path = "examples/core/composer"
+
+[[example]]
+name = "traits"
+path = "examples/core/traits"
+
+[[example]]
 name = "counter"
+path = "examples/ecs/counter"
 required-features = ["ecs"]
 
 [[example]]
 name = "http"
+path = "examples/ecs/http"
 required-features = ["ecs", "rt"]
 
 [[example]]
 name = "timer"
+path = "examples/ecs/timer"
 required-features = ["ecs"]

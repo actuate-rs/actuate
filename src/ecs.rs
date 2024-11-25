@@ -376,6 +376,10 @@ where
 }
 
 /// A function that takes a [`SystemParam`] as input.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a valid system",
+    label = "invalid system"
+)]
 pub trait SystemParamFunctionOnce<Marker> {
     /// The [`SystemParam`].
     type Param: SystemParam + 'static;

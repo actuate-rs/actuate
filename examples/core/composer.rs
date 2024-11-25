@@ -1,4 +1,7 @@
+// Example using the core `Composer` struct.
+
 use actuate::{composer::Composer, prelude::*};
+
 #[derive(Data)]
 struct A;
 

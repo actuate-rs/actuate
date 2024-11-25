@@ -1,3 +1,5 @@
+// Timer UI example.
+
 use actuate::prelude::*;
 
 // Timer composable.

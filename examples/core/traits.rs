@@ -1,3 +1,5 @@
+// Example showing borrowed trait objects.
+
 use actuate::prelude::*;
 
 #[data]
