@@ -1,12 +1,12 @@
 //! # Actuate
-//! Actuate is a native, declarative, and friendly user-interface (UI) framework.
-//! This crate provides a library with components to build a reactive user-interface.
-//!
-//! With only default features this crate can be used as a general-purpose reactive hierarchy.
+//! A high-performance and borrow-checker friendly framework for declarative programming in Rust.
+//! This crate provides a generic library that lets you define reactive components (also known as composables).
 //!
 //! ```no_run
-//! use actuate::prelude::*;
+//! use actuate::prelude::{Mut, *};
+//! use bevy::prelude::*;
 //!
+//! // Counter composable.
 //! #[derive(Data)]
 //! struct Counter {
 //!     start: i32,
@@ -16,27 +16,40 @@
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
 //!         let count = use_mut(&cx, || cx.me().start);
 //!
-//!         Window::new((
-//!             Text::new(format!("High five count: {}", *count))
-//!                 .font(GenericFamily::Cursive)
-//!                 .font_size(60.),
-//!             Text::new("Up high")
-//!                 .on_click(move ||Mut::update(count, |x| *x += 1))
-//!                 .background_color(Color::BLUE),
-//!             Text::new("Down low")
-//!                 .on_click(move || Mut::update(count, |x| *x -= 1))
-//!                 .background_color(Color::RED),
-//!             if *count == 0 {
-//!                 Some(Text::new("Gimme five!"))
-//!             } else {
-//!                 None
+//!         spawn_with(
+//!             Node {
+//!                 flex_direction: FlexDirection::Column,
+//!                 ..default()
 //!             },
-//!         ))
-//!         .font_size(40.)
+//!             (
+//!                 spawn(Text::new(format!("High five count: {}", count))),
+//!                 spawn(Text::new("Up high")).observe(
+//!                     move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x += 1),
+//!                 ),
+//!                 spawn(Text::new("Down low")).observe(
+//!                     move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x -= 1),
+//!                 ),
+//!                 if *count == 0 {
+//!                     Some(spawn(Text::new("Gimme five!")))
+//!                 } else {
+//!                     None
+//!                 },
+//!             ),
+//!         )
 //!     }
 //! }
 //!
-//! actuate::run(Counter { start: 0 })
+//! fn setup(mut commands: Commands) {
+//!     commands.spawn(Camera2d::default());
+//!
+//!     // Spawn a composition with a `Counter`, adding it to the Actuate runtime.
+//!     commands.spawn((Node::default(), Composition::new(Counter { start: 0 })));
+//! }
+//!
+//! App::new()
+//!     .add_plugins((DefaultPlugins, ActuatePlugin))
+//!     .add_systems(Startup, setup)
+//!     .run();
 //! ```
 //!
 //! ## Borrowing
