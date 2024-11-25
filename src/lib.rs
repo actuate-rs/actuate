@@ -15,26 +15,24 @@
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
 //!         let count = use_mut(&cx, || cx.me().start);
 //!
-//!         spawn_with(
-//!             Node {
-//!                 flex_direction: FlexDirection::Column,
-//!                 ..default()
+//!         spawn(Node {
+//!             flex_direction: FlexDirection::Column,
+//!             ..default()
+//!         })
+//!         .with_content((
+//!             spawn(Text::new(format!("High five count: {}", count))),
+//!             spawn(Text::new("Up high")).observe(move |_trigger: In<Trigger<Pointer<Click>>>| {
+//!                 Mut::update(count, |x| *x += 1)
+//!             }),
+//!             spawn(Text::new("Down low")).observe(move |_trigger: In<Trigger<Pointer<Click>>>| {
+//!                 Mut::update(count, |x| *x -= 1)
+//!             }),
+//!             if *count == 0 {
+//!                 Some(spawn(Text::new("Gimme five!")))
+//!             } else {
+//!                 None
 //!             },
-//!             (
-//!                 spawn(Text::new(format!("High five count: {}", count))),
-//!                 spawn(Text::new("Up high")).observe(
-//!                     move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x += 1),
-//!                 ),
-//!                 spawn(Text::new("Down low")).observe(
-//!                     move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x -= 1),
-//!                 ),
-//!                 if *count == 0 {
-//!                     Some(spawn(Text::new("Gimme five!")))
-//!                 } else {
-//!                     None
-//!                 },
-//!             ),
-//!         )
+//!         ))
 //!     }
 //! }
 //!
@@ -140,8 +138,8 @@ pub mod prelude {
     #[cfg(feature = "ecs")]
     #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
     pub use crate::ecs::{
-        spawn, spawn_with, use_bundle, use_commands, use_world, use_world_once, ActuatePlugin,
-        Composition, Spawn, UseCommands,
+        spawn, use_bundle, use_commands, use_world, use_world_once, ActuatePlugin, Composition,
+        Spawn, UseCommands,
     };
 
     #[cfg(feature = "executor")]

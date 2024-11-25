@@ -474,17 +474,6 @@ pub fn spawn<'a, B>(bundle: B) -> Spawn<'a, ()>
 where
     B: Bundle + Clone,
 {
-    spawn_with(bundle, ())
-}
-
-/// Create a [`Spawn`] composable that spawns the provided `bundle` when composed, with some content as its children.
-///
-/// On re-composition, the spawned entity is updated to the latest provided value.
-pub fn spawn_with<'a, B, C>(bundle: B, content: C) -> Spawn<'a, C>
-where
-    B: Bundle + Clone,
-    C: Compose,
-{
     Spawn {
         spawn_fn: Arc::new(move |world, cell| {
             if let Some(entity) = cell {
@@ -493,7 +482,7 @@ where
                 *cell = Some(world.spawn(bundle.clone()).id())
             }
         }),
-        content,
+        content: (),
         target: None,
         observer_fns: Vec::new(),
     }
@@ -533,6 +522,16 @@ impl<'a, C> Spawn<'a, C> {
     pub fn with_target(mut self, target: Entity) -> Self {
         self.target = Some(target);
         self
+    }
+
+    /// Set the child content.
+    pub fn with_content<C2>(self, content: C2) -> Spawn<'a, C2> {
+        Spawn {
+            spawn_fn: self.spawn_fn,
+            content,
+            target: self.target,
+            observer_fns: self.observer_fns,
+        }
     }
 
     /// Add an observer to the spawned entity.

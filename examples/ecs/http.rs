@@ -16,30 +16,27 @@ struct Breed<'a> {
 
 impl Compose for Breed<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        spawn_with(
-            Node {
-                flex_direction: FlexDirection::Row,
+        spawn(Node {
+            flex_direction: FlexDirection::Row,
+            ..default()
+        })
+        .with_content((
+            spawn((
+                Text::new(cx.me().name),
+                Node {
+                    width: Val::Px(300.0),
+                    ..default()
+                },
+            )),
+            spawn(Node {
+                flex_direction: FlexDirection::Column,
                 ..default()
-            },
-            (
-                spawn((
-                    Text::new(cx.me().name),
-                    Node {
-                        width: Val::Px(300.0),
-                        ..default()
-                    },
-                )),
-                spawn_with(
-                    Node {
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    },
-                    compose::from_iter(Ref::map(cx.me(), |me| me.families), |family| {
-                        spawn(Text::from(family.to_string()))
-                    }),
-                ),
-            ),
-        )
+            })
+            .with_content(compose::from_iter(
+                Ref::map(cx.me(), |me| me.families),
+                |family| spawn(Text::from(family.to_string())),
+            )),
+        ))
     }
 }
 
@@ -69,18 +66,16 @@ impl Compose for BreedList {
         });
 
         // Render the currently loaded breeds.
-        spawn_with(
-            Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(30.),
-                overflow: Overflow::scroll_y(),
-                ..default()
-            },
-            compose::from_iter(breeds, |breed| Breed {
-                name: breed.0,
-                families: breed.1,
-            }),
-        )
+        spawn(Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(30.),
+            overflow: Overflow::scroll_y(),
+            ..default()
+        })
+        .with_content(compose::from_iter(breeds, |breed| Breed {
+            name: breed.0,
+            families: breed.1,
+        }))
     }
 }
 
