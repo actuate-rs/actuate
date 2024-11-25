@@ -1,12 +1,11 @@
 //! # Actuate
-//! Actuate is a native, declarative, and friendly user-interface (UI) framework.
-//! This crate provides a library with components to build a reactive user-interface.
-//!
-//! With only default features this crate can be used as a general-purpose reactive hierarchy.
+//! A high-performance and borrow-checker friendly framework for declarative programming in Rust.
+//! This crate provides a generic library that lets you define reactive components (also known as composables).
 //!
 //! ```no_run
 //! use actuate::prelude::*;
 //!
+//! // Counter composable.
 //! #[derive(Data)]
 //! struct Counter {
 //!     start: i32,
@@ -16,27 +15,40 @@
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
 //!         let count = use_mut(&cx, || cx.me().start);
 //!
-//!         Window::new((
-//!             Text::new(format!("High five count: {}", *count))
-//!                 .font(GenericFamily::Cursive)
-//!                 .font_size(60.),
-//!             Text::new("Up high")
-//!                 .on_click(move ||Mut::update(count, |x| *x += 1))
-//!                 .background_color(Color::BLUE),
-//!             Text::new("Down low")
-//!                 .on_click(move || Mut::update(count, |x| *x -= 1))
-//!                 .background_color(Color::RED),
-//!             if *count == 0 {
-//!                 Some(Text::new("Gimme five!"))
-//!             } else {
-//!                 None
+//!         spawn_with(
+//!             Node {
+//!                 flex_direction: FlexDirection::Column,
+//!                 ..default()
 //!             },
-//!         ))
-//!         .font_size(40.)
+//!             (
+//!                 spawn(Text::new(format!("High five count: {}", count))),
+//!                 spawn(Text::new("Up high")).observe(
+//!                     move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x += 1),
+//!                 ),
+//!                 spawn(Text::new("Down low")).observe(
+//!                     move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x -= 1),
+//!                 ),
+//!                 if *count == 0 {
+//!                     Some(spawn(Text::new("Gimme five!")))
+//!                 } else {
+//!                     None
+//!                 },
+//!             ),
+//!         )
 //!     }
 //! }
 //!
-//! actuate::run(Counter { start: 0 })
+//! fn setup(mut commands: Commands) {
+//!     commands.spawn(Camera2d::default());
+//!
+//!     // Spawn a composition with a `Counter`, adding it to the Actuate runtime.
+//!     commands.spawn((Node::default(), Composition::new(Counter { start: 0 })));
+//! }
+//!
+//! App::new()
+//!     .add_plugins((DefaultPlugins, ActuatePlugin))
+//!     .add_systems(Startup, setup)
+//!     .run();
 //! ```
 //!
 //! ## Borrowing
@@ -52,10 +64,7 @@
 //!
 //! impl Compose for User<'_> {
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
-//!         // Get a mapped reference to the user's `name` field.
-//!         let name = Ref::map(cx.me(), |me| &me.name);
-//!
-//!         Text::new(name)
+//!         spawn(Text::new(cx.me().name.to_string()))
 //!     }
 //! }
 //!
@@ -72,8 +81,6 @@
 //!         User { name }
 //!     }
 //! }
-//!
-//! actuate::run(App { name: String::from("Matt") })
 //! ```
 //!
 //! ## Hooks
@@ -117,45 +124,29 @@ use std::{
 };
 use thiserror::Error;
 
-macro_rules! cfg_ui {
-    ($($t:item)*) => {
-        $(
-            #[cfg(feature = "ui")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-            $t
-        )*
-    };
-}
-
 /// Prelude of commonly used items.
 pub mod prelude {
     pub use crate::{
         compose::{self, Compose, DynCompose, Memo},
         data::{Data, DataField, FieldWrap, FnField, StateField, StaticField},
-        use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, Cow, Map,
-        Mut, Ref, RefMap, Scope, ScopeState,
+        use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
+        use_ref, Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
+    };
+
+    #[cfg(feature = "ecs")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
+    pub use bevy::prelude::*;
+
+    #[cfg(feature = "ecs")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
+    pub use crate::ecs::{
+        spawn, spawn_with, use_bundle, use_commands, use_world, use_world_once, ActuatePlugin,
+        Composition, Spawn, UseCommands,
     };
 
     #[cfg(feature = "executor")]
     #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
     pub use crate::use_task;
-
-    cfg_ui!(
-        pub use crate::ui::{
-            view::{Canvas, Flex, Text, View, Window},
-            Draw,
-        };
-
-        pub use parley::GenericFamily;
-
-        pub use taffy::prelude::*;
-
-        pub use vello::peniko::Color;
-    );
-
-    #[cfg(feature = "event-loop")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
-    pub use winit::window::WindowAttributes;
 }
 
 /// Composable functions.
@@ -169,32 +160,15 @@ pub mod composer;
 pub mod data;
 pub use crate::data::Data;
 
-#[cfg(feature = "event-loop")]
-#[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
-/// System event loop for windowing.
-pub mod event_loop;
+#[cfg(feature = "ecs")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
+/// Bevy ECS integration.
+pub mod ecs;
 
 #[cfg(feature = "executor")]
 #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
 /// Task execution context.
 pub mod executor;
-
-#[cfg(feature = "ui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-/// Run this content on the system event loop.
-pub fn run(content: impl Compose + 'static) {
-    event_loop::run(ui::RenderRoot { content });
-}
-
-cfg_ui!(
-    /// User interface components.
-    pub mod ui;
-
-    /// Run this content on the system event loop with a provided task executor.
-    pub fn run_with_executor(content: impl Compose + 'static) {
-        event_loop::run(ui::RenderRoot { content });
-    }
-);
 
 /// Clone-on-write value.
 ///

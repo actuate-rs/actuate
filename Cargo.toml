@@ -7,12 +7,11 @@ description = "A reactive user-interface framework"
 repository = "https://github.com/actuate-rs/actuate"
 
 [features]
-event-loop = ["dep:winit"]
+ecs = ["dep:bevy"]
 executor = []
 rt = ["executor", "tokio/rt-multi-thread"]
 tracing = ["dep:tracing"]
-ui = ["event-loop", "dep:parley", "dep:peniko", "dep:pollster", "dep:taffy", "dep:vello"]
-full = ["event-loop", "rt", "tracing", "ui"]
+full = ["ecs", "rt", "tracing"]
 default = []
 
 [workspace]
@@ -23,6 +22,7 @@ members = [
 
 [dependencies]
 actuate-macros = { version = "0.1.5", path = "macros" }
+bevy = { version = "0.15.0-rc.3", optional = true }
 parley = { version = "0.2.0", optional = true }
 peniko = { version = "0.2.0", optional = true }
 pollster = { version = "0.4.0", optional = true }
@@ -45,25 +45,13 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[example]]
-name = "canvas"
-required-features = ["ui"]
-
-[[example]]
-name = "core"
-required-features = ["ui"]
-
-[[example]]
 name = "counter"
-required-features = ["ui"]
+required-features = ["ecs"]
 
 [[example]]
 name = "http"
-required-features = ["rt", "ui"]
+required-features = ["ecs"]
 
 [[example]]
-name = "list"
-required-features = ["ui"]
-
-[[example]]
-name = "multi_window"
-required-features = ["ui"]
+name = "timer"
+required-features = ["ecs"]

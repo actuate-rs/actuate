@@ -22,20 +22,18 @@
 
 <br />
 
-A high-performance reactive user-interface framework for Rust.
-This crate provides a generic library that lets you define UI using declarative, borrow-checker friendly syntax.
+A high-performance and borrow-checker friendly framework for declarative programming in Rust.
+This crate provides a generic library that lets you define reactive components (also known as composables).
 
 ## Features
-
+- Declarative and reactive scenes for [Bevy](https://github.com/bevyengine/bevy)
 - Efficient and borrow-checker friendly state management: Manage state with components and hooks, all using zero-cost smart pointers
-- High-performance multi-platform rendering with [Vello](https://github.com/linebender/vello)
-- CSS Block, Flex, and Grid layout support with [Taffy](https://github.com/DioxusLabs/taffy)
-- Built-in accessibility via [Accesskit](https://github.com/AccessKit/accesskit)
-- Generic core crate for custom use-cases (such as [`bevy_mod_actuate`](https://github.com/actuate-rs/bevy_mod_actuate))
+- Generic core for custom backends
 
 ```rust
 use actuate::prelude::*;
 
+// Counter composable.
 #[derive(Data)]
 struct Counter {
     start: i32,
@@ -45,28 +43,41 @@ impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let count = use_mut(&cx, || cx.me().start);
 
-        Window::new((
-            Text::new(format!("High five count: {}", *count))
-                .font(GenericFamily::Cursive)
-                .font_size(60.),
-            Text::new("Up high")
-                .on_click(move || Mut::update(count, |x| *x += 1))
-                .background_color(Color::BLUE),
-            Text::new("Down low")
-                .on_click(move || Mut::update(count, |x| *x -= 1))
-                .background_color(Color::RED),
-            if *count == 0 {
-                Some(Text::new("Gimme five!"))
-            } else {
-                None
+        spawn_with(
+            Node {
+                flex_direction: FlexDirection::Column,
+                ..default()
             },
-        ))
-        .font_size(40.)
+            (
+                spawn(Text::new(format!("High five count: {}", count))),
+                spawn(Text::new("Up high")).observe(
+                    move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x += 1),
+                ),
+                spawn(Text::new("Down low")).observe(
+                    move |_trigger: In<Trigger<Pointer<Click>>>| Mut::update(count, |x| *x -= 1),
+                ),
+                if *count == 0 {
+                    Some(spawn(Text::new("Gimme five!")))
+                } else {
+                    None
+                },
+            ),
+        )
     }
 }
 
 fn main() {
-    actuate::run(Counter { start: 0 })
+    App::new()
+        .add_plugins((DefaultPlugins, ActuatePlugin))
+        .add_systems(Startup, setup)
+        .run();
+}
+
+fn setup(mut commands: Commands) {
+    commands.spawn(Camera2d::default());
+
+    // Spawn a composition with a `Counter`, adding it to the Actuate runtime.
+    commands.spawn((Node::default(), Composition::new(Counter { start: 0 })));
 }
 ```
 
@@ -83,10 +94,7 @@ struct User<'a> {
 
 impl Compose for User<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        // Get a mapped reference to the user's `name` field.
-        let name = Ref::map(cx.me(), |me| &me.name);
-
-        Text::new(name)
+        spawn(Text::new(cx.me().name.to_string()))
     }
 }
 
@@ -103,8 +111,6 @@ impl Compose for App {
         User { name }
     }
 }
-
-actuate::run(App { name: String::from("Matt") })
 ```
 
 ## Installation
