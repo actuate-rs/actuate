@@ -31,8 +31,7 @@ This crate provides a generic library that lets you define reactive components (
 - Generic core for custom backends
 
 ```rust
-use actuate::prelude::{Mut, *};
-use bevy::prelude::*;
+use actuate::prelude::*;
 
 // Counter composable.
 #[derive(Data)]
@@ -95,7 +94,7 @@ struct User<'a> {
 
 impl Compose for User<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        spawn(Text::new(cx.me().name.clone()))
+        spawn(Text::new(cx.me().name.to_string()))
     }
 }
 
@@ -112,8 +111,6 @@ impl Compose for App {
         User { name }
     }
 }
-
-actuate::run(App { name: String::from("Matt") })
 ```
 
 ## Installation

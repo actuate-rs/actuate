@@ -1,5 +1,4 @@
-use actuate::prelude::{Mut, *};
-use bevy::prelude::*;
+use actuate::prelude::*;
 
 // Counter composable.
 #[derive(Data)]

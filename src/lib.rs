@@ -3,8 +3,7 @@
 //! This crate provides a generic library that lets you define reactive components (also known as composables).
 //!
 //! ```no_run
-//! use actuate::prelude::{Mut, *};
-//! use bevy::prelude::*;
+//! use actuate::prelude::*;
 //!
 //! // Counter composable.
 //! #[derive(Data)]
@@ -65,10 +64,7 @@
 //!
 //! impl Compose for User<'_> {
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
-//!         // Get a mapped reference to the user's `name` field.
-//!         let name = Ref::map(cx.me(), |me| &me.name);
-//!
-//!         Text::new(name)
+//!         spawn(Text::new(cx.me().name.to_string()))
 //!     }
 //! }
 //!
@@ -85,8 +81,6 @@
 //!         User { name }
 //!     }
 //! }
-//!
-//! actuate::run(App { name: String::from("Matt") })
 //! ```
 //!
 //! ## Hooks
@@ -138,6 +132,10 @@ pub mod prelude {
         use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
         use_ref, Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
     };
+
+    #[cfg(feature = "ecs")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
+    pub use bevy::prelude::*;
 
     #[cfg(feature = "ecs")]
     #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]

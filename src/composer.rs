@@ -82,10 +82,8 @@ pub trait Updater: Send + Sync {
     fn update(&self, update: Update);
 }
 
-#[cfg(feature = "rt")]
 struct DefaultUpdater;
 
-#[cfg(feature = "rt")]
 impl Updater for DefaultUpdater {
     fn update(&self, update: Update) {
         unsafe {
@@ -139,8 +137,6 @@ pub struct Composer {
 
 impl Composer {
     /// Create a new [`Composer`] with the given content and default updater.
-    #[cfg(feature = "rt")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
     pub fn new(content: impl Compose + 'static) -> Self {
         Self::with_updater(content, DefaultUpdater)
     }

@@ -47,3 +47,11 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[example]]
 name = "counter"
 required-features = ["ecs"]
+
+[[example]]
+name = "http"
+required-features = ["ecs"]
+
+[[example]]
+name = "timer"
+required-features = ["ecs"]
