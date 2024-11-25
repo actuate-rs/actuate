@@ -61,7 +61,7 @@ dependencies = [
 
 [[package]]
 name = "actuate"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "actuate-macros",
  "bevy",
