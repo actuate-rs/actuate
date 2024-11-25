@@ -45,12 +45,9 @@ pub struct ActuatePlugin;
 
 impl Plugin for ActuatePlugin {
     fn build(&self, app: &mut App) {
-        let (tx, rx) = mpsc::channel();
         let rt = Runtime {
             composers: RefCell::new(HashMap::new()),
             lock: None,
-            tx,
-            rx,
         };
 
         app.insert_non_send_resource(rt)
@@ -95,12 +92,12 @@ thread_local! {
 }
 
 struct RuntimeUpdater {
-    queue: mpsc::Sender<Update>,
+    tx: mpsc::Sender<Update>,
 }
 
 impl Updater for RuntimeUpdater {
     fn update(&self, update: Update) {
-        self.queue.send(update).unwrap();
+        self.tx.send(update).unwrap();
     }
 }
 
@@ -111,13 +108,12 @@ unsafe impl Sync for RuntimeUpdater {}
 struct RuntimeComposer {
     composer: Composer,
     guard: Option<RwLockWriteGuard<'static, ()>>,
+    rx: mpsc::Receiver<Update>,
 }
 
 struct Runtime {
     composers: RefCell<HashMap<Entity, RuntimeComposer>>,
     lock: Option<RwLockWriteGuard<'static, ()>>,
-    tx: mpsc::Sender<Update>,
-    rx: mpsc::Receiver<Update>,
 }
 
 /// Composition of some composable content.
@@ -192,17 +188,18 @@ where
 
                 let target = composition.target.unwrap_or(entity);
 
-                let tx = world.non_send_resource::<Runtime>().tx.clone();
-
                 let rt = world.non_send_resource_mut::<Runtime>();
+
+                let (tx, rx) = mpsc::channel();
                 rt.composers.borrow_mut().insert(
                     entity,
                     RuntimeComposer {
                         composer: Composer::with_updater(
                             CompositionContent { content, target },
-                            RuntimeUpdater { queue: tx },
+                            RuntimeUpdater { tx },
                         ),
                         guard: None,
+                        rx,
                     },
                 );
             });
@@ -240,18 +237,14 @@ fn compose(world: &mut World) {
     }
     drop(composers);
 
-    while let Ok(update) = rt.rx.try_recv() {
-        unsafe { update.apply() }
-    }
-
     {
         world.increment_change_tick();
         let rt_cx = RuntimeContext::current();
         let mut rt = rt_cx.inner.borrow_mut();
+
         for f in &mut rt.updates {
             f(world);
         }
-
         rt.updates.clear();
 
         rt.commands.borrow_mut().apply(world);
@@ -260,9 +253,17 @@ fn compose(world: &mut World) {
     let rt = &mut *world.non_send_resource_mut::<Runtime>();
     let mut composers = rt.composers.borrow_mut();
     for rt_composer in composers.values_mut() {
-        let guard = rt_composer.composer.lock();
-        let guard: RwLockWriteGuard<'static, ()> = unsafe { mem::transmute(guard) };
-        rt_composer.guard = Some(guard);
+        let mut is_changed = false;
+        while let Ok(update) = rt_composer.rx.try_recv() {
+            is_changed = true;
+            unsafe { update.apply() }
+        }
+
+        if is_changed {
+            let guard = rt_composer.composer.lock();
+            let guard: RwLockWriteGuard<'static, ()> = unsafe { mem::transmute(guard) };
+            rt_composer.guard = Some(guard);
+        }
     }
 }
 
