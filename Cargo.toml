@@ -40,23 +40,23 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [[example]]
 name = "composer"
-path = "examples/core/composer"
+path = "examples/core/composer.rs"
 
 [[example]]
 name = "traits"
-path = "examples/core/traits"
+path = "examples/core/traits.rs"
 
 [[example]]
 name = "counter"
-path = "examples/ecs/counter"
+path = "examples/ecs/counter.rs"
 required-features = ["ecs"]
 
 [[example]]
 name = "http"
-path = "examples/ecs/http"
+path = "examples/ecs/http.rs"
 required-features = ["ecs", "rt"]
 
 [[example]]
 name = "timer"
-path = "examples/ecs/timer"
+path = "examples/ecs/timer.rs"
 required-features = ["ecs"]
