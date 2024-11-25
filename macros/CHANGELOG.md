@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/actuate-rs/actuate/compare/actuate-macros-v0.1.5...actuate-macros-v0.1.6) - 2024-11-25
+
+### Other
+
+- Add basic support for borrowed trait objects
+
 ## [0.1.5](https://github.com/actuate-rs/actuate/compare/actuate-macros-v0.1.4...actuate-macros-v0.1.5) - 2024-11-21
 
 ### Other
