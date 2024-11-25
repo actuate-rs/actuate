@@ -149,6 +149,20 @@ pub mod prelude {
     pub use crate::use_task;
 }
 
+macro_rules! impl_trait_for_tuples {
+    ($t:tt) => {
+        $t!();
+        $t!(T1);
+        $t!(T1, T2);
+        $t!(T1, T2, T3);
+        $t!(T1, T2, T3, T4);
+        $t!(T1, T2, T3, T4, T5);
+        $t!(T1, T2, T3, T4, T5, T6);
+        $t!(T1, T2, T3, T4, T5, T6, T7);
+        $t!(T1, T2, T3, T4, T5, T6, T7, T8);
+    };
+}
+
 /// Composable functions.
 pub mod compose;
 use self::compose::{AnyCompose, Compose};

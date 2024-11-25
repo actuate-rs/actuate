@@ -330,15 +330,7 @@ macro_rules! impl_system_param_fn {
     };
 }
 
-impl_system_param_fn!();
-impl_system_param_fn!(T1);
-impl_system_param_fn!(T1, T2);
-impl_system_param_fn!(T1, T2, T3);
-impl_system_param_fn!(T1, T2, T3, T4);
-impl_system_param_fn!(T1, T2, T3, T4, T5);
-impl_system_param_fn!(T1, T2, T3, T4, T5, T6);
-impl_system_param_fn!(T1, T2, T3, T4, T5, T6, T7);
-impl_system_param_fn!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_trait_for_tuples!(impl_system_param_fn);
 
 /// Use a [`SystemParam`] from the ECS world.
 ///
@@ -407,14 +399,7 @@ macro_rules! impl_system_param_fn_once {
     };
 }
 
-impl_system_param_fn_once!(T1);
-impl_system_param_fn_once!(T1, T2);
-impl_system_param_fn_once!(T1, T2, T3);
-impl_system_param_fn_once!(T1, T2, T3, T4);
-impl_system_param_fn_once!(T1, T2, T3, T4, T5);
-impl_system_param_fn_once!(T1, T2, T3, T4, T5, T6);
-impl_system_param_fn_once!(T1, T2, T3, T4, T5, T6, T7);
-impl_system_param_fn_once!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_trait_for_tuples!(impl_system_param_fn_once);
 
 /// Use a [`SystemParam`] from the ECS world.
 ///

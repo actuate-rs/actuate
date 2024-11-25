@@ -1,4 +1,4 @@
-use actuate::prelude::{*};
+use actuate::prelude::*;
 
 // Timer composable.
 #[derive(Data)]
