@@ -1,20 +1,24 @@
 use crate::{
     composer::{Composer, Update, Updater},
     prelude::*,
+    use_callback,
 };
 use bevy::{
     app::Plugin,
     ecs::{
         component::{ComponentHooks, StorageType},
-        system::{SystemParam, SystemState},
+        system::{SystemParam, SystemParamItem, SystemState},
         world::CommandQueue,
     },
-    prelude::{App, BuildChildren, Bundle, Command, Component, Entity, World},
+    prelude::{
+        App, BuildChildren, Bundle, Command, Component, Entity, EntityWorldMut, Event, In,
+        ParamSet, Trigger, World,
+    },
     utils::HashMap,
 };
 use slotmap::{DefaultKey, SlotMap};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     marker::PhantomData,
     mem, ptr,
     rc::Rc,
@@ -254,28 +258,79 @@ pub struct UseWorld<'a> {
 }
 
 /// A function that takes a [`SystemParam`] as input.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a valid system",
+    label = "invalid system"
+)]
 pub trait SystemParamFunction<Marker> {
+    /// The input type to this system. See [`System::In`].
+    type In;
+
+    /// The return type of this system. See [`System::Out`].
+    type Out;
+
     /// The [`SystemParam`].
     type Param: SystemParam + 'static;
 
     /// Run the function with the provided [`SystemParam`]'s item.
-    fn run(&self, param: <Self::Param as SystemParam>::Item<'_, '_>);
+    fn run(&mut self, input: Self::In, param_value: SystemParamItem<Self::Param>) -> Self::Out;
 }
+
+#[doc(hidden)]
+pub struct Wrap<T>(T);
 
 macro_rules! impl_system_param_fn {
     ($($t:tt),*) => {
-        impl<$($t: SystemParam + 'static,)* F: Fn($($t),*) + Fn($($t::Item<'_, '_>),*)> SystemParamFunction<fn($($t),*)> for F {
+        impl<Out, Func, $($t: SystemParam + 'static),*> SystemParamFunction<Wrap<fn($($t,)*) -> Out>> for Func
+        where
+        for <'a> &'a mut Func:
+                FnMut($($t),*) -> Out +
+                FnMut($(SystemParamItem<$t>),*) -> Out, Out: 'static
+        {
+            type In = ();
+            type Out = Out;
             type Param = ($($t,)*);
 
-            fn run(&self, param: <Self::Param as SystemParam>::Item<'_, '_>) {
-                #[allow(non_snake_case)]
-                let ($($t,)*) = param;
-                self($($t,)*)
+            #[inline]
+            #[allow(non_snake_case)]
+            fn run(&mut self, _input: (), param_value: SystemParamItem< ($($t,)*)>) -> Out {
+                #[allow(clippy::too_many_arguments)]
+                fn call_inner<Out, $($t,)*>(mut f: impl FnMut($($t,)*) -> Out, $($t: $t,)*)->Out{
+                    f($($t,)*)
+                }
+                let ($($t,)*) = param_value;
+                call_inner(self, $($t),*)
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<Input, Out, Func, $($t: SystemParam + 'static),*> SystemParamFunction<fn(In<Input>, $($t,)*) -> Out> for Func
+        where
+        for <'a> &'a mut Func:
+                FnMut(In<Input>, $($t),*) -> Out +
+                FnMut(In<Input>, $(SystemParamItem<$t>),*) -> Out, Out: 'static
+        {
+            type In = Input;
+            type Out = Out;
+            type Param = ($($t,)*);
+            #[inline]
+            fn run(&mut self, input: Input, param_value: SystemParamItem< ($($t,)*)>) -> Out {
+                #[allow(clippy::too_many_arguments)]
+                fn call_inner<Input, Out, $($t,)*>(
+                    mut f: impl FnMut(In<Input>, $($t,)*)->Out,
+                    input: In<Input>,
+                    $($t: $t,)*
+                )->Out{
+                    f(input, $($t,)*)
+                }
+                let ($($t,)*) = param_value;
+                call_inner(self, In(input), $($t),*)
             }
         }
     };
 }
 
+impl_system_param_fn!();
 impl_system_param_fn!(T1);
 impl_system_param_fn!(T1, T2);
 impl_system_param_fn!(T1, T2, T3);
@@ -290,9 +345,9 @@ impl_system_param_fn!(T1, T2, T3, T4, T5, T6, T7, T8);
 /// `with_world` will be called on every frame with the latest query.
 ///
 /// Change detection is implemented as a traditional system parameter.
-pub fn use_world<'a, Marker, F>(cx: ScopeState<'a>, with_world: F)
+pub fn use_world<'a, Marker, F>(cx: ScopeState<'a>, mut with_world: F)
 where
-    F: SystemParamFunction<Marker> + 'a,
+    F: SystemParamFunction<Marker, In = (), Out = ()> + 'a,
 {
     let system_state_cell = use_ref(cx, || RefCell::new(None));
 
@@ -301,7 +356,7 @@ where
         let system_state =
             system_state_cell.get_or_insert_with(|| SystemState::<F::Param>::new(world));
         let query = system_state.get_mut(world);
-        with_world.run(query)
+        with_world.run((), query)
     })
     .clone();
 
@@ -422,7 +477,7 @@ type SpawnFn = Arc<dyn Fn(&mut World, &mut Option<Entity>)>;
 /// Create a [`Spawn`] composable that spawns the provided `bundle` when composed.
 ///
 /// On re-composition, the spawned entity is updated to the latest provided value.
-pub fn spawn<B>(bundle: B) -> SpawnWith<()>
+pub fn spawn<'a, B>(bundle: B) -> Spawn<'a, ()>
 where
     B: Bundle + Clone,
 {
@@ -432,12 +487,12 @@ where
 /// Create a [`Spawn`] composable that spawns the provided `bundle` when composed, with some content as its children.
 ///
 /// On re-composition, the spawned entity is updated to the latest provided value.
-pub fn spawn_with<B, C>(bundle: B, content: C) -> SpawnWith<C>
+pub fn spawn_with<'a, B, C>(bundle: B, content: C) -> Spawn<'a, C>
 where
     B: Bundle + Clone,
     C: Compose,
 {
-    SpawnWith {
+    Spawn {
         spawn_fn: Arc::new(move |world, cell| {
             if let Some(entity) = cell {
                 world.entity_mut(*entity).insert(bundle.clone());
@@ -447,21 +502,24 @@ where
         }),
         content,
         target: None,
+        observer_fns: Vec::new(),
     }
 }
 
+type ObserverFn<'a> = Box<dyn Fn(&mut EntityWorldMut) + 'a>;
+
 /// Spawn composable with content.
 ///
-/// See [`spawn_with`] for more information.
-#[derive(Data)]
+/// See [`spawn`] and [`spawn_with`] for more information.
 #[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
-pub struct SpawnWith<C> {
+pub struct Spawn<'a, C> {
     spawn_fn: SpawnFn,
     content: C,
     target: Option<Entity>,
+    observer_fns: Vec<ObserverFn<'a>>,
 }
 
-impl<C> SpawnWith<C> {
+impl<'a, C> Spawn<'a, C> {
     /// Get the target entity to spawn the composition into.
     ///
     /// If `None`, this will use the composition's parent (if any).
@@ -483,18 +541,61 @@ impl<C> SpawnWith<C> {
         self.target = Some(target);
         self
     }
+
+    /// Add an observer to the spawned entity.
+    pub fn observe<F, E, B, Marker>(mut self, observer: F) -> Self
+    where
+        F: SystemParamFunction<Marker, In = Trigger<'static, E, B>, Out = ()> + Send + Sync + 'a,
+        E: Event,
+        B: Bundle,
+    {
+        let cell = Cell::new(Some(observer));
+        self.observer_fns.push(Box::new(move |entity| {
+            let mut observer = cell.take().unwrap();
+
+            type SpawnObserveFn<'a, F, E, B, Marker> = Box<
+                dyn FnMut(
+                        Trigger<'_, E, B>,
+                        ParamSet<'_, '_, (<F as SystemParamFunction<Marker>>::Param,)>,
+                    ) + Send
+                    + Sync
+                    + 'a,
+            >;
+
+            let f: SpawnObserveFn<'a, F, E, B, Marker> = Box::new(move |trigger, mut params| {
+                let trigger: Trigger<'static, E, B> = unsafe { mem::transmute(trigger) };
+                observer.run(trigger, params.p0())
+            });
+            let f: SpawnObserveFn<'static, F, E, B, Marker> = unsafe { mem::transmute(f) };
+
+            entity.observe(f);
+        }));
+        self
+    }
 }
 
-impl<C: Compose> Compose for SpawnWith<C> {
+unsafe impl<C: Data> Data for Spawn<'_, C> {}
+
+impl<C: Compose> Compose for Spawn<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let spawn_cx = use_context::<SpawnContext>(&cx);
 
+        let is_initial = use_ref(&cx, || Cell::new(true));
         let entity = use_bundle_inner(&cx, |world, entity| {
             if let Some(target) = cx.me().target {
                 *entity = Some(target);
             }
 
             (cx.me().spawn_fn)(world, entity);
+
+            if is_initial.get() {
+                let mut entity_mut = world.entity_mut(entity.unwrap());
+                for f in &cx.me().observer_fns {
+                    f(&mut entity_mut);
+                }
+
+                is_initial.set(false);
+            }
         });
 
         use_provider(&cx, || {

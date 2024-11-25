@@ -117,16 +117,6 @@ use std::{
 };
 use thiserror::Error;
 
-macro_rules! cfg_ui {
-    ($($t:item)*) => {
-        $(
-            #[cfg(feature = "ui")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-            $t
-        )*
-    };
-}
-
 /// Prelude of commonly used items.
 pub mod prelude {
     pub use crate::{
@@ -136,26 +126,16 @@ pub mod prelude {
         use_ref, Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
     };
 
+    #[cfg(feature = "ecs")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
+    pub use crate::ecs::{
+        spawn, spawn_with, use_bundle, use_commands, use_world, use_world_once, ActuatePlugin,
+        Composition, Spawn, UseCommands,
+    };
+
     #[cfg(feature = "executor")]
     #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
     pub use crate::use_task;
-
-    cfg_ui!(
-        pub use crate::ui::{
-            view::{Canvas, Flex, Text, View, Window},
-            Draw,
-        };
-
-        pub use parley::GenericFamily;
-
-        pub use taffy::prelude::*;
-
-        pub use vello::peniko::Color;
-    );
-
-    #[cfg(feature = "event-loop")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
-    pub use winit::window::WindowAttributes;
 }
 
 /// Composable functions.
@@ -174,32 +154,10 @@ pub use crate::data::Data;
 /// Bevy ECS integration.
 pub mod ecs;
 
-#[cfg(feature = "event-loop")]
-#[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
-/// System event loop for windowing.
-pub mod event_loop;
-
 #[cfg(feature = "executor")]
 #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
 /// Task execution context.
 pub mod executor;
-
-#[cfg(feature = "ui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
-/// Run this content on the system event loop.
-pub fn run(content: impl Compose + 'static) {
-    event_loop::run(ui::RenderRoot { content });
-}
-
-cfg_ui!(
-    /// User interface components.
-    pub mod ui;
-
-    /// Run this content on the system event loop with a provided task executor.
-    pub fn run_with_executor(content: impl Compose + 'static) {
-        event_loop::run(ui::RenderRoot { content });
-    }
-);
 
 /// Clone-on-write value.
 ///

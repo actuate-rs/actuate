@@ -8,12 +8,10 @@ repository = "https://github.com/actuate-rs/actuate"
 
 [features]
 ecs = ["dep:bevy"]
-event-loop = ["dep:winit"]
 executor = []
 rt = ["executor", "tokio/rt-multi-thread"]
 tracing = ["dep:tracing"]
-ui = ["event-loop", "dep:parley", "dep:peniko", "dep:pollster", "dep:taffy", "dep:vello"]
-full = ["ecs", "event-loop", "rt", "tracing", "ui"]
+full = ["ecs", "rt", "tracing"]
 default = []
 
 [workspace]
@@ -47,25 +45,5 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[example]]
-name = "canvas"
-required-features = ["ui"]
-
-[[example]]
-name = "core"
-required-features = ["ui"]
-
-[[example]]
 name = "counter"
-required-features = ["ui"]
-
-[[example]]
-name = "http"
-required-features = ["rt", "ui"]
-
-[[example]]
-name = "list"
-required-features = ["ui"]
-
-[[example]]
-name = "multi_window"
-required-features = ["ui"]
+required-features = ["ecs"]
