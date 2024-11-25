@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2](https://github.com/actuate-rs/actuate/compare/actuate-v0.9.1...actuate-v0.9.2) - 2024-11-25
+
+### Other
+
+- Add basic trait object example
+- Add basic support for borrowed trait objects
+
 ## [0.9.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.9.0...actuate-v0.9.1) - 2024-11-25
 
 ### Other
