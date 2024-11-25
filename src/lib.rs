@@ -132,8 +132,8 @@ pub mod prelude {
     pub use crate::{
         compose::{self, Compose, DynCompose, Memo},
         data::{Data, DataField, FieldWrap, FnField, StateField, StaticField},
-        use_context, use_drop, use_local_task, use_memo, use_mut, use_provider, use_ref, Cow, Map,
-        Mut, Ref, RefMap, Scope, ScopeState,
+        use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
+        use_ref, Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
     };
 
     #[cfg(feature = "executor")]
@@ -168,6 +168,11 @@ pub mod composer;
 /// Data trait and derive macro.
 pub mod data;
 pub use crate::data::Data;
+
+#[cfg(feature = "ecs")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
+/// Bevy ECS integration.
+pub mod ecs;
 
 #[cfg(feature = "event-loop")]
 #[cfg_attr(docsrs, doc(cfg(feature = "event-loop")))]
