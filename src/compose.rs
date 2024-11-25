@@ -24,7 +24,7 @@ use std::{
 /// [`Memo`] is special in that it will only recompose in two cases:
 /// 1. It's provided dependencies have changed (see [`Memo::new`] for more)
 /// 2. Its own state has changed, which will then trigger the above parent-to-child process for its children.
-#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
+#[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub trait Compose: Data {
     /// Compose this function.
     fn compose(cx: Scope<Self>) -> impl Compose;
@@ -119,7 +119,7 @@ impl Drop for AnyItemState {
 }
 
 /// Composable from an iterator, created with [`from_iter`].
-#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
+#[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
     f: Box<dyn Fn(Ref<'a, Item>) -> C + 'a>,
@@ -214,7 +214,7 @@ where
 ///
 /// Children of this `Memo` may still be re-composed if their state has changed.
 #[derive(Data)]
-#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
+#[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct Memo<T, C> {
     dependency: T,
     content: C,
@@ -263,7 +263,7 @@ where
 }
 
 /// Dynamically-typed composable.
-#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
+#[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct DynCompose<'a> {
     compose: UnsafeCell<Option<Box<dyn AnyCompose + 'a>>>,
 }

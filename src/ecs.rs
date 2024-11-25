@@ -26,6 +26,20 @@ use std::{
 };
 use tokio::sync::RwLockWriteGuard;
 
+macro_rules! impl_trait_for_tuples {
+    ($t:tt) => {
+        $t!();
+        $t!(T1);
+        $t!(T1, T2);
+        $t!(T1, T2, T3);
+        $t!(T1, T2, T3, T4);
+        $t!(T1, T2, T3, T4, T5);
+        $t!(T1, T2, T3, T4, T5, T6);
+        $t!(T1, T2, T3, T4, T5, T6, T7);
+        $t!(T1, T2, T3, T4, T5, T6, T7, T8);
+    };
+}
+
 /// Actuate plugin to run [`Composition`]s.
 pub struct ActuatePlugin;
 
@@ -496,7 +510,7 @@ type ObserverFn<'a> = Box<dyn Fn(&mut EntityWorldMut) + 'a>;
 /// Spawn composable with content.
 ///
 /// See [`spawn`] and [`spawn_with`] for more information.
-#[must_use = "Composables do nothing unless composed with `actuate::run` or returned from other composables"]
+#[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct Spawn<'a, C> {
     spawn_fn: SpawnFn,
     content: C,
