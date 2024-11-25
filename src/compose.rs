@@ -25,7 +25,7 @@ use std::{
 /// 1. It's provided dependencies have changed (see [`Memo::new`] for more)
 /// 2. Its own state has changed, which will then trigger the above parent-to-child process for its children.
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
-pub trait Compose: Data {
+pub trait Compose: Data + Sized {
     /// Compose this function.
     fn compose(cx: Scope<Self>) -> impl Compose;
 
@@ -420,7 +420,7 @@ where
             || cx.is_parent_changed.get()
             || cx.is_container.get()
         {
-            let child = C::compose(cx);
+            let mut child = C::compose(cx);
 
             cx.is_parent_changed.set(false);
             if cx.state.is_empty.take() {

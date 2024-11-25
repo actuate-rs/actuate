@@ -128,7 +128,7 @@ use thiserror::Error;
 pub mod prelude {
     pub use crate::{
         compose::{self, Compose, DynCompose, Memo},
-        data::{Data, DataField, FieldWrap, FnField, StateField, StaticField},
+        data::{data, Data, DataField, FieldWrap, FnField, StateField, StaticField},
         use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
         use_ref, Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
     };

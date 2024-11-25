@@ -2,11 +2,11 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, token::Comma, Data, DeriveInput,
-    GenericParam,
+    GenericParam, ItemTrait, TypeParamBound,
 };
 
 #[proc_macro_derive(Data)]
-pub fn data(input: TokenStream) -> TokenStream {
+pub fn derive_data(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let ident = &input.ident;
 
@@ -64,4 +64,38 @@ pub fn data(input: TokenStream) -> TokenStream {
         unsafe impl <#generic_params> Data for #ident <#generic_ty_params> {}
     };
     gen.into()
+}
+
+#[proc_macro_attribute]
+pub fn data(_attrs: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as ItemTrait);
+
+    let contains_data = item.supertraits.iter().any(|x| {
+        if let TypeParamBound::Trait(trait_bound) = x {
+            if trait_bound.path.is_ident("Data") {
+                return true;
+            }
+        }
+
+        false
+    });
+
+    if !contains_data {
+        return quote! {
+            compile_error!("\
+                Traits used as `Data` must require all implementations to be `Data`. \
+                To fix this, add `Data` as a supertrait to your trait (i.e trait MyTrait: Data {}).\
+            ");
+        }
+        .into();
+    }
+
+    let ident = &item.ident;
+
+    quote! {
+        #item
+
+        unsafe impl Data for Box<dyn #ident + '_> {}
+    }
+    .into()
 }
