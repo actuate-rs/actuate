@@ -44,7 +44,7 @@ required-features = ["ecs"]
 
 [[example]]
 name = "http"
-required-features = ["ecs"]
+required-features = ["ecs", "rt"]
 
 [[example]]
 name = "timer"

@@ -107,8 +107,8 @@ unsafe impl Sync for RuntimeUpdater {}
 
 struct RuntimeComposer {
     composer: Composer,
-    guard: Option<RwLockWriteGuard<'static, ()>>,
     rx: mpsc::Receiver<Update>,
+    is_initial: bool,
 }
 
 struct Runtime {
@@ -198,8 +198,8 @@ where
                             CompositionContent { content, target },
                             RuntimeUpdater { tx },
                         ),
-                        guard: None,
                         rx,
+                        is_initial: true,
                     },
                 );
             });
@@ -229,26 +229,17 @@ fn compose(world: &mut World) {
         }
     });
 
-    let rt = world.non_send_resource_mut::<Runtime>();
-    let mut composers = rt.composers.borrow_mut();
-    for rt_composer in composers.values_mut() {
-        rt_composer.guard = None;
-        rt_composer.composer.compose();
+    world.increment_change_tick();
+    let rt_cx = RuntimeContext::current();
+    let mut rt = rt_cx.inner.borrow_mut();
+
+    for f in &mut rt.updates {
+        f(world);
     }
-    drop(composers);
+    rt.updates.clear();
 
-    {
-        world.increment_change_tick();
-        let rt_cx = RuntimeContext::current();
-        let mut rt = rt_cx.inner.borrow_mut();
-
-        for f in &mut rt.updates {
-            f(world);
-        }
-        rt.updates.clear();
-
-        rt.commands.borrow_mut().apply(world);
-    }
+    rt.commands.borrow_mut().apply(world);
+    drop(rt);
 
     let rt = &mut *world.non_send_resource_mut::<Runtime>();
     let mut composers = rt.composers.borrow_mut();
@@ -259,10 +250,8 @@ fn compose(world: &mut World) {
             unsafe { update.apply() }
         }
 
-        if is_changed {
-            let guard = rt_composer.composer.lock();
-            let guard: RwLockWriteGuard<'static, ()> = unsafe { mem::transmute(guard) };
-            rt_composer.guard = Some(guard);
+        if is_changed || mem::take(&mut rt_composer.is_initial) {
+            rt_composer.composer.compose();
         }
     }
 }
