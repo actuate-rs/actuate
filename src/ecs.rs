@@ -1,6 +1,6 @@
 use crate::{
     composer::{Composer, Update, Updater},
-    prelude::{Ref, *},
+    prelude::{Signal, *},
 };
 use bevy_app::{App, Plugin};
 use bevy_ecs::{
@@ -153,22 +153,6 @@ where
     }
 }
 
-#[derive(Data)]
-struct CompositionContent<C> {
-    content: C,
-    target: Entity,
-}
-
-impl<C: Compose> Compose for CompositionContent<C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        use_provider(&cx, || SpawnContext {
-            parent_entity: cx.me().target,
-        });
-
-        Ref::map(cx.me(), |me| &me.content)
-    }
-}
-
 impl<C> Component for Composition<C>
 where
     C: Compose + Send + Sync + 'static,
@@ -181,12 +165,11 @@ where
                 let mut composition = world.get_mut::<Composition<C>>(entity).unwrap();
 
                 let content = composition.content.take().unwrap();
-
                 let target = composition.target.unwrap_or(entity);
 
                 let rt = world.non_send_resource_mut::<Runtime>();
-
                 let (tx, rx) = mpsc::channel();
+
                 rt.composers.borrow_mut().insert(
                     entity,
                     RuntimeComposer {
@@ -200,6 +183,22 @@ where
                 );
             });
         });
+    }
+}
+
+#[derive(Data)]
+struct CompositionContent<C> {
+    content: C,
+    target: Entity,
+}
+
+impl<C: Compose> Compose for CompositionContent<C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        use_provider(&cx, || SpawnContext {
+            parent_entity: cx.me().target,
+        });
+
+        Signal::map(cx.me(), |me| &me.content)
     }
 }
 
@@ -603,7 +602,7 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             }
         });
 
-        Ref::map(cx.me(), |me| &me.content)
+        Signal::map(cx.me(), |me| &me.content)
     }
 }
 

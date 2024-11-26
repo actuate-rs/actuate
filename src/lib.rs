@@ -3,7 +3,7 @@
 //! This crate provides a generic library that lets you define reactive components (also known as composables).
 //!
 //! ```no_run
-//! use actuate::prelude::{Mut, *};
+//! use actuate::prelude::*;
 //! use bevy::prelude::*;
 //!
 //! // Counter composable.
@@ -23,10 +23,10 @@
 //!         .content((
 //!             spawn(Text::new(format!("High five count: {}", count))),
 //!             spawn(Text::new("Up high")).observe(move |_trigger: In<Trigger<Pointer<Click>>>| {
-//!                 Mut::update(count, |x| *x += 1)
+//!                 SignalMut::update(count, |x| *x += 1)
 //!             }),
 //!             spawn(Text::new("Down low")).observe(move |_trigger: In<Trigger<Pointer<Click>>>| {
-//!                 Mut::update(count, |x| *x -= 1)
+//!                 SignalMut::update(count, |x| *x -= 1)
 //!             }),
 //!             if *count == 0 {
 //!                 Some(spawn(Text::new("Gimme five!")))
@@ -53,7 +53,7 @@
 //! ## Borrowing
 //! Composables can borrow from their ancestors, as well as state.
 //! ```no_run
-//! use actuate::prelude::{Ref, *};
+//! use actuate::prelude::*;
 //! use bevy::prelude::*;
 //!
 //! #[derive(Data)]
@@ -76,7 +76,7 @@
 //! impl Compose for App {
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
 //!         // Get a mapped reference to the app's `name` field.
-//!         let name = Ref::map(cx.me(), |me| &me.name).into();
+//!         let name = Signal::map(cx.me(), |me| &me.name).into();
 //!
 //!         User { name }
 //!     }
@@ -130,7 +130,7 @@ pub mod prelude {
         compose::{self, Compose, DynCompose, Memo},
         data::{data, Data, DataField, FieldWrap, FnField, StateField, StaticField},
         use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
-        use_ref, Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
+        use_ref, Cow, Map, RefMap, Scope, ScopeState, Signal, SignalMut,
     };
 
     #[cfg(feature = "ecs")]
@@ -220,8 +220,8 @@ impl<'a, T> From<RefMap<'a, T>> for Cow<'a, T> {
     }
 }
 
-impl<'a, T> From<Ref<'a, T>> for Cow<'a, T> {
-    fn from(value: Ref<'a, T>) -> Self {
+impl<'a, T> From<Signal<'a, T>> for Cow<'a, T> {
+    fn from(value: Signal<'a, T>) -> Self {
         RefMap::from(value).into()
     }
 }
@@ -247,7 +247,7 @@ unsafe impl<T: Data> Data for Cow<'_, T> {}
 #[derive(Debug)]
 pub enum RefMap<'a, T> {
     /// Reference to a value.
-    Ref(Ref<'a, T>),
+    Ref(Signal<'a, T>),
     /// Mapped reference to a value.
     Map(Map<'a, T>),
 }
@@ -277,8 +277,8 @@ impl<T: Hash> Hash for RefMap<'_, T> {
     }
 }
 
-impl<'a, T> From<Ref<'a, T>> for RefMap<'a, T> {
-    fn from(value: Ref<'a, T>) -> Self {
+impl<'a, T> From<Signal<'a, T>> for RefMap<'a, T> {
+    fn from(value: Signal<'a, T>) -> Self {
         RefMap::Ref(value)
     }
 }
@@ -363,13 +363,13 @@ impl<T> Hash for Map<'_, T> {
 ///
 /// Memoizing this value will use pointer-equality for higher-performance.
 ///
-/// This reference can be mapped to inner values with [`Ref::map`].
-pub struct Ref<'a, T> {
+/// This reference can be mapped to inner values with [`Signal::map`].
+pub struct Signal<'a, T> {
     value: &'a T,
     generation: *const Cell<u64>,
 }
 
-impl<'a, T> Ref<'a, T> {
+impl<'a, T> Signal<'a, T> {
     /// Map this reference to a value of type `U`.
     pub fn map<U>(me: Self, f: fn(&T) -> &U) -> Map<'a, U> {
         Map {
@@ -387,7 +387,7 @@ impl<'a, T> Ref<'a, T> {
     }
 }
 
-impl<T> Deref for Ref<'_, T> {
+impl<T> Deref for Signal<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -395,7 +395,7 @@ impl<T> Deref for Ref<'_, T> {
     }
 }
 
-impl<T> Hash for Ref<'_, T> {
+impl<T> Hash for Signal<'_, T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.value as *const T).hash(state);
         self.generation.hash(state);
@@ -403,7 +403,7 @@ impl<T> Hash for Ref<'_, T> {
 }
 
 /// Mutable reference to a value of type `T`.
-pub struct Mut<'a, T> {
+pub struct SignalMut<'a, T> {
     /// Pointer to the boxed value.
     ptr: NonNull<T>,
 
@@ -417,7 +417,7 @@ pub struct Mut<'a, T> {
     phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, T: 'static> Mut<'a, T> {
+impl<'a, T: 'static> SignalMut<'a, T> {
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(me: Self, f: impl FnOnce(&mut T) + 'static) {
         let mut ptr = me.ptr;
@@ -439,7 +439,7 @@ impl<'a, T: 'static> Mut<'a, T> {
 
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn set(me: Self, value: T) {
-        Mut::update(me, |x| *x = value)
+        SignalMut::update(me, |x| *x = value)
     }
 
     /// Queue an update to this value wtihout triggering an update.
@@ -454,15 +454,15 @@ impl<'a, T: 'static> Mut<'a, T> {
     }
 
     /// Convert this mutable reference to an immutable reference.
-    pub fn as_ref(me: Self) -> Ref<'a, T> {
-        Ref {
+    pub fn as_ref(me: Self) -> Signal<'a, T> {
+        Signal {
             value: unsafe { me.ptr.as_ref() },
             generation: me.generation,
         }
     }
 }
 
-impl<T> Deref for Mut<'_, T> {
+impl<T> Deref for SignalMut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -520,7 +520,7 @@ macro_rules! impl_pointer {
         )*
     };
 }
-impl_pointer!(Ref, Map, Mut);
+impl_pointer!(Signal, Map, SignalMut);
 
 /// Map of [`TypeId`] to context values.
 #[derive(Clone, Default)]
@@ -598,8 +598,8 @@ pub struct Scope<'a, C> {
 
 impl<'a, C> Scope<'a, C> {
     /// Get a [`Ref`] to this composable.
-    pub fn me(self) -> Ref<'a, C> {
-        Ref {
+    pub fn me(self) -> Signal<'a, C> {
+        Signal {
             value: self.me,
             generation: &self.state.generation,
         }
@@ -653,7 +653,7 @@ struct MutState<T> {
 /// Use a mutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Mut<'_, T> {
+pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> SignalMut<'_, T> {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -671,7 +671,7 @@ pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Mu
     };
     let state: &mut MutState<T> = any.downcast_mut().unwrap();
 
-    Mut {
+    SignalMut {
         ptr: unsafe { NonNull::new_unchecked(&mut state.value as *mut _) },
         scope_is_changed: &cx.is_changed,
         generation: &state.generation,
@@ -785,7 +785,7 @@ impl<T: PartialEq + 'static> Memoize for T {
     }
 }
 
-impl<T> Memoize for Ref<'_, T> {
+impl<T> Memoize for Signal<'_, T> {
     type Value = u64;
 
     fn memoized(self) -> Self::Value {
@@ -812,7 +812,7 @@ impl<T> Memoize for RefMap<'_, T> {
     }
 }
 
-impl<T> Memoize for Mut<'_, T> {
+impl<T> Memoize for SignalMut<'_, T> {
     type Value = u64;
 
     fn memoized(self) -> Self::Value {
@@ -848,7 +848,7 @@ where
 /// Use a memoized value of type `T` with a dependency of type `D`.
 ///
 /// `make_value` will update the returned value whenver `dependency` is changed.
-pub fn use_memo<D, T>(cx: ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Ref<T>
+pub fn use_memo<D, T>(cx: ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Signal<T>
 where
     D: Memoize,
     T: 'static,
@@ -864,14 +864,14 @@ where
         if let Some(dependency) = dependency_cell.take() {
             if dependency != *hash_mut {
                 let value = make_value();
-                Mut::with(value_mut, move |update| *update = value);
+                SignalMut::with(value_mut, move |update| *update = value);
 
-                Mut::with(hash_mut, move |dst| *dst = dependency);
+                SignalMut::with(hash_mut, move |dst| *dst = dependency);
             }
         }
     }
 
-    Mut::as_ref(value_mut)
+    SignalMut::as_ref(value_mut)
 }
 
 /// Use a function that will be called when this scope is dropped.

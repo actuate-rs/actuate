@@ -1,6 +1,6 @@
 // Timer UI example.
 
-use actuate::prelude::{Mut, *};
+use actuate::prelude::*;
 use bevy::prelude::*;
 
 // Timer composable.
@@ -12,7 +12,9 @@ impl Compose for Timer {
         let current_time = use_mut(&cx, Time::default);
 
         // Use the `Time` resource from the ECS world, updating the `current_time`.
-        use_world(&cx, move |time: Res<Time>| Mut::set(current_time, *time));
+        use_world(&cx, move |time: Res<Time>| {
+            SignalMut::set(current_time, *time)
+        });
 
         // Spawn a `Text` component, updating it when this scope is re-composed.
         spawn(Text::new(format!("Elapsed: {:?}", current_time.elapsed())))

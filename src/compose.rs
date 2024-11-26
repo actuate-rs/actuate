@@ -88,7 +88,7 @@ impl<C: Compose> Compose for Option<C> {
 /// Create a composable from an iterator.
 pub fn from_iter<'a, I, C>(
     iter: I,
-    f: impl Fn(Ref<'a, I::Item>) -> C + 'a,
+    f: impl Fn(Signal<'a, I::Item>) -> C + 'a,
 ) -> FromIter<'a, I, I::Item, C>
 where
     I: IntoIterator + Clone + Data,
@@ -122,7 +122,7 @@ impl Drop for AnyItemState {
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
-    f: Box<dyn Fn(Ref<'a, Item>) -> C + 'a>,
+    f: Box<dyn Fn(Signal<'a, Item>) -> C + 'a>,
 }
 
 unsafe impl<I, Item, C> Data for FromIter<'_, I, Item, C>
@@ -161,7 +161,7 @@ where
 
                     let item_ref: &Item = &state.item;
                     let item_ref: &Item = unsafe { mem::transmute(item_ref) };
-                    let compose = (cx.me().f)(Ref {
+                    let compose = (cx.me().f)(Signal {
                         value: item_ref,
                         generation: &cx.generation as _,
                     });
@@ -250,7 +250,7 @@ where
             cx.is_parent_changed.set(true);
         }
 
-        Ref::map(cx.me(), |me| &me.content)
+        Signal::map(cx.me(), |me| &me.content)
     }
 
     fn name() -> Option<Cow<'static, str>> {

@@ -1,9 +1,6 @@
 // HTTP UI example
 
-use actuate::{
-    executor::ExecutorContext,
-    prelude::{Mut, Ref, *},
-};
+use actuate::{executor::ExecutorContext, prelude::*};
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -34,7 +31,7 @@ impl Compose for Breed<'_> {
                 ..default()
             })
             .content(compose::from_iter(
-                Ref::map(cx.me(), |me| me.families),
+                Signal::map(cx.me(), |me| me.families),
                 |family| spawn(Text::from(family.to_string())),
             )),
         ))
@@ -63,7 +60,7 @@ impl Compose for BreedList {
                 .await
                 .unwrap();
 
-            Mut::update(breeds, |breeds| *breeds = json.message);
+            SignalMut::update(breeds, |breeds| *breeds = json.message);
         });
 
         // Render the currently loaded breeds.
