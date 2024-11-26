@@ -346,8 +346,11 @@ where
         let mut system_state_cell = system_state_cell.borrow_mut();
         let system_state =
             system_state_cell.get_or_insert_with(|| SystemState::<F::Param>::new(world));
-        let query = system_state.get_mut(world);
-        with_world.run((), query)
+        
+        let params = system_state.get_mut(world);
+        with_world.run((), params);
+        
+        system_state.apply(world);
     })
     .clone();
 
