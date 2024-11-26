@@ -33,7 +33,8 @@ This crate provides a generic library that lets you define reactive components (
 ```rust
 // Counter UI example.
 
-use actuate::prelude::*;
+use actuate::prelude::{Mut, *};
+use bevy::prelude::*;
 
 // Counter composable.
 #[derive(Data)]

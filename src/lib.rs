@@ -3,7 +3,8 @@
 //! This crate provides a generic library that lets you define reactive components (also known as composables).
 //!
 //! ```no_run
-//! use actuate::prelude::*;
+//! use actuate::prelude::{Mut, *};
+//! use bevy::prelude::*;
 //!
 //! // Counter composable.
 //! #[derive(Data)]
@@ -52,7 +53,8 @@
 //! ## Borrowing
 //! Composables can borrow from their ancestors, as well as state.
 //! ```no_run
-//! use actuate::prelude::*;
+//! use actuate::prelude::{Ref, *};
+//! use bevy::prelude::*;
 //!
 //! #[derive(Data)]
 //! struct User<'a> {
@@ -130,10 +132,6 @@ pub mod prelude {
         use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
         use_ref, Cow, Map, Mut, Ref, RefMap, Scope, ScopeState,
     };
-
-    #[cfg(feature = "ecs")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
-    pub use bevy::prelude::*;
 
     #[cfg(feature = "ecs")]
     #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]

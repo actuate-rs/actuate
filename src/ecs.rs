@@ -1,21 +1,17 @@
 use crate::{
     composer::{Composer, Update, Updater},
+    prelude::{Ref, *},
+};
+use bevy_app::{App, Plugin};
+use bevy_ecs::{
+    component::{Component, ComponentHooks, StorageType},
+    entity::Entity,
     prelude::*,
-    use_callback,
+    system::{SystemParam, SystemParamItem, SystemState},
+    world::{CommandQueue, World},
 };
-use bevy::{
-    app::Plugin,
-    ecs::{
-        component::{ComponentHooks, StorageType},
-        system::{SystemParam, SystemParamItem, SystemState},
-        world::CommandQueue,
-    },
-    prelude::{
-        App, BuildChildren, Bundle, Command, Component, Entity, EntityWorldMut, Event, In,
-        ParamSet, Trigger, World,
-    },
-    utils::HashMap,
-};
+use bevy_hierarchy::BuildChildren;
+use bevy_utils::HashMap;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     cell::{Cell, RefCell},
@@ -51,7 +47,7 @@ impl Plugin for ActuatePlugin {
         };
 
         app.insert_non_send_resource(rt)
-            .add_systems(bevy::prelude::Update, compose);
+            .add_systems(bevy_app::prelude::Update, compose);
     }
 }
 

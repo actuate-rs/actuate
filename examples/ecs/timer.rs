@@ -1,6 +1,7 @@
 // Timer UI example.
 
-use actuate::prelude::*;
+use actuate::prelude::{Mut, *};
+use bevy::prelude::*;
 
 // Timer composable.
 #[derive(Data)]

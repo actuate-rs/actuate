@@ -1,6 +1,7 @@
 // Counter UI example.
 
-use actuate::prelude::*;
+use actuate::prelude::{Mut, *};
+use bevy::prelude::*;
 
 // Counter composable.
 #[derive(Data)]
