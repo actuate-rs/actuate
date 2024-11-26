@@ -346,10 +346,10 @@ where
         let mut system_state_cell = system_state_cell.borrow_mut();
         let system_state =
             system_state_cell.get_or_insert_with(|| SystemState::<F::Param>::new(world));
-        
+
         let params = system_state.get_mut(world);
         with_world.run((), params);
-        
+
         system_state.apply(world);
     })
     .clone();
@@ -418,7 +418,10 @@ where
         let world = unsafe { RuntimeContext::current().world_mut() };
         let mut param = SystemState::<F::Param>::new(world);
         let item = param.get_mut(world);
-        with_world.run(item)
+
+        let output = with_world.run(item);
+        param.apply(world);
+        output
     })
 }
 
