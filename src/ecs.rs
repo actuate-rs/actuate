@@ -487,6 +487,8 @@ where
 
 type ObserverFn<'a> = Box<dyn Fn(&mut EntityWorldMut) + 'a>;
 
+type OnAddFn<'a> = Box<dyn FnOnce(EntityWorldMut) + 'a>;
+
 /// Spawn composable with content.
 ///
 /// See [`spawn`] and [`spawn_with`] for more information.
@@ -496,7 +498,7 @@ pub struct Spawn<'a, C> {
     content: C,
     target: Option<Entity>,
     observer_fns: Vec<ObserverFn<'a>>,
-    on_add: Cell<Option<Box<dyn FnOnce(EntityWorldMut) + 'a>>>,
+    on_add: Cell<Option<OnAddFn<'a>>>,
 }
 
 impl<'a, C> Spawn<'a, C> {
