@@ -16,7 +16,7 @@ impl Compose for Counter {
             flex_direction: FlexDirection::Column,
             ..default()
         })
-        .with_content((
+        .content((
             spawn(Text::new(format!("High five count: {}", count))),
             spawn(Text::new("Up high")).observe(move |_trigger: In<Trigger<Pointer<Click>>>| {
                 Mut::update(count, |x| *x += 1)

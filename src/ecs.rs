@@ -485,6 +485,7 @@ where
         content: (),
         target: None,
         observer_fns: Vec::new(),
+        on_add: Cell::new(None),
     }
 }
 
@@ -499,39 +500,36 @@ pub struct Spawn<'a, C> {
     content: C,
     target: Option<Entity>,
     observer_fns: Vec<ObserverFn<'a>>,
+    on_add: Cell<Option<Box<dyn FnOnce(EntityWorldMut) + 'a>>>,
 }
 
 impl<'a, C> Spawn<'a, C> {
-    /// Get the target entity to spawn the composition into.
-    ///
-    /// If `None`, this will use the composition's parent (if any).
-    pub fn target(&self) -> Option<Entity> {
-        self.target
-    }
-
     /// Set the target entity to spawn the composition into.
     ///
     /// If `None`, this will use the composition's parent (if any).
-    pub fn set_target(&mut self, target: Option<Entity>) {
-        self.target = target;
-    }
-
-    /// Set the target entity to spawn the composition into.
-    ///
-    /// If `None`, this will use the composition's parent (if any).
-    pub fn with_target(mut self, target: Entity) -> Self {
+    pub fn target(mut self, target: Entity) -> Self {
         self.target = Some(target);
         self
     }
 
     /// Set the child content.
-    pub fn with_content<C2>(self, content: C2) -> Spawn<'a, C2> {
+    pub fn content<C2>(self, content: C2) -> Spawn<'a, C2> {
         Spawn {
             spawn_fn: self.spawn_fn,
             content,
             target: self.target,
             observer_fns: self.observer_fns,
+            on_add: self.on_add,
         }
+    }
+
+    /// Set a function to be called when this entity is spawned.
+    pub fn on_spawn<F>(self, f: F) -> Self
+    where
+        F: FnOnce(EntityWorldMut) + 'a,
+    {
+        self.on_add.set(Some(Box::new(f)));
+        self
     }
 
     /// Add an observer to the spawned entity.
@@ -584,6 +582,10 @@ impl<C: Compose> Compose for Spawn<'_, C> {
                 let mut entity_mut = world.entity_mut(entity.unwrap());
                 for f in &cx.me().observer_fns {
                     f(&mut entity_mut);
+                }
+
+                if let Some(f) = cx.me().on_add.take() {
+                    f(entity_mut);
                 }
 
                 is_initial.set(false);

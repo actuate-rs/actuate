@@ -20,7 +20,7 @@ impl Compose for Breed<'_> {
             flex_direction: FlexDirection::Row,
             ..default()
         })
-        .with_content((
+        .content((
             spawn((
                 Text::new(cx.me().name),
                 Node {
@@ -32,7 +32,7 @@ impl Compose for Breed<'_> {
                 flex_direction: FlexDirection::Column,
                 ..default()
             })
-            .with_content(compose::from_iter(
+            .content(compose::from_iter(
                 Ref::map(cx.me(), |me| me.families),
                 |family| spawn(Text::from(family.to_string())),
             )),
@@ -72,7 +72,7 @@ impl Compose for BreedList {
             overflow: Overflow::scroll_y(),
             ..default()
         })
-        .with_content(compose::from_iter(breeds, |breed| Breed {
+        .content(compose::from_iter(breeds, |breed| Breed {
             name: breed.0,
             families: breed.1,
         }))

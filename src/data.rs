@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
-pub use actuate_macros::{Data, data};
+pub use actuate_macros::{data, Data};
 
 /// Composable data.
 ///
@@ -12,9 +12,7 @@ pub use actuate_macros::{Data, data};
 ///
 /// For example, a `RefCell<&'a T>` is unsafe because the compiler will infer the lifetime of a child composable's lifetime (e.g. `'a`)
 /// as this struct's lifetime (e.g. `'a`).
-pub unsafe trait Data {
-    
-}
+pub unsafe trait Data {}
 
 macro_rules! impl_data_for_std {
     ($($t:ty),*) => {
