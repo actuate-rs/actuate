@@ -418,6 +418,11 @@ pub struct SignalMut<'a, T> {
 }
 
 impl<'a, T: 'static> SignalMut<'a, T> {
+    /// Get the current generation of this value.
+    pub fn generation(me: Self) -> u64 {
+        unsafe { &*me.generation }.get()
+    }
+
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(me: Self, f: impl FnOnce(&mut T) + 'static) {
         let mut ptr = me.ptr;
@@ -440,6 +445,16 @@ impl<'a, T: 'static> SignalMut<'a, T> {
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn set(me: Self, value: T) {
         SignalMut::update(me, |x| *x = value)
+    }
+
+    /// Queue an update to this value if it is not equal to the given value.
+    pub fn set_if_neq(me: Self, value: T)
+    where
+        T: PartialEq,
+    {
+        if *me != value {
+            SignalMut::set(me, value);
+        }
     }
 
     /// Queue an update to this value wtihout triggering an update.
