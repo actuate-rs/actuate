@@ -79,6 +79,7 @@ pub fn use_animated<T: VectorSpace + 'static>(
 }
 
 /// Hook for [`use_animated`].
+
 pub struct UseAnimated<'a, T> {
     value: Signal<'a, T>,
     tx: &'a mpsc::UnboundedSender<(T, Duration, oneshot::Sender<()>)>,
@@ -108,3 +109,5 @@ impl<T> Deref for UseAnimated<'_, T> {
         &self.value
     }
 }
+
+unsafe impl<T> Data for UseAnimated<'_, T> {}

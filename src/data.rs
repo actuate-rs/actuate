@@ -63,15 +63,6 @@ unsafe impl Data for DynCompose<'_> {}
 pub struct FieldWrap<T>(pub T);
 
 #[doc(hidden)]
-pub unsafe trait StateField {
-    fn check(&self) {
-        let _ = self;
-    }
-}
-
-unsafe impl<T: 'static> StateField for FieldWrap<&T> {}
-
-#[doc(hidden)]
 pub unsafe trait FnField<Marker> {
     fn check(&self) {
         let _ = self;
@@ -111,3 +102,4 @@ pub unsafe trait StaticField {
 }
 
 unsafe impl<T: 'static> StaticField for &&FieldWrap<T> {}
+
