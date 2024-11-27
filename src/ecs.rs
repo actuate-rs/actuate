@@ -104,7 +104,6 @@ unsafe impl Sync for RuntimeUpdater {}
 struct RuntimeComposer {
     composer: Composer,
     rx: mpsc::Receiver<Update>,
-    is_initial: bool,
 }
 
 struct Runtime {
@@ -178,7 +177,6 @@ where
                             RuntimeUpdater { tx },
                         ),
                         rx,
-                        is_initial: true,
                     },
                 );
             });
@@ -239,15 +237,11 @@ fn compose(world: &mut World) {
     let rt = &mut *world.non_send_resource_mut::<Runtime>();
     let mut composers = rt.composers.borrow_mut();
     for rt_composer in composers.values_mut() {
-        let mut is_changed = false;
         while let Ok(update) = rt_composer.rx.try_recv() {
-            is_changed = true;
             unsafe { update.apply() }
         }
 
-        if is_changed || mem::take(&mut rt_composer.is_initial) {
-            rt_composer.composer.compose();
-        }
+        rt_composer.composer.compose();
     }
 }
 
