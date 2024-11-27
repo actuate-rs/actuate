@@ -9,6 +9,13 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot};
 
+struct State<T> {
+    from: T,
+    to: T,
+    duration: Duration,
+    tx: Option<oneshot::Sender<()>>,
+}
+
 /// Use an animated value.
 pub fn use_animated<T: VectorSpace + 'static>(
     cx: ScopeState,
@@ -21,8 +28,7 @@ pub fn use_animated<T: VectorSpace + 'static>(
         (tx, Cell::new(Some(rx)))
     });
 
-    let state: &RefCell<Option<(T, T, Duration, Option<oneshot::Sender<()>>)>> =
-        use_ref(cx, || RefCell::new(None));
+    let state: &RefCell<Option<State<T>>> = use_ref(cx, || RefCell::new(None));
 
     let out = use_mut(cx, make_initial);
 
@@ -34,23 +40,33 @@ pub fn use_animated<T: VectorSpace + 'static>(
     use_local_task(cx, move || async move {
         let mut rx = rx.take().unwrap();
         while let Some((to, duration, tx)) = rx.recv().await {
-            *state.borrow_mut() = Some((*out, to, duration, Some(tx)));
+            *state.borrow_mut() = Some(State {
+                from: *out,
+                to,
+                duration,
+                tx: Some(tx),
+            });
             start_cell.set(Some(time_cell.get()));
         }
     });
 
     use_world(cx, move |time: Res<Time>| {
         if let Some(start) = start_cell.get() {
-            let mut state = state.borrow_mut();
-            if let Some((from, to, duration, oneshot)) = &mut *state {
+            let mut state_cell = state.borrow_mut();
+            if let Some(state) = &mut *state_cell {
                 let elapsed = time.elapsed_secs() - start;
 
-                if elapsed < duration.as_secs_f32() {
-                    SignalMut::set(out, from.lerp(*to, elapsed / duration.as_secs_f32()));
+                if elapsed < state.duration.as_secs_f32() {
+                    SignalMut::set(
+                        out,
+                        state
+                            .from
+                            .lerp(state.to, elapsed / state.duration.as_secs_f32()),
+                    );
                 } else {
-                    SignalMut::set(out, *to);
-                    oneshot.take().unwrap().send(()).unwrap();
-                    *state = None;
+                    SignalMut::set(out, state.to);
+                    state.tx.take().unwrap().send(()).unwrap();
+                    *state_cell = None;
                 }
             }
         }
