@@ -133,6 +133,10 @@ pub mod prelude {
         use_ref, Cow, Map, RefMap, Scope, ScopeState, Signal, SignalMut,
     };
 
+    #[cfg(feature = "animation")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "animation")))]
+    pub use crate::animation::{use_animated, UseAnimated};
+
     #[cfg(feature = "ecs")]
     #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
     pub use crate::ecs::{
