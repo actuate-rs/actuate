@@ -68,6 +68,8 @@ dependencies = [
  "bevy_app",
  "bevy_ecs",
  "bevy_hierarchy",
+ "bevy_math",
+ "bevy_time",
  "bevy_utils",
  "reqwest",
  "serde",

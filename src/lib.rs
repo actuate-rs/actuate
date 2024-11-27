@@ -145,6 +145,11 @@ pub mod prelude {
     pub use crate::use_task;
 }
 
+#[cfg(feature = "animation")]
+#[cfg_attr(docsrs, doc(cfg(feature = "animation")))]
+/// Animation hooks.
+pub mod animation;
+
 /// Composable functions.
 pub mod compose;
 use self::compose::{AnyCompose, Compose};
