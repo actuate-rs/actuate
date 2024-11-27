@@ -23,9 +23,9 @@ pub fn use_animated<T: VectorSpace + 'static>(
 ) -> UseAnimated<T> {
     let start_cell = use_world_once(cx, |time: Res<Time>| Cell::new(Some(time.elapsed_secs())));
 
-    let (tx, rx) = use_ref(cx, || {
+    let (controller, rx) = use_ref(cx, || {
         let (tx, rx) = mpsc::unbounded_channel();
-        (tx, Cell::new(Some(rx)))
+        (AnimationController { tx }, Cell::new(Some(rx)))
     });
 
     let state: &RefCell<Option<State<T>>> = use_ref(cx, || RefCell::new(None));
@@ -74,23 +74,25 @@ pub fn use_animated<T: VectorSpace + 'static>(
 
     UseAnimated {
         value: SignalMut::as_ref(out),
-        tx,
+        controller,
     }
 }
 
 /// Hook for [`use_animated`].
-
 pub struct UseAnimated<'a, T> {
     value: Signal<'a, T>,
-    tx: &'a mpsc::UnboundedSender<(T, Duration, oneshot::Sender<()>)>,
+    controller: &'a AnimationController<T>,
 }
 
 impl<T> UseAnimated<'_, T> {
     /// Animate this value over a duration.
     pub async fn animate(&self, to: T, duration: Duration) {
-        let (tx, rx) = oneshot::channel();
-        self.tx.send((to, duration, tx)).unwrap();
-        rx.await.unwrap()
+        self.controller.animate(to, duration).await
+    }
+
+    /// Get the controller for this animation.
+    pub fn controller(&self) -> AnimationController<T> {
+        self.controller.clone()
     }
 }
 
@@ -111,3 +113,25 @@ impl<T> Deref for UseAnimated<'_, T> {
 }
 
 unsafe impl<T> Data for UseAnimated<'_, T> {}
+
+/// Controller for an animation created with [`use_animated`].
+pub struct AnimationController<T> {
+    tx: mpsc::UnboundedSender<(T, Duration, oneshot::Sender<()>)>,
+}
+
+impl<T> AnimationController<T> {
+    /// Animate this value over a duration.
+    pub async fn animate(&self, to: T, duration: Duration) {
+        let (tx, rx) = oneshot::channel();
+        self.tx.send((to, duration, tx)).unwrap();
+        rx.await.unwrap()
+    }
+}
+
+impl<T> Clone for AnimationController<T> {
+    fn clone(&self) -> Self {
+        Self {
+            tx: self.tx.clone(),
+        }
+    }
+}
