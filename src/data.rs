@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::{collections::HashMap, future::Future};
+use std::{collections::HashMap, future::Future, pin::Pin};
 
 pub use actuate_macros::{data, Data};
 
@@ -52,6 +52,8 @@ unsafe impl<T: Data, U: Data> Data for HashMap<T, U> {}
 unsafe impl<T: Data> Data for &T {}
 
 unsafe impl<T: Data> Data for Option<T> {}
+
+unsafe impl<T: Data> Data for Pin<T> {}
 
 unsafe impl Data for Box<dyn Future<Output = ()> + '_> {}
 
