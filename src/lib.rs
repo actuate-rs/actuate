@@ -133,6 +133,10 @@ pub mod prelude {
         use_ref, Cow, Map, RefMap, Scope, ScopeState, Signal, SignalMut,
     };
 
+    #[cfg(feature = "animation")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "animation")))]
+    pub use crate::animation::{use_animated, UseAnimated};
+
     #[cfg(feature = "ecs")]
     #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
     pub use crate::ecs::{
@@ -144,6 +148,11 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
     pub use crate::use_task;
 }
+
+#[cfg(feature = "animation")]
+#[cfg_attr(docsrs, doc(cfg(feature = "animation")))]
+/// Animation hooks.
+pub mod animation;
 
 /// Composable functions.
 pub mod compose;
