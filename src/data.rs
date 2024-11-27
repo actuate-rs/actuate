@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, future::Future};
 
 pub use actuate_macros::{data, Data};
 
@@ -53,6 +53,8 @@ unsafe impl<T: Data> Data for &T {}
 
 unsafe impl<T: Data> Data for Option<T> {}
 
+unsafe impl Data for Box<dyn Future<Output = ()> + '_> {}
+
 unsafe impl Data for DynCompose<'_> {}
 
 #[doc(hidden)]
@@ -76,7 +78,7 @@ pub unsafe trait FnField<Marker> {
 
 macro_rules! impl_data_for_fns {
     ($($t:tt),*) => {
-        unsafe impl<$($t: 'static,)* R, F: Fn($($t,)*) -> R> FnField<fn($($t,)*)> for &FieldWrap<F> {}
+        unsafe impl<$($t: 'static,)* R: Data, F: Fn($($t,)*) -> R> FnField<fn($($t,)*)> for &FieldWrap<F> {}
     }
 }
 
