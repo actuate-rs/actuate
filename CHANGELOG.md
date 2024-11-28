@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2](https://github.com/actuate-rs/actuate/compare/actuate-v0.10.1...actuate-v0.10.2) - 2024-11-28
+
+### Other
+
+- Add specialized impl of SystemParamFunction for Triggers
+- Export animation channel
+- Impl Data for UseAnimated
+- Impl Data for Pin
+- Impl Data for Box<dyn Future<Output = ()>>
+- Allow return values for Data fns
+- Create `use_animated` hook ([#88](https://github.com/actuate-rs/actuate/pull/88))
+- Fix tasks not running on the ecs
+
 ## [0.10.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.10.0...actuate-v0.10.1) - 2024-11-26
 
 ### Other
