@@ -320,6 +320,31 @@ macro_rules! impl_system_param_fn {
                 call_inner(self, In(input), $($t),*)
             }
         }
+
+        #[allow(non_snake_case)]
+        impl<E: Event, B: Bundle, Out, Func, $($t: SystemParam + 'static),*> SystemParamFunction<fn(Trigger<E, B>, $($t,)*) -> Out> for Func
+        where
+        for <'a> &'a mut Func:
+                FnMut(Trigger<E, B>, $($t),*) -> Out +
+                FnMut(Trigger<E, B>, $(SystemParamItem<$t>),*) -> Out, Out: 'static
+        {
+            type In = Trigger<'static, E, B>;
+            type Out = Out;
+            type Param = ($($t,)*);
+            #[inline]
+            fn run(&mut self, input: Trigger<E, B>, param_value: SystemParamItem< ($($t,)*)>) -> Out {
+                #[allow(clippy::too_many_arguments)]
+                fn call_inner<E: Event, B: Bundle, Out, $($t,)*>(
+                    mut f: impl FnMut(Trigger<E, B>, $($t,)*)->Out,
+                    input: Trigger<E, B>,
+                    $($t: $t,)*
+                )->Out{
+                    f(input, $($t,)*)
+                }
+                let ($($t,)*) = param_value;
+                call_inner(self, input, $($t),*)
+            }
+        }
     };
 }
 
