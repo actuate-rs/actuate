@@ -18,7 +18,7 @@ use std::{
     marker::PhantomData,
     mem, ptr,
     rc::Rc,
-    sync::{mpsc, Arc},
+    sync::{mpsc, Arc, Mutex},
 };
 use tokio::sync::RwLockWriteGuard;
 
@@ -505,6 +505,7 @@ where
         content: (),
         target: None,
         observer_fns: Vec::new(),
+        observer_guard: Arc::new(Mutex::new(true)),
         on_add: Cell::new(None),
     }
 }
@@ -523,6 +524,7 @@ pub struct Spawn<'a, C> {
     target: Option<Entity>,
     observer_fns: Vec<ObserverFn<'a>>,
     on_add: Cell<Option<OnAddFn<'a>>>,
+    observer_guard: Arc<Mutex<bool>>,
 }
 
 impl<'a, C> Spawn<'a, C> {
@@ -542,6 +544,7 @@ impl<'a, C> Spawn<'a, C> {
             target: self.target,
             observer_fns: self.observer_fns,
             on_add: self.on_add,
+            observer_guard: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -562,8 +565,11 @@ impl<'a, C> Spawn<'a, C> {
         B: Bundle,
     {
         let cell = Cell::new(Some(observer));
+        let guard = self.observer_guard.clone();
+
         self.observer_fns.push(Box::new(move |entity| {
             let mut observer = cell.take().unwrap();
+            let guard = guard.clone();
 
             type SpawnObserveFn<'a, F, E, B, Marker> = Box<
                 dyn FnMut(
@@ -575,9 +581,17 @@ impl<'a, C> Spawn<'a, C> {
             >;
 
             let f: SpawnObserveFn<'a, F, E, B, Marker> = Box::new(move |trigger, mut params| {
+                let guard = guard.lock().unwrap();
+                if !*guard {
+                    panic!("Actuate observer called after its scope was dropped.")
+                }
+
+                // Safety: The event will be accessed under a shortened lifetime.
                 let trigger: Trigger<'static, E, B> = unsafe { mem::transmute(trigger) };
                 observer.run(trigger, params.p0())
             });
+
+            // Safety: The observer will be disabled after this scope is dropped.
             let f: SpawnObserveFn<'static, F, E, B, Marker> = unsafe { mem::transmute(f) };
 
             entity.observe(f);
@@ -625,6 +639,12 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             SpawnContext {
                 parent_entity: entity,
             }
+        });
+
+        // Use the initial guard.
+        let guard = use_ref(&cx, || cx.me().observer_guard.clone());
+        use_drop(&cx, move || {
+            *guard.lock().unwrap() = false;
         });
 
         Signal::map(cx.me(), |me| &me.content)
