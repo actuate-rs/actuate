@@ -253,7 +253,9 @@ unsafe impl<T: Data> Data for Cow<'_, T> {}
 #[derive(Debug)]
 pub enum RefMap<'a, T> {
     /// Reference to a value.
-    Ref(Signal<'a, T>),
+    Ref(&'a T),
+    /// Signal value.
+    Signal(Signal<'a, T>),
     /// Mapped reference to a value.
     Map(Map<'a, T>),
 }
@@ -272,6 +274,7 @@ impl<T> Deref for RefMap<'_, T> {
     fn deref(&self) -> &Self::Target {
         match self {
             RefMap::Ref(r) => r,
+            RefMap::Signal(s) => s,
             RefMap::Map(map) => map,
         }
     }
@@ -285,7 +288,7 @@ impl<T: Hash> Hash for RefMap<'_, T> {
 
 impl<'a, T> From<Signal<'a, T>> for RefMap<'a, T> {
     fn from(value: Signal<'a, T>) -> Self {
-        RefMap::Ref(value)
+        RefMap::Signal(value)
     }
 }
 
@@ -297,10 +300,7 @@ impl<'a, T> From<Map<'a, T>> for RefMap<'a, T> {
 
 impl<T: fmt::Display> fmt::Display for RefMap<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RefMap::Ref(r) => r.fmt(f),
-            RefMap::Map(map) => map.fmt(f),
-        }
+        (**self).fmt(f)
     }
 }
 
@@ -822,13 +822,14 @@ impl<T> Memoize for Map<'_, T> {
     }
 }
 
-impl<T> Memoize for RefMap<'_, T> {
-    type Value = u64;
+impl<T: Clone + PartialEq + 'static> Memoize for RefMap<'_, T> {
+    type Value = MemoizedCow<T>;
 
     fn memoized(self) -> Self::Value {
         match self {
-            RefMap::Ref(r) => r.memoized(),
-            RefMap::Map(map) => map.memoized(),
+            RefMap::Ref(r) => MemoizedCow::Owned(r.clone()),
+            RefMap::Signal(r) => MemoizedCow::Generation(r.memoized()),
+            RefMap::Map(map) => MemoizedCow::Generation(map.memoized()),
         }
     }
 }
@@ -854,13 +855,13 @@ pub enum MemoizedCow<T> {
 
 impl<T> Memoize for Cow<'_, T>
 where
-    T: PartialEq + 'static,
+    T: Clone + PartialEq + 'static,
 {
     type Value = MemoizedCow<T>;
 
     fn memoized(self) -> Self::Value {
         match self {
-            Cow::Borrowed(value) => MemoizedCow::Generation(value.memoized()),
+            Cow::Borrowed(value) => value.memoized(),
             Cow::Owned(owned) => MemoizedCow::Owned(owned),
         }
     }
