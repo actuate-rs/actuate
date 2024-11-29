@@ -52,7 +52,7 @@ impl Compose for Counter {
         })
         .content((
             spawn(Text::new(format!("High five count: {}", count))),
-                 spawn(Text::new("Up high"))
+            spawn(Text::new("Up high"))
                 .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x += 1)),
             spawn(Text::new("Down low"))
                 .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x -= 1)),
