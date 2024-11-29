@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.10.2...actuate-v0.11.0) - 2024-11-29
+
+### Other
+
+- Update to Bevy 0.15.0
+- Disable observers after drop
+- Add support for standard references in RefMap and Cow
+- Fix formatting in README
+
 ## [0.10.2](https://github.com/actuate-rs/actuate/compare/actuate-v0.10.1...actuate-v0.10.2) - 2024-11-28
 
 ### Other
