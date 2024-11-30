@@ -10,9 +10,10 @@ repository = "https://github.com/actuate-rs/actuate"
 animation = ["ecs", "dep:bevy_math", "dep:bevy_time"]
 ecs = ["dep:bevy_app", "dep:bevy_ecs", "dep:bevy_hierarchy", "dep:bevy_utils"]
 executor = []
+inspector = ["dep:bevy_reflect", "dep:bevy_text", "dep:bevy_ui"]
 rt = ["executor", "tokio/rt-multi-thread"]
 tracing = ["dep:tracing"]
-full = ["animation", "ecs", "rt", "tracing"]
+full = ["animation", "ecs", "inspector", "rt", "tracing"]
 default = []
 
 [workspace]
@@ -27,7 +28,10 @@ bevy_app = { version = "0.15.0", optional = true }
 bevy_ecs = { version = "0.15.0", optional = true }
 bevy_hierarchy = { version = "0.15.0", optional = true }
 bevy_math = { version = "0.15.0", optional = true }
+bevy_reflect = { version = "0.15.0", optional = true }
+bevy_text = { version = "0.15.0", optional = true }
 bevy_time = { version = "0.15.0", optional = true }
+bevy_ui = { version = "0.15.0", optional = true }
 bevy_utils = { version = "0.15.0", optional = true }
 slotmap = "1.0.7"
 thiserror = "2.0.3"
@@ -62,6 +66,11 @@ required-features = ["ecs"]
 name = "http"
 path = "examples/ecs/http.rs"
 required-features = ["ecs", "rt"]
+
+[[example]]
+name = "inspector"
+path = "examples/ecs/inspector.rs"
+required-features = ["inspector"]
 
 [[example]]
 name = "timer"
