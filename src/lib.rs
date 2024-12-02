@@ -176,6 +176,11 @@ pub mod ecs;
 /// Task execution context.
 pub mod executor;
 
+#[cfg(feature = "inspector")]
+#[cfg_attr(docsrs, doc(cfg(feature = "inspector")))]
+/// ECS inspector tool.
+pub mod inspector;
+
 /// Clone-on-write value.
 ///
 /// This represents either a borrowed or owned value.
