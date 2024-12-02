@@ -444,7 +444,7 @@ pub struct SignalMut<'a, T> {
     generation: *const Cell<u64>,
 
     /// Marker for the lifetime of this immutable reference.
-    phantom: PhantomData<&'a ()>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a, T: 'static> SignalMut<'a, T> {
@@ -752,7 +752,7 @@ pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Si
         ptr: unsafe { NonNull::new_unchecked(&mut state.value as *mut _) },
         scope_is_changed: &cx.is_changed,
         generation: &state.generation,
-        phantom: PhantomData::<&()>,
+        _marker: PhantomData,
     }
 }
 
