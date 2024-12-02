@@ -117,7 +117,7 @@ use core::{
     cell::{Cell, RefCell, UnsafeCell},
     fmt,
     future::Future,
-    hash::{Hash, Hasher, BuildHasherDefault},
+    hash::{BuildHasherDefault, Hash, Hasher},
     marker::PhantomData,
     mem,
     ops::Deref,
@@ -625,7 +625,13 @@ impl ScopeData<'_> {
 
     /// Set this scope as changed during the next re-composition.
     pub fn set_changed(&self) {
-        self.is_changed.set(true)
+        let is_changed = UnsafeWrap(&self.is_changed as *const Cell<bool>);
+
+        Runtime::current().update(move || {
+            let is_changed = is_changed;
+            let is_changed = unsafe { &*is_changed.0 };
+            is_changed.set(true);
+        });
     }
 
     /// Returns `true` if an ancestor to this scope is changed.

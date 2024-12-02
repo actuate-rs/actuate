@@ -275,7 +275,7 @@ mod tests {
         composer.try_compose().unwrap().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.try_compose().unwrap().unwrap();
+        assert!(composer.try_compose().is_none());
         assert_eq!(x.get(), 1);
     }
 
@@ -335,7 +335,7 @@ mod tests {
         composer.try_compose().unwrap().unwrap();
         assert_eq!(*x.borrow(), 1);
 
-        composer.try_compose().unwrap().unwrap();
+        assert!(composer.try_compose().is_none());
         assert_eq!(*x.borrow(), 1);
     }
 }
