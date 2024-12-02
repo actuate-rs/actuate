@@ -375,7 +375,10 @@ impl<T> Hash for Map<'_, T> {
 ///
 /// This reference can be mapped to inner values with [`Signal::map`].
 pub struct Signal<'a, T> {
+    /// Pinned reference to the value.
     value: &'a T,
+
+    /// Pointer to this value's current generation.
     generation: *const Cell<u64>,
 }
 
@@ -435,21 +438,15 @@ impl<'a, T: 'static> SignalMut<'a, T> {
 
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(me: Self, f: impl FnOnce(&mut T) + 'static) {
-        let mut ptr = me.ptr;
         let is_changed = me.scope_is_changed;
-        let generation = me.generation;
 
-        Runtime::current().update(move || {
-            let value = unsafe { ptr.as_mut() };
-            f(value);
+        Self::with(me, move |value| {
+            // Set this scope as changed.
+            // Safety: the pointer to this scope is guranteed to outlive `me`.
+            unsafe { (*is_changed).set(true) };
 
-            unsafe {
-                (*is_changed).set(true);
-
-                let g = &*generation;
-                g.set(g.get() + 1)
-            }
-        });
+            f(value)
+        })
     }
 
     /// Queue an update to this value, triggering an update to the component owning this value.
@@ -471,10 +468,17 @@ impl<'a, T: 'static> SignalMut<'a, T> {
     pub fn with(me: Self, f: impl FnOnce(&mut T) + 'static) {
         let mut cell = Some(f);
         let mut ptr = me.ptr;
+        let generation_ptr = me.generation;
 
         Runtime::current().update(move || {
+            // Safety: Updates are guaranteed to be called before any structural changes of the composition tree.
             let value = unsafe { ptr.as_mut() };
             cell.take().unwrap()(value);
+
+            // Increment the generation of this value.
+            // Safety: the pointer to this scope's generation is guranteed to outlive `me`.
+            let generation = unsafe { &*generation_ptr };
+            generation.set(generation.get() + 1)
         });
     }
 
