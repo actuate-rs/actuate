@@ -633,7 +633,7 @@ impl Drop for ScopeData<'_> {
 }
 
 /// Composable scope.
-pub struct Scope<'a, C> {
+pub struct Scope<'a, C: ?Sized> {
     me: &'a C,
     state: ScopeState<'a>,
 }

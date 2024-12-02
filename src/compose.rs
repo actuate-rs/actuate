@@ -26,7 +26,7 @@ use std::{
 /// 1. It's provided dependencies have changed (see [`memo`] for more)
 /// 2. Its own state has changed, which will then trigger the above parent-to-child process for its children.
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
-pub trait Compose: Data + Sized {
+pub trait Compose: Data {
     /// Compose this function.
     fn compose(cx: Scope<Self>) -> impl Compose;
 
@@ -202,9 +202,7 @@ impl<C: Compose> Compose for Catch<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let f: &dyn Fn(Box<dyn StdError>) = &*cx.me().f;
         let f: &dyn Fn(Box<dyn StdError>) = unsafe { mem::transmute(f) };
-        use_provider(&cx, move || CatchContext {
-            f: Box::new(f),
-        });
+        use_provider(&cx, move || CatchContext { f: Box::new(f) });
 
         Signal::map(cx.me(), |me| &me.content)
     }
