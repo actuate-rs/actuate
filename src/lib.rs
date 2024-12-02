@@ -108,22 +108,29 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use composer::Runtime;
-use std::{
+extern crate alloc;
+
+use ahash::AHasher;
+use alloc::rc::Rc;
+use core::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
-    collections::HashMap,
     fmt,
     future::Future,
-    hash::{Hash, Hasher},
+    hash::{Hash, Hasher, BuildHasherDefault},
     marker::PhantomData,
     mem,
     ops::Deref,
     pin::Pin,
     ptr::NonNull,
-    rc::Rc,
 };
 use thiserror::Error;
+
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
+
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
 /// Prelude of commonly used items.
 pub mod prelude {
@@ -161,6 +168,7 @@ use self::compose::{AnyCompose, Compose};
 
 /// Low-level composer.
 pub mod composer;
+use self::composer::Runtime;
 
 /// Data trait and derive macro.
 pub mod data;
@@ -569,7 +577,7 @@ impl_pointer!(Signal, Map, SignalMut);
 /// Map of [`TypeId`] to context values.
 #[derive(Clone, Default)]
 struct Contexts {
-    values: HashMap<TypeId, Rc<dyn Any>>,
+    values: HashMap<TypeId, Rc<dyn Any>, BuildHasherDefault<AHasher>>,
 }
 
 /// Scope state of a composable function.
@@ -774,7 +782,7 @@ pub struct ContextError<T> {
 impl<T> fmt::Debug for ContextError<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("ContextError")
-            .field(&std::any::type_name::<T>())
+            .field(&core::any::type_name::<T>())
             .finish()
     }
 }
@@ -783,7 +791,7 @@ impl<T> fmt::Display for ContextError<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&format!(
             "Context value not found for type: {}",
-            std::any::type_name::<T>()
+            core::any::type_name::<T>()
         ))
     }
 }
@@ -1000,7 +1008,7 @@ type BoxedFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 #[cfg(feature = "executor")]
 struct TaskFuture {
-    task: std::sync::Arc<std::sync::Mutex<Option<BoxedFuture>>>,
+    task: alloc::sync::Arc<std::sync::Mutex<Option<BoxedFuture>>>,
     rt: Runtime,
 }
 

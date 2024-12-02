@@ -1,17 +1,16 @@
 use crate::{prelude::*, ScopeData};
+use alloc::{rc::Rc, sync::Arc, task::Wake};
 use compose::{AnyCompose, CatchContext};
-use crossbeam_queue::SegQueue;
-use slotmap::{DefaultKey, SlotMap};
-use std::{
+use core::{
     any::TypeId,
     cell::{Cell, RefCell},
     error::Error,
     future::Future,
     pin::Pin,
-    rc::Rc,
-    sync::Arc,
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
+use crossbeam_queue::SegQueue;
+use slotmap::{DefaultKey, SlotMap};
 use tokio::sync::{RwLock, RwLockWriteGuard};
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;

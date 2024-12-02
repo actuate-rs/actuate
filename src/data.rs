@@ -1,5 +1,5 @@
-use crate::prelude::*;
-use std::{collections::HashMap, error::Error, future::Future, pin::Pin};
+use crate::{prelude::*, HashMap};
+use core::{error::Error, future::Future, pin::Pin};
 
 pub use actuate_macros::{data, Data};
 
@@ -47,7 +47,7 @@ unsafe impl Data for &str {}
 
 unsafe impl<T: Data> Data for Vec<T> {}
 
-unsafe impl<T: Data, U: Data> Data for HashMap<T, U> {}
+unsafe impl<T: Data, U: Data, S: 'static> Data for HashMap<T, U, S> {}
 
 unsafe impl<T: Data> Data for &T {}
 
