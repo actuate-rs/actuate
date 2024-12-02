@@ -591,14 +591,34 @@ pub struct ScopeData<'a> {
 }
 
 impl ScopeData<'_> {
-    /// Set this scope as changed.
+    /// Returns `true` if this is this scope's state has changed since the last re-composition.
+    pub fn is_changed(&self) -> bool {
+        self.is_changed.get()
+    }
+
+    /// Set this scope as changed during the next re-composition.
     pub fn set_changed(&self) {
-        self.is_changed.set(true);
+        self.is_changed.set(true)
     }
 
     /// Returns `true` if an ancestor to this scope is changed.
     pub fn is_parent_changed(&self) -> bool {
         self.is_parent_changed.get()
+    }
+
+    /// Returns `true` if this scope contains a container composable.
+    ///
+    /// A container composable will be re-composed during every re-composition of the tree.
+    /// This is useful for low-level composables that manage child state or external elements.
+    pub fn is_container(&self) -> bool {
+        self.is_container.get()
+    }
+
+    /// Set this scope as a container composable.
+    ///
+    /// See [`ScopeData::is_container`] for more.
+    pub fn set_is_container(&self) {
+        self.is_container.set(true)
     }
 }
 
