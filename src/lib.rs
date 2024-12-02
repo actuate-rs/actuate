@@ -567,9 +567,6 @@ pub struct ScopeData<'a> {
     /// `true` if an ancestor to this scope is changed.
     is_parent_changed: Cell<bool>,
 
-    /// `true` if this scope contains an empty composable.
-    is_empty: Cell<bool>,
-
     /// `true` if this scope contains a container composable.
     is_container: Cell<bool>,
 

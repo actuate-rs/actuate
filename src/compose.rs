@@ -46,7 +46,7 @@ pub trait Compose: Data + Sized {
 
 impl Compose for () {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_empty.set(true);
+        let _ = cx;
     }
 }
 
@@ -415,24 +415,25 @@ where
         // Scope for this composable's content.
         let child_state = use_ref(&cx, ScopeData::default);
 
+        if typeid::of::<C>() == typeid::of::<()>() {
+            return;
+        }
+
         if cell.is_none()
             || cx.is_changed.take()
             || cx.is_parent_changed.get()
             || cx.is_container.get()
         {
-            let mut child = C::compose(cx);
-
-            cx.is_parent_changed.set(false);
-            if cx.state.is_empty.take() {
-                return;
-            }
-
             #[cfg(feature = "tracing")]
             if !cx.is_container.get() {
                 if let Some(name) = C::name() {
                     tracing::trace!("Compose: {}", name);
                 }
             }
+
+            let mut child = C::compose(cx);
+
+            cx.is_parent_changed.set(false);
 
             *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
             child_state
