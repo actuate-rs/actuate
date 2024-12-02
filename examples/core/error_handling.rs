@@ -7,7 +7,7 @@ struct A;
 
 impl Compose for A {
     fn compose(_cx: Scope<Self>) -> impl Compose {
-        dbg!("A");
+        "".parse().map(|_: i32| ()).map_err(Error::new)
     }
 }
 
@@ -16,9 +16,12 @@ struct App;
 
 impl Compose for App {
     fn compose(_cx: Scope<Self>) -> impl Compose {
-        dbg!("App!");
-
-        A
+        catch(
+            |error| {
+                dbg!(error);
+            },
+            A,
+        )
     }
 }
 
@@ -32,6 +35,5 @@ fn main() {
     .unwrap();
 
     let mut composer = Composer::new(App);
-    composer.compose().unwrap();
-    composer.compose().unwrap();
+    assert!(composer.compose().is_ok());
 }

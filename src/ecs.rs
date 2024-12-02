@@ -241,7 +241,8 @@ fn compose(world: &mut World) {
             unsafe { update.apply() }
         }
 
-        rt_composer.composer.compose();
+        // TODO handle composition error.
+        rt_composer.composer.compose().unwrap();
     }
 }
 
