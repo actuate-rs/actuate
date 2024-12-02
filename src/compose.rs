@@ -138,9 +138,11 @@ impl<C: Compose> Compose for Result<C, Error> {
 }
 
 /// Create a composable from an iterator.
+/// 
+/// `make_item` will be called for each item to produce a composable.
 pub fn from_iter<'a, I, C>(
     iter: I,
-    f: impl Fn(Signal<'a, I::Item>) -> C + 'a,
+    make_item: impl Fn(Signal<'a, I::Item>) -> C + 'a,
 ) -> FromIter<'a, I, I::Item, C>
 where
     I: IntoIterator + Clone + Data,
@@ -149,7 +151,7 @@ where
 {
     FromIter {
         iter,
-        f: Box::new(f),
+        make_item: Box::new(make_item),
     }
 }
 
@@ -217,7 +219,7 @@ impl<C: Compose> Compose for Catch<'_, C> {
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
-    f: Box<dyn Fn(Signal<'a, Item>) -> C + 'a>,
+    make_item: Box<dyn Fn(Signal<'a, Item>) -> C + 'a>,
 }
 
 unsafe impl<I, Item, C> Data for FromIter<'_, I, Item, C>
@@ -256,7 +258,7 @@ where
 
                     let item_ref: &Item = &state.item;
                     let item_ref: &Item = unsafe { mem::transmute(item_ref) };
-                    let compose = (cx.me().f)(Signal {
+                    let compose = (cx.me().make_item)(Signal {
                         value: item_ref,
                         generation: &cx.generation as _,
                     });
