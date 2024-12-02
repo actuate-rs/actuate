@@ -15,7 +15,6 @@ use bevy_utils::HashMap;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     cell::{Cell, RefCell},
-    marker::PhantomData,
     mem, ptr,
     rc::Rc,
     sync::{Arc, Mutex},
@@ -220,11 +219,6 @@ fn compose(world: &mut World) {
         // TODO handle composition error.
         let _ = rt_composer.composer.try_compose();
     }
-}
-
-/// Hook for [`use_world`].
-pub struct UseWorld<'a> {
-    _marker: PhantomData<ScopeState<'a>>,
 }
 
 /// A function that takes a [`SystemParam`] as input.
