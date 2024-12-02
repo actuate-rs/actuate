@@ -181,6 +181,9 @@ impl CatchContext {
 }
 
 /// Create a composable that catches errors from its children.
+/// 
+/// If a child returns a `Result<T, actuate::Error>`,
+/// any errors will be caught by this composable by calling `on_error`.
 pub fn catch<'a, C: Compose>(
     on_error: impl Fn(Box<dyn StdError>) + 'a,
     content: C,
@@ -192,6 +195,8 @@ pub fn catch<'a, C: Compose>(
 }
 
 /// Error catch composable.
+/// 
+/// See [`catch`] for more.
 #[derive(Data)]
 pub struct Catch<'a, C> {
     content: C,
