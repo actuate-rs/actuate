@@ -32,6 +32,7 @@ fn main() {
     .unwrap();
 
     let mut composer = Composer::new(App);
-    composer.compose().unwrap();
-    composer.compose().unwrap();
+    composer.try_compose().unwrap().unwrap();
+
+    assert!(composer.try_compose().is_none());
 }

@@ -10,41 +10,28 @@ use std::{
     pin::Pin,
     rc::Rc,
     sync::Arc,
-    task::{Context, Wake, Waker},
+    task::{Context, Poll, Wake, Waker},
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
-
-/// An update to apply to a composable.
-pub struct Update {
-    pub(crate) f: Box<dyn FnOnce()>,
-}
-
-impl Update {
-    /// Apply this update.
-    ///
-    /// # Safety
-    /// The caller must ensure the composable triggering this update still exists.
-    pub unsafe fn apply(self) {
-        (self.f)();
-    }
-}
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
 
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
 pub struct Runtime {
-    /// Updater for this runtime.
-    pub(crate) updater: Arc<dyn Updater>,
-
     /// Local task stored on this runtime.
     pub(crate) tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
 
     /// Queue for ready local tasks.
     pub(crate) task_queue: Arc<SegQueue<DefaultKey>>,
 
+    /// Queue for updates that mutate the composition tree.
+    pub(crate) update_queue: Arc<SegQueue<Box<dyn FnMut()>>>,
+
     /// Update lock for shared tasks.
     pub(crate) lock: Arc<RwLock<()>>,
+
+    pub(crate) waker: RefCell<Option<Waker>>,
 }
 
 impl Runtime {
@@ -71,7 +58,15 @@ impl Runtime {
 
     /// Queue an update to run after [`Composer::compose`].
     pub fn update(&self, f: impl FnOnce() + 'static) {
-        self.updater.update(Update { f: Box::new(f) });
+        let lock = self.lock.clone();
+        let mut f_cell = Some(f);
+
+        self.update_queue.push(Box::new(move || {
+            let _guard = lock.blocking_write();
+
+            let f = f_cell.take().unwrap();
+            f()
+        }));
     }
 }
 
@@ -79,52 +74,18 @@ thread_local! {
     static RUNTIME: RefCell<Option<Runtime>> = const { RefCell::new(None) };
 }
 
-/// Updater for a [`Composer`].
-pub trait Updater: Send + Sync {
-    /// Update the content of a [`Composer`].
-    fn update(&self, update: Update);
-}
-
-struct DefaultUpdater;
-
-impl Updater for DefaultUpdater {
-    fn update(&self, update: Update) {
-        unsafe {
-            update.apply();
-        }
-    }
-}
-
-struct UpdateWrapper<U> {
-    updater: U,
-    lock: Arc<RwLock<()>>,
-}
-
-impl<U: Updater> Updater for UpdateWrapper<U> {
-    fn update(&self, update: Update) {
-        let lock = self.lock.clone();
-        self.updater.update(Update {
-            f: Box::new(move || {
-                let _guard = lock.blocking_write();
-                unsafe { update.apply() }
-            }),
-        });
-    }
-}
-
 struct TaskWaker {
     key: DefaultKey,
-    updater: Arc<dyn Updater>,
     queue: Arc<SegQueue<DefaultKey>>,
+    waker: Option<Waker>,
 }
 
 impl Wake for TaskWaker {
     fn wake(self: Arc<Self>) {
-        let key = self.key;
-        let pending = self.queue.clone();
-        self.updater.update(Update {
-            f: Box::new(move || pending.push(key)),
-        });
+        self.queue.push(self.key);
+        if let Some(waker) = self.waker.as_ref() {
+            waker.wake_by_ref();
+        }
     }
 }
 
@@ -134,42 +95,37 @@ pub struct Composer {
     scope_state: Box<ScopeData<'static>>,
     rt: Runtime,
     task_queue: Arc<SegQueue<DefaultKey>>,
+    update_queue: Arc<SegQueue<Box<dyn FnMut()>>>,
+    is_initial: bool,
 }
 
 impl Composer {
-    /// Create a new [`Composer`] with the given content and default updater.
-    pub fn new(content: impl Compose + 'static) -> Self {
-        Self::with_updater(content, DefaultUpdater)
-    }
-
     /// Create a new [`Composer`] with the given content, updater, and task executor.
-    pub fn with_updater(content: impl Compose + 'static, updater: impl Updater + 'static) -> Self {
+    pub fn new(content: impl Compose + 'static) -> Self {
         let lock = Arc::new(RwLock::new(()));
-        let updater = Arc::new(UpdateWrapper {
-            updater,
-            lock: lock.clone(),
-        });
-        let queue = Arc::new(SegQueue::new());
+
+        let task_queue = Arc::new(SegQueue::new());
+        let update_queue = Arc::new(SegQueue::new());
 
         let scope_data = ScopeData::default();
         Self {
             compose: Box::new(content),
             scope_state: Box::new(scope_data),
             rt: Runtime {
-                updater: updater.clone(),
                 tasks: Rc::new(RefCell::new(SlotMap::new())),
-                task_queue: queue.clone(),
+                task_queue: task_queue.clone(),
+                update_queue: update_queue.clone(),
                 lock,
+                waker: RefCell::new(None),
             },
-            task_queue: queue,
+            task_queue,
+            update_queue,
+            is_initial: true,
         }
     }
 
-    /// Compose the content of this composer.
-    pub fn compose(&mut self) -> Result<(), Box<dyn Error>> {
-        #[cfg(feature = "tracing")]
-        tracing::trace!("Composer::compose");
-
+    /// Try to immediately compose the content in this composer.
+    pub fn try_compose(&mut self) -> Option<Result<(), Box<dyn Error>>> {
         self.rt.enter();
 
         let error_cell = Rc::new(Cell::new(None));
@@ -181,23 +137,59 @@ impl Composer {
             })),
         );
 
-        while let Some(key) = self.task_queue.pop() {
-            let waker = Waker::from(Arc::new(TaskWaker {
-                key,
-                updater: Runtime::current().updater.clone(),
-                queue: self.rt.task_queue.clone(),
-            }));
-            let mut cx = Context::from_waker(&waker);
+        if !self.is_initial {
+            let mut is_ready = false;
 
-            let mut tasks = self.rt.tasks.borrow_mut();
-            let task = tasks.get_mut(key).unwrap();
-            let _ = task.as_mut().poll(&mut cx);
+            while let Some(key) = self.task_queue.pop() {
+                let waker = Waker::from(Arc::new(TaskWaker {
+                    key,
+                    waker: self.rt.waker.borrow().clone(),
+                    queue: self.rt.task_queue.clone(),
+                }));
+                let mut cx = Context::from_waker(&waker);
+
+                let mut tasks = self.rt.tasks.borrow_mut();
+                let task = tasks.get_mut(key).unwrap();
+                let _ = task.as_mut().poll(&mut cx);
+
+                is_ready = true;
+            }
+
+            while let Some(mut update) = self.update_queue.pop() {
+                update();
+                is_ready = true;
+            }
+
+            if !is_ready {
+                return None;
+            }
+        } else {
+            self.is_initial = false;
         }
+
+        #[cfg(feature = "tracing")]
+        tracing::trace!("Start composition");
 
         // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
         unsafe { self.compose.any_compose(&self.scope_state) };
 
-        error_cell.take().map(Err).unwrap_or(Ok(()))
+        Some(error_cell.take().map(Err).unwrap_or(Ok(())))
+    }
+
+    /// Poll a composition of the content in this composer.
+    pub fn poll_compose(&mut self, cx: &mut Context) -> Poll<Result<(), Box<dyn Error>>> {
+        *self.rt.waker.borrow_mut() = Some(cx.waker().clone());
+
+        if let Some(result) = self.try_compose() {
+            Poll::Ready(result)
+        } else {
+            Poll::Pending
+        }
+    }
+
+    /// Compose the content of this composer.
+    pub async fn compose(&mut self) -> Result<(), Box<dyn Error>> {
+        futures::future::poll_fn(|cx| self.poll_compose(cx)).await
     }
 
     /// Lock updates to the content of this composer.
@@ -256,10 +248,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(x.get(), 2);
     }
 
@@ -281,10 +273,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(x.get(), 1);
     }
 
@@ -306,10 +298,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(x.get(), 2);
     }
 
@@ -339,12 +331,12 @@ mod tests {
         }
 
         let x = Rc::new(RefCell::new(0));
-        let mut compsoer = Composer::new(A { x: x.clone() });
+        let mut composer = Composer::new(A { x: x.clone() });
 
-        compsoer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(*x.borrow(), 1);
 
-        compsoer.compose().unwrap();
+        composer.try_compose().unwrap().unwrap();
         assert_eq!(*x.borrow(), 1);
     }
 }
