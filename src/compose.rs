@@ -3,6 +3,7 @@ use std::{
     any::TypeId,
     borrow::Cow,
     cell::{RefCell, UnsafeCell},
+    error::Error as StdError,
     mem,
 };
 
@@ -22,7 +23,7 @@ use std::{
 /// until either a [`Memo`] is reached or the composition is complete.
 ///
 /// [`Memo`] is special in that it will only recompose in two cases:
-/// 1. It's provided dependencies have changed (see [`Memo::new`] for more)
+/// 1. It's provided dependencies have changed (see [`memo`] for more)
 /// 2. Its own state has changed, which will then trigger the above parent-to-child process for its children.
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub trait Compose: Data + Sized {
@@ -85,6 +86,57 @@ impl<C: Compose> Compose for Option<C> {
     }
 }
 
+/// Composable error.
+///
+/// This can be handled by a parent composable with [`Catch`].
+#[derive(Data)]
+pub struct Error {
+    make_error: Box<dyn Fn() -> Box<dyn std::error::Error>>,
+}
+
+impl Error {
+    /// Create a new composable error.
+    pub fn new(error: impl StdError + Clone + 'static) -> Self {
+        Self {
+            make_error: Box::new(move || Box::new(error.clone())),
+        }
+    }
+}
+
+impl<C: Compose> Compose for Result<C, Error> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let catch_cx = use_context::<CatchContext>(&cx).unwrap();
+
+        cx.is_container.set(true);
+
+        let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
+        let mut state_cell = state_cell.borrow_mut();
+
+        match &*cx.me() {
+            Ok(content) => {
+                if let Some(state) = &*state_cell {
+                    state.is_parent_changed.set(cx.is_parent_changed.get());
+                    unsafe {
+                        content.any_compose(state);
+                    }
+                } else {
+                    let mut state = ScopeData::default();
+                    state.contexts = cx.contexts.clone();
+                    *state_cell = Some(state);
+                    unsafe {
+                        content.any_compose(state_cell.as_ref().unwrap());
+                    }
+                }
+            }
+            Err(error) => {
+                *state_cell = None;
+
+                (catch_cx.f)((error.make_error)());
+            }
+        }
+    }
+}
+
 /// Create a composable from an iterator.
 pub fn from_iter<'a, I, C>(
     iter: I,
@@ -115,6 +167,46 @@ struct AnyItemState {
 impl Drop for AnyItemState {
     fn drop(&mut self) {
         (self.drop)(self)
+    }
+}
+
+pub(crate) struct CatchContext {
+    f: Box<dyn Fn(Box<dyn StdError>)>,
+}
+
+impl CatchContext {
+    pub(crate) fn new(f: impl Fn(Box<dyn StdError>) + 'static) -> Self {
+        Self { f: Box::new(f) }
+    }
+}
+
+/// Create a composable that catches errors from its children.
+pub fn catch<'a, C: Compose>(
+    on_error: impl Fn(Box<dyn StdError>) + 'a,
+    content: C,
+) -> Catch<'a, C> {
+    Catch {
+        content,
+        f: Box::new(on_error),
+    }
+}
+
+/// Error catch composable.
+#[derive(Data)]
+pub struct Catch<'a, C> {
+    content: C,
+    f: Box<dyn Fn(Box<dyn StdError>) + 'a>,
+}
+
+impl<C: Compose> Compose for Catch<'_, C> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let f: &dyn Fn(Box<dyn StdError>) = &*cx.me().f;
+        let f: &dyn Fn(Box<dyn StdError>) = unsafe { mem::transmute(f) };
+        use_provider(&cx, move || CatchContext {
+            f: Box::new(f),
+        });
+
+        Signal::map(cx.me(), |me| &me.content)
     }
 }
 
@@ -208,28 +300,30 @@ where
     }
 }
 
-/// Memoized composable.
+/// Create a new memoized composable.
 ///
 /// The content of the memoized composable is only re-composed when the dependency changes.
 ///
 /// Children of this `Memo` may still be re-composed if their state has changed.
+pub fn memo<T, C>(dependency: impl Memoize<Value = T>, content: C) -> Memo<T, C>
+where
+    T: Clone + Data + PartialEq + 'static,
+    C: Compose,
+{
+    Memo {
+        dependency: dependency.memoized(),
+        content,
+    }
+}
+
+/// Memoized composable.
+///
+/// See [`memo`] for more.
 #[derive(Data)]
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct Memo<T, C> {
     dependency: T,
     content: C,
-}
-
-impl<T, C> Memo<T, C> {
-    /// Create a new memoized composable.
-    ///
-    /// `content` is only re-composed when `dependency` is changed.
-    pub fn new(dependency: impl Memoize<Value = T>, content: C) -> Self {
-        Self {
-            dependency: dependency.memoized(),
-            content,
-        }
-    }
 }
 
 impl<T, C> Compose for Memo<T, C>

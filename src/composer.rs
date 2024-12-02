@@ -1,8 +1,10 @@
 use crate::{prelude::*, ScopeData};
-use compose::AnyCompose;
+use compose::{AnyCompose, CatchContext};
 use slotmap::{DefaultKey, SlotMap};
 use std::{
-    cell::RefCell,
+    any::TypeId,
+    cell::{Cell, RefCell},
+    error::Error,
     future::Future,
     pin::Pin,
     rc::Rc,
@@ -165,11 +167,20 @@ impl Composer {
     }
 
     /// Compose the content of this composer.
-    pub fn compose(&mut self) {
+    pub fn compose(&mut self) -> Result<(), Box<dyn Error>> {
         #[cfg(feature = "tracing")]
         tracing::trace!("Composer::compose");
 
         self.rt.enter();
+
+        let error_cell = Rc::new(Cell::new(None));
+        let error_cell_handle = error_cell.clone();
+        self.scope_state.contexts.borrow_mut().values.insert(
+            TypeId::of::<CatchContext>(),
+            Rc::new(CatchContext::new(move |error| {
+                error_cell_handle.set(Some(error));
+            })),
+        );
 
         while let Ok(key) = self.task_rx.try_recv() {
             let waker = Waker::from(Arc::new(TaskWaker {
@@ -185,7 +196,9 @@ impl Composer {
         }
 
         // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
-        unsafe { self.compose.any_compose(&self.scope_state) }
+        unsafe { self.compose.any_compose(&self.scope_state) };
+
+        error_cell.take().map(Err).unwrap_or(Ok(()))
     }
 
     /// Lock updates to the content of this composer.
@@ -244,10 +257,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.compose();
+        composer.compose().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.compose();
+        composer.compose().unwrap();
         assert_eq!(x.get(), 2);
     }
 
@@ -269,10 +282,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.compose();
+        composer.compose().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.compose();
+        composer.compose().unwrap();
         assert_eq!(x.get(), 1);
     }
 
@@ -294,10 +307,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.compose();
+        composer.compose().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.compose();
+        composer.compose().unwrap();
         assert_eq!(x.get(), 2);
     }
 
@@ -322,17 +335,17 @@ mod tests {
         impl Compose for A {
             fn compose(cx: Scope<Self>) -> impl Compose {
                 let x = cx.me().x.clone();
-                Memo::new((), B { x })
+                memo((), B { x })
             }
         }
 
         let x = Rc::new(RefCell::new(0));
         let mut compsoer = Composer::new(A { x: x.clone() });
 
-        compsoer.compose();
+        compsoer.compose().unwrap();
         assert_eq!(*x.borrow(), 1);
 
-        compsoer.compose();
+        compsoer.compose().unwrap();
         assert_eq!(*x.borrow(), 1);
     }
 }
