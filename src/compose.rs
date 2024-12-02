@@ -1,4 +1,4 @@
-use crate::{prelude::*, Memoize, ScopeData};
+use crate::{prelude::*, ScopeData};
 use alloc::borrow::Cow;
 use core::{
     any::TypeId,
@@ -303,13 +303,13 @@ where
 /// The content of the memoized composable is only re-composed when the dependency changes.
 ///
 /// Children of this `Memo` may still be re-composed if their state has changed.
-pub fn memo<T, C>(dependency: impl Memoize<Value = T>, content: C) -> Memo<T, C>
+pub fn memo<D, C>(dependency: D, content: C) -> Memo<D, C>
 where
-    T: Clone + Data + PartialEq + 'static,
+    D: Data + Clone + PartialEq + 'static,
     C: Compose,
 {
     Memo {
-        dependency: dependency.memoized(),
+        dependency,
         content,
     }
 }

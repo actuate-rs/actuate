@@ -836,10 +836,9 @@ pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() ->
 }
 
 /// Memoize a value, caching it until the dependency changes.
+/// This can be used to diff expensive values by pointer equality.
 ///
-/// This is used in [`Memo`](crate::compose::Memo) and [`use_memo`] to cache composables.
-///
-/// This is implemented for `T: PartialEq + 'static` by default.
+/// This trait is implemented for `T: PartialEq + 'static` by default.
 /// As well as:
 /// - [`Signal`]
 /// - [`SignalMut`]
@@ -928,24 +927,22 @@ where
 /// `make_value` will update the returned value whenver `dependency` is changed.
 pub fn use_memo<D, T>(cx: ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Signal<T>
 where
-    D: Memoize,
-    D::Value: Send,
+    D: PartialEq + Send + 'static,
     T: Send + 'static,
 {
-    let mut dependency_cell = Some(dependency.memoized());
-
+    let mut dependency_cell = Some(dependency);
     let mut make_value_cell = Some(make_value);
-    let value_mut = use_mut(cx, || make_value_cell.take().unwrap()());
 
-    let hash_mut = use_mut(cx, || dependency_cell.take().unwrap());
+    let value_mut = use_mut(cx, || make_value_cell.take().unwrap()());
+    let last_mut = use_mut(cx, || dependency_cell.take().unwrap());
 
     if let Some(make_value) = make_value_cell {
         if let Some(dependency) = dependency_cell.take() {
-            if dependency != *hash_mut {
+            if dependency != *last_mut {
                 let value = make_value();
                 SignalMut::with(value_mut, move |update| *update = value);
 
-                SignalMut::with(hash_mut, move |dst| *dst = dependency);
+                SignalMut::with(last_mut, move |dst| *dst = dependency);
             }
         }
     }
