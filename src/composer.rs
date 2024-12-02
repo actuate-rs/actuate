@@ -26,7 +26,7 @@ pub struct Runtime {
     pub(crate) task_queue: Arc<SegQueue<DefaultKey>>,
 
     /// Queue for updates that mutate the composition tree.
-    pub(crate) update_queue: Arc<SegQueue<Box<dyn FnMut()>>>,
+    pub(crate) update_queue: Rc<SegQueue<Box<dyn FnMut()>>>,
 
     /// Update lock for shared tasks.
     pub(crate) lock: Arc<RwLock<()>>,
@@ -57,7 +57,7 @@ impl Runtime {
     }
 
     /// Queue an update to run after [`Composer::compose`].
-    pub fn update(&self, f: impl FnOnce() + 'static) {
+    pub fn update(&self, f: impl FnOnce() + Send + 'static) {
         let lock = self.lock.clone();
         let mut f_cell = Some(f);
 
@@ -95,7 +95,7 @@ pub struct Composer {
     scope_state: Box<ScopeData<'static>>,
     rt: Runtime,
     task_queue: Arc<SegQueue<DefaultKey>>,
-    update_queue: Arc<SegQueue<Box<dyn FnMut()>>>,
+    update_queue: Rc<SegQueue<Box<dyn FnMut()>>>,
     is_initial: bool,
 }
 
@@ -105,7 +105,7 @@ impl Composer {
         let lock = Arc::new(RwLock::new(()));
 
         let task_queue = Arc::new(SegQueue::new());
-        let update_queue = Arc::new(SegQueue::new());
+        let update_queue = Rc::new(SegQueue::new());
 
         let scope_data = ScopeData::default();
         Self {

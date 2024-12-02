@@ -415,6 +415,13 @@ impl<T> Hash for Signal<'_, T> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct UnsafeWrap<T: ?Sized>(T);
+
+unsafe impl<T: ?Sized> Send for UnsafeWrap<T> {}
+
+unsafe impl<T: ?Sized> Sync for UnsafeWrap<T> {}
+
 /// Mutable reference to a value of type `T`.
 pub struct SignalMut<'a, T> {
     /// Pointer to the boxed value.
@@ -437,27 +444,31 @@ impl<'a, T: 'static> SignalMut<'a, T> {
     }
 
     /// Queue an update to this value, triggering an update to the component owning this value.
-    pub fn update(me: Self, f: impl FnOnce(&mut T) + 'static) {
-        let is_changed = me.scope_is_changed;
+    pub fn update(me: Self, f: impl FnOnce(&mut T) + Send + 'static) {
+        let is_changed = UnsafeWrap(me.scope_is_changed);
 
         Self::with(me, move |value| {
+            let is_changed = is_changed;
             // Set this scope as changed.
             // Safety: the pointer to this scope is guranteed to outlive `me`.
-            unsafe { (*is_changed).set(true) };
+            unsafe { (*is_changed.0).set(true) };
 
             f(value)
         })
     }
 
     /// Queue an update to this value, triggering an update to the component owning this value.
-    pub fn set(me: Self, value: T) {
+    pub fn set(me: Self, value: T)
+    where
+        T: Send,
+    {
         SignalMut::update(me, |x| *x = value)
     }
 
     /// Queue an update to this value if it is not equal to the given value.
     pub fn set_if_neq(me: Self, value: T)
     where
-        T: PartialEq,
+        T: PartialEq + Send,
     {
         if *me != value {
             SignalMut::set(me, value);
@@ -465,19 +476,23 @@ impl<'a, T: 'static> SignalMut<'a, T> {
     }
 
     /// Queue an update to this value wtihout triggering an update.
-    pub fn with(me: Self, f: impl FnOnce(&mut T) + 'static) {
-        let mut cell = Some(f);
-        let mut ptr = me.ptr;
-        let generation_ptr = me.generation;
+    pub fn with(me: Self, f: impl FnOnce(&mut T) + Send + 'static) {
+        let cell = UnsafeWrap(Some(f));
+        let ptr = UnsafeWrap(me.ptr);
+        let generation_ptr = UnsafeWrap(me.generation);
 
         Runtime::current().update(move || {
+            let mut cell = cell;
+            let mut ptr = ptr;
+            let generation_ptr = generation_ptr;
+
             // Safety: Updates are guaranteed to be called before any structural changes of the composition tree.
-            let value = unsafe { ptr.as_mut() };
-            cell.take().unwrap()(value);
+            let value = unsafe { ptr.0.as_mut() };
+            cell.0.take().unwrap()(value);
 
             // Increment the generation of this value.
             // Safety: the pointer to this scope's generation is guranteed to outlive `me`.
-            let generation = unsafe { &*generation_ptr };
+            let generation = unsafe { &*generation_ptr.0 };
             generation.set(generation.get() + 1)
         });
     }
@@ -898,7 +913,8 @@ where
 pub fn use_memo<D, T>(cx: ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Signal<T>
 where
     D: Memoize,
-    T: 'static,
+    D::Value: Send,
+    T: Send + 'static,
 {
     let mut dependency_cell = Some(dependency.memoized());
 
