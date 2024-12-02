@@ -13,7 +13,7 @@ use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
 
 #[cfg(feature = "executor")]
-use tokio::sync::{RwLock, RwLockWriteGuard};
+use tokio::sync::RwLock;
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
 
@@ -60,10 +60,13 @@ impl Runtime {
 
     /// Queue an update to run after [`Composer::compose`].
     pub fn update(&self, f: impl FnOnce() + Send + 'static) {
-        let lock = self.lock.clone();
         let mut f_cell = Some(f);
 
+        #[cfg(feature = "executor")]
+        let lock = self.lock.clone();
+
         self.update_queue.push(Box::new(move || {
+            #[cfg(feature = "executor")]
             let _guard = lock.blocking_write();
 
             let f = f_cell.take().unwrap();
@@ -104,6 +107,7 @@ pub struct Composer {
 impl Composer {
     /// Create a new [`Composer`] with the given content, updater, and task executor.
     pub fn new(content: impl Compose + 'static) -> Self {
+        #[cfg(feature = "executor")]
         let lock = Arc::new(RwLock::new(()));
 
         let task_queue = Arc::new(SegQueue::new());
@@ -117,8 +121,9 @@ impl Composer {
                 tasks: Rc::new(RefCell::new(SlotMap::new())),
                 task_queue: task_queue.clone(),
                 update_queue: update_queue.clone(),
-                lock,
                 waker: RefCell::new(None),
+                #[cfg(feature = "executor")]
+                lock,
             },
             task_queue,
             update_queue,
