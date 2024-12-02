@@ -970,7 +970,7 @@ where
 
         let rt = Runtime::current();
         let key = rt.tasks.borrow_mut().insert(task);
-        rt.task_tx.send(key).unwrap();
+        rt.task_queue.push(key);
         key
     });
 

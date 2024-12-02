@@ -34,6 +34,7 @@ thiserror = "2.0.3"
 tracing = { version = "0.1.40", optional = true }
 tokio = { version = "1.41.1", features = ["sync"] }
 typeid = "1.0.2"
+crossbeam-queue = { version = "0.3.11", no-default-feature = true, features = ["alloc"] }
 
 [dev-dependencies]
 bevy = { version = "0.15.0" }

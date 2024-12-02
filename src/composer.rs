@@ -1,5 +1,6 @@
 use crate::{prelude::*, ScopeData};
 use compose::{AnyCompose, CatchContext};
+use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     any::TypeId,
@@ -8,7 +9,7 @@ use std::{
     future::Future,
     pin::Pin,
     rc::Rc,
-    sync::{mpsc, Arc},
+    sync::Arc,
     task::{Context, Wake, Waker},
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
@@ -39,8 +40,8 @@ pub struct Runtime {
     /// Local task stored on this runtime.
     pub(crate) tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
 
-    /// Waker for local tasks.
-    pub(crate) task_tx: mpsc::Sender<DefaultKey>,
+    /// Queue for ready local tasks.
+    pub(crate) task_queue: Arc<SegQueue<DefaultKey>>,
 
     /// Update lock for shared tasks.
     pub(crate) lock: Arc<RwLock<()>>,
@@ -114,17 +115,15 @@ impl<U: Updater> Updater for UpdateWrapper<U> {
 struct TaskWaker {
     key: DefaultKey,
     updater: Arc<dyn Updater>,
-    tx: mpsc::Sender<DefaultKey>,
+    queue: Arc<SegQueue<DefaultKey>>,
 }
 
 impl Wake for TaskWaker {
     fn wake(self: Arc<Self>) {
         let key = self.key;
-        let pending = self.tx.clone();
+        let pending = self.queue.clone();
         self.updater.update(Update {
-            f: Box::new(move || {
-                pending.send(key).unwrap();
-            }),
+            f: Box::new(move || pending.push(key)),
         });
     }
 }
@@ -134,7 +133,7 @@ pub struct Composer {
     compose: Box<dyn AnyCompose>,
     scope_state: Box<ScopeData<'static>>,
     rt: Runtime,
-    task_rx: mpsc::Receiver<DefaultKey>,
+    task_queue: Arc<SegQueue<DefaultKey>>,
 }
 
 impl Composer {
@@ -150,7 +149,7 @@ impl Composer {
             updater,
             lock: lock.clone(),
         });
-        let (task_tx, task_rx) = mpsc::channel();
+        let queue = Arc::new(SegQueue::new());
 
         let scope_data = ScopeData::default();
         Self {
@@ -159,10 +158,10 @@ impl Composer {
             rt: Runtime {
                 updater: updater.clone(),
                 tasks: Rc::new(RefCell::new(SlotMap::new())),
-                task_tx,
+                task_queue: queue.clone(),
                 lock,
             },
-            task_rx,
+            task_queue: queue,
         }
     }
 
@@ -182,11 +181,11 @@ impl Composer {
             })),
         );
 
-        while let Ok(key) = self.task_rx.try_recv() {
+        while let Some(key) = self.task_queue.pop() {
             let waker = Waker::from(Arc::new(TaskWaker {
                 key,
                 updater: Runtime::current().updater.clone(),
-                tx: self.rt.task_tx.clone(),
+                queue: self.rt.task_queue.clone(),
             }));
             let mut cx = Context::from_waker(&waker);
 
