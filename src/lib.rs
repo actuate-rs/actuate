@@ -96,6 +96,8 @@
 //! ```
 //!
 //! ## Features
+//! - `std`: Enables features that use Rust's standard library (default).
+//!    With this feature disabled Actuate can be used in `#![no_std]` environments.
 //! - `animation`: Enables the `animation` module for animating values from the [Bevy](https://crates.io/crates/bevy) ECS.
 //!   (enables the `ecs` feature).
 //! - `ecs`: Enables the `ecs` module for bindings to the [Bevy](https://crates.io/crates/bevy) ECS.
@@ -336,7 +338,7 @@ impl<C: Compose> Compose for RefMap<'_, C> {
 
 /// Mapped immutable reference to a value of type `T`.
 ///
-/// This can be created with [`Ref::map`].
+/// This can be created with [`Signal::map`].
 pub struct Map<'a, T> {
     ptr: *const (),
     map_fn: *const (),

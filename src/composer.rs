@@ -11,6 +11,8 @@ use core::{
 };
 use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
+
+#[cfg(feature = "executor")]
 use tokio::sync::{RwLock, RwLockWriteGuard};
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
@@ -27,6 +29,7 @@ pub struct Runtime {
     /// Queue for updates that mutate the composition tree.
     pub(crate) update_queue: Rc<SegQueue<Box<dyn FnMut()>>>,
 
+    #[cfg(feature = "executor")]
     /// Update lock for shared tasks.
     pub(crate) lock: Arc<RwLock<()>>,
 
@@ -189,11 +192,6 @@ impl Composer {
     /// Compose the content of this composer.
     pub async fn compose(&mut self) -> Result<(), Box<dyn Error>> {
         futures::future::poll_fn(|cx| self.poll_compose(cx)).await
-    }
-
-    /// Lock updates to the content of this composer.
-    pub fn lock(&self) -> RwLockWriteGuard<()> {
-        self.rt.lock.blocking_write()
     }
 }
 
