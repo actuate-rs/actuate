@@ -203,7 +203,7 @@ impl<C: Compose> Compose for Catch<'_, C> {
         let f: &dyn Fn(Box<dyn StdError>) = &*cx.me().f;
         let f: &dyn Fn(Box<dyn StdError>) = unsafe { mem::transmute(f) };
         use_provider(&cx, move || CatchContext {
-            f: Box::new(move |error| f(error)),
+            f: Box::new(f),
         });
 
         Signal::map(cx.me(), |me| &me.content)
