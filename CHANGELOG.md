@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.11.0...actuate-v0.12.0) - 2024-12-02
+
+### Other
+
+- `#![no_std]` support ([#100](https://github.com/actuate-rs/actuate/pull/100))
+- Clean up and add internal docs
+- Remove Sized bound in Compose trait
+- Create `Catch` composable and impl `Compose` for `Result` ([#99](https://github.com/actuate-rs/actuate/pull/99))
+- Add getter and setter methods to ScopeData
+- Update docs
+- Remove is_empty from ScopeState in favor of checking for empty types
+- Create README.md
+
 ## [0.11.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.10.2...actuate-v0.11.0) - 2024-11-29
 
 ### Other
