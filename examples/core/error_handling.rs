@@ -35,5 +35,5 @@ fn main() {
     .unwrap();
 
     let mut composer = Composer::new(App);
-    assert!(composer.compose().is_ok());
+    assert!(composer.try_compose().unwrap().is_ok());
 }

@@ -1,7 +1,7 @@
 use crate::{prelude::*, Memoize, ScopeData};
-use std::{
+use alloc::borrow::Cow;
+use core::{
     any::TypeId,
-    borrow::Cow,
     cell::{RefCell, UnsafeCell},
     error::Error as StdError,
     mem,
@@ -32,7 +32,7 @@ pub trait Compose: Data {
 
     #[doc(hidden)]
     fn name() -> Option<Cow<'static, str>> {
-        let name = std::any::type_name::<Self>();
+        let name = core::any::type_name::<Self>();
         Some(
             name.split('<')
                 .next()
@@ -91,7 +91,7 @@ impl<C: Compose> Compose for Option<C> {
 /// This can be handled by a parent composable with [`Catch`].
 #[derive(Data)]
 pub struct Error {
-    make_error: Box<dyn Fn() -> Box<dyn std::error::Error>>,
+    make_error: Box<dyn Fn() -> Box<dyn core::error::Error>>,
 }
 
 impl Error {
@@ -483,7 +483,7 @@ where
     }
 
     unsafe fn reborrow(&mut self, ptr: *mut ()) {
-        std::ptr::swap(self, ptr as _);
+        core::ptr::swap(self, ptr as _);
     }
 
     unsafe fn any_compose(&self, state: &ScopeData) {

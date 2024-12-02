@@ -1,5 +1,5 @@
 use crate::{
-    composer::{Composer, Update, Updater},
+    composer::Composer,
     prelude::{Signal, *},
 };
 use bevy_app::{App, Plugin};
@@ -18,7 +18,7 @@ use std::{
     marker::PhantomData,
     mem, ptr,
     rc::Rc,
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 use tokio::sync::RwLockWriteGuard;
 
@@ -87,23 +87,8 @@ thread_local! {
     static RUNTIME_CONTEXT: RefCell<Option<RuntimeContext>> = const { RefCell::new(None) };
 }
 
-struct RuntimeUpdater {
-    tx: mpsc::Sender<Update>,
-}
-
-impl Updater for RuntimeUpdater {
-    fn update(&self, update: Update) {
-        self.tx.send(update).unwrap();
-    }
-}
-
-unsafe impl Send for RuntimeUpdater {}
-
-unsafe impl Sync for RuntimeUpdater {}
-
 struct RuntimeComposer {
     composer: Composer,
-    rx: mpsc::Receiver<Update>,
 }
 
 struct Runtime {
@@ -167,16 +152,11 @@ where
                 let target = composition.target.unwrap_or(entity);
 
                 let rt = world.non_send_resource_mut::<Runtime>();
-                let (tx, rx) = mpsc::channel();
 
                 rt.composers.borrow_mut().insert(
                     entity,
                     RuntimeComposer {
-                        composer: Composer::with_updater(
-                            CompositionContent { content, target },
-                            RuntimeUpdater { tx },
-                        ),
-                        rx,
+                        composer: Composer::new(CompositionContent { content, target }),
                     },
                 );
             });
@@ -237,12 +217,8 @@ fn compose(world: &mut World) {
     let rt = &mut *world.non_send_resource_mut::<Runtime>();
     let mut composers = rt.composers.borrow_mut();
     for rt_composer in composers.values_mut() {
-        while let Ok(update) = rt_composer.rx.try_recv() {
-            unsafe { update.apply() }
-        }
-
         // TODO handle composition error.
-        rt_composer.composer.compose().unwrap();
+        let _ = rt_composer.composer.try_compose();
     }
 }
 

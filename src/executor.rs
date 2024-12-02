@@ -1,4 +1,5 @@
-use std::{future::Future, pin::Pin, rc::Rc, sync::Arc};
+use alloc::{rc::Rc, sync::Arc};
+use core::{future::Future, pin::Pin};
 
 /// Executor for async tasks.
 pub trait Executor {

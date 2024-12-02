@@ -96,6 +96,8 @@
 //! ```
 //!
 //! ## Features
+//! - `std`: Enables features that use Rust's standard library (default).
+//!    With this feature disabled Actuate can be used in `#![no_std]` environments.
 //! - `animation`: Enables the `animation` module for animating values from the [Bevy](https://crates.io/crates/bevy) ECS.
 //!   (enables the `ecs` feature).
 //! - `ecs`: Enables the `ecs` module for bindings to the [Bevy](https://crates.io/crates/bevy) ECS.
@@ -108,22 +110,29 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use composer::Runtime;
-use std::{
+extern crate alloc;
+
+use ahash::AHasher;
+use alloc::rc::Rc;
+use core::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
-    collections::HashMap,
     fmt,
     future::Future,
-    hash::{Hash, Hasher},
+    hash::{BuildHasherDefault, Hash, Hasher},
     marker::PhantomData,
     mem,
     ops::Deref,
     pin::Pin,
     ptr::NonNull,
-    rc::Rc,
 };
 use thiserror::Error;
+
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
+
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
 /// Prelude of commonly used items.
 pub mod prelude {
@@ -161,6 +170,7 @@ use self::compose::{AnyCompose, Compose};
 
 /// Low-level composer.
 pub mod composer;
+use self::composer::Runtime;
 
 /// Data trait and derive macro.
 pub mod data;
@@ -328,7 +338,7 @@ impl<C: Compose> Compose for RefMap<'_, C> {
 
 /// Mapped immutable reference to a value of type `T`.
 ///
-/// This can be created with [`Ref::map`].
+/// This can be created with [`Signal::map`].
 pub struct Map<'a, T> {
     ptr: *const (),
     map_fn: *const (),
@@ -415,6 +425,13 @@ impl<T> Hash for Signal<'_, T> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct UnsafeWrap<T: ?Sized>(T);
+
+unsafe impl<T: ?Sized> Send for UnsafeWrap<T> {}
+
+unsafe impl<T: ?Sized> Sync for UnsafeWrap<T> {}
+
 /// Mutable reference to a value of type `T`.
 pub struct SignalMut<'a, T> {
     /// Pointer to the boxed value.
@@ -437,27 +454,31 @@ impl<'a, T: 'static> SignalMut<'a, T> {
     }
 
     /// Queue an update to this value, triggering an update to the component owning this value.
-    pub fn update(me: Self, f: impl FnOnce(&mut T) + 'static) {
-        let is_changed = me.scope_is_changed;
+    pub fn update(me: Self, f: impl FnOnce(&mut T) + Send + 'static) {
+        let is_changed = UnsafeWrap(me.scope_is_changed);
 
         Self::with(me, move |value| {
+            let is_changed = is_changed;
             // Set this scope as changed.
             // Safety: the pointer to this scope is guranteed to outlive `me`.
-            unsafe { (*is_changed).set(true) };
+            unsafe { (*is_changed.0).set(true) };
 
             f(value)
         })
     }
 
     /// Queue an update to this value, triggering an update to the component owning this value.
-    pub fn set(me: Self, value: T) {
+    pub fn set(me: Self, value: T)
+    where
+        T: Send,
+    {
         SignalMut::update(me, |x| *x = value)
     }
 
     /// Queue an update to this value if it is not equal to the given value.
     pub fn set_if_neq(me: Self, value: T)
     where
-        T: PartialEq,
+        T: PartialEq + Send,
     {
         if *me != value {
             SignalMut::set(me, value);
@@ -465,19 +486,23 @@ impl<'a, T: 'static> SignalMut<'a, T> {
     }
 
     /// Queue an update to this value wtihout triggering an update.
-    pub fn with(me: Self, f: impl FnOnce(&mut T) + 'static) {
-        let mut cell = Some(f);
-        let mut ptr = me.ptr;
-        let generation_ptr = me.generation;
+    pub fn with(me: Self, f: impl FnOnce(&mut T) + Send + 'static) {
+        let cell = UnsafeWrap(Some(f));
+        let ptr = UnsafeWrap(me.ptr);
+        let generation_ptr = UnsafeWrap(me.generation);
 
         Runtime::current().update(move || {
+            let mut cell = cell;
+            let mut ptr = ptr;
+            let generation_ptr = generation_ptr;
+
             // Safety: Updates are guaranteed to be called before any structural changes of the composition tree.
-            let value = unsafe { ptr.as_mut() };
-            cell.take().unwrap()(value);
+            let value = unsafe { ptr.0.as_mut() };
+            cell.0.take().unwrap()(value);
 
             // Increment the generation of this value.
             // Safety: the pointer to this scope's generation is guranteed to outlive `me`.
-            let generation = unsafe { &*generation_ptr };
+            let generation = unsafe { &*generation_ptr.0 };
             generation.set(generation.get() + 1)
         });
     }
@@ -554,7 +579,7 @@ impl_pointer!(Signal, Map, SignalMut);
 /// Map of [`TypeId`] to context values.
 #[derive(Clone, Default)]
 struct Contexts {
-    values: HashMap<TypeId, Rc<dyn Any>>,
+    values: HashMap<TypeId, Rc<dyn Any>, BuildHasherDefault<AHasher>>,
 }
 
 /// Scope state of a composable function.
@@ -602,7 +627,13 @@ impl ScopeData<'_> {
 
     /// Set this scope as changed during the next re-composition.
     pub fn set_changed(&self) {
-        self.is_changed.set(true)
+        let is_changed = UnsafeWrap(&self.is_changed as *const Cell<bool>);
+
+        Runtime::current().update(move || {
+            let is_changed = is_changed;
+            let is_changed = unsafe { &*is_changed.0 };
+            is_changed.set(true);
+        });
     }
 
     /// Returns `true` if an ancestor to this scope is changed.
@@ -759,7 +790,7 @@ pub struct ContextError<T> {
 impl<T> fmt::Debug for ContextError<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("ContextError")
-            .field(&std::any::type_name::<T>())
+            .field(&core::any::type_name::<T>())
             .finish()
     }
 }
@@ -768,7 +799,7 @@ impl<T> fmt::Display for ContextError<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&format!(
             "Context value not found for type: {}",
-            std::any::type_name::<T>()
+            core::any::type_name::<T>()
         ))
     }
 }
@@ -898,7 +929,8 @@ where
 pub fn use_memo<D, T>(cx: ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Signal<T>
 where
     D: Memoize,
-    T: 'static,
+    D::Value: Send,
+    T: Send + 'static,
 {
     let mut dependency_cell = Some(dependency.memoized());
 
@@ -970,7 +1002,7 @@ where
 
         let rt = Runtime::current();
         let key = rt.tasks.borrow_mut().insert(task);
-        rt.task_tx.send(key).unwrap();
+        rt.task_queue.push(key);
         key
     });
 
@@ -984,7 +1016,7 @@ type BoxedFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 #[cfg(feature = "executor")]
 struct TaskFuture {
-    task: std::sync::Arc<std::sync::Mutex<Option<BoxedFuture>>>,
+    task: alloc::sync::Arc<std::sync::Mutex<Option<BoxedFuture>>>,
     rt: Runtime,
 }
 

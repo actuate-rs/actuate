@@ -17,10 +17,10 @@ struct State<T> {
 }
 
 /// Use an animated value.
-pub fn use_animated<T: VectorSpace + 'static>(
-    cx: ScopeState,
-    make_initial: impl FnOnce() -> T,
-) -> UseAnimated<T> {
+pub fn use_animated<T>(cx: ScopeState, make_initial: impl FnOnce() -> T) -> UseAnimated<T>
+where
+    T: VectorSpace + Send + 'static,
+{
     let start_cell = use_world_once(cx, |time: Res<Time>| Cell::new(Some(time.elapsed_secs())));
 
     let (controller, rx) = use_ref(cx, || {
