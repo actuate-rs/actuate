@@ -1,6 +1,7 @@
 //! # Actuate
 //! A high-performance and borrow-checker friendly framework for declarative programming in Rust.
-//! This crate provides a generic library that lets you define reactive components (also known as composables).
+//! This crate provides a generic library that lets you define reactive components
+//! (also known as composables, for more see [`Compose`]).
 //!
 //! ```no_run
 //! use actuate::prelude::*;
@@ -95,10 +96,13 @@
 //! ```
 //!
 //! ## Features
-//! - `event-loop`: Enables the `event_loop` module for access to the system event loop.
-//! - `rt`: Enables the `rt` module for running async tasks on the Tokio runtime.
+//! - `animation`: Enables the `animation` module for animating values from the [Bevy](https://crates.io/crates/bevy) ECS.
+//!   (enables the `ecs` feature).
+//! - `ecs`: Enables the `ecs` module for bindings to the [Bevy](https://crates.io/crates/bevy) ECS.
+//! - `executor`: Enables the `executor` module for multi-threaded tasks.
+//! - `rt` Enables support for the [Tokio](https://crates.io/crates/tokio) runtime with the Executor trait.
+//!   (enables the `executor` feature).
 //! - `tracing`: Enables the `tracing` module for logging.
-//! - `ui`: Enables the `ui` module for building user interfaces.
 //! - `full`: Enables all features above.
 
 #![deny(missing_docs)]
@@ -178,7 +182,7 @@ pub mod executor;
 /// A borrowed value is stored as a [`RefMap`], which can be either a reference or a mapped reference.
 #[derive(Debug)]
 pub enum Cow<'a, T> {
-    /// Borrowed value, contained inside either a [`Ref`] or [`Map`].
+    /// Borrowed value, contained inside either a [`Signal`] or [`Map`].
     Borrowed(RefMap<'a, T>),
     /// Owned value.
     Owned(T),
@@ -615,7 +619,7 @@ pub struct Scope<'a, C> {
 }
 
 impl<'a, C> Scope<'a, C> {
-    /// Get a [`Ref`] to this composable.
+    /// Get a [`Signal`] to this composable.
     pub fn me(self) -> Signal<'a, C> {
         Signal {
             value: self.me,
@@ -782,8 +786,8 @@ pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() ->
 ///
 /// This is implemented for `T: PartialEq + 'static` by default.
 /// As well as:
-/// - [`Ref`]
-/// - [`Mut`]
+/// - [`Signal`]
+/// - [`SignalMut`]
 /// - [`Map`]
 /// - [`RefMap`]
 /// - [`Cow`]
