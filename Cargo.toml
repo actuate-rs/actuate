@@ -55,6 +55,10 @@ name = "composer"
 path = "examples/core/composer.rs"
 
 [[example]]
+name = "dynamic"
+path = "examples/core/dynamic.rs"
+
+[[example]]
 name = "error_handling"
 path = "examples/core/error_handling.rs"
 

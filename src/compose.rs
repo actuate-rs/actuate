@@ -390,7 +390,8 @@ impl Compose for DynCompose<'_> {
 
         let inner = unsafe { &mut *cx.me().compose.get() };
 
-        let child_state = use_ref(&cx, ScopeData::default);
+        let child_state = use_ref(&cx, || UnsafeCell::new(ScopeData::default()));
+        let child_state = unsafe { &mut *child_state.get() };
 
         *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
         child_state
@@ -408,13 +409,13 @@ impl Compose for DynCompose<'_> {
 
             if let Some(state) = cell {
                 if state.data_id != compose.data_id() {
-                    todo!()
-                }
-
-                let ptr = (*state.compose).as_ptr_mut();
-
-                unsafe {
-                    compose.reborrow(ptr);
+                    *child_state = ScopeData::default();
+                    state.compose = compose;
+                } else {
+                    let ptr = (*state.compose).as_ptr_mut();
+                    unsafe {
+                        compose.reborrow(ptr);
+                    }
                 }
             } else {
                 *cell = Some(DynComposeState {
