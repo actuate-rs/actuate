@@ -19,7 +19,6 @@ use std::{
     rc::Rc,
     sync::{Arc, Mutex},
 };
-use tokio::sync::RwLockWriteGuard;
 
 macro_rules! impl_trait_for_tuples {
     ($t:tt) => {
@@ -42,7 +41,6 @@ impl Plugin for ActuatePlugin {
     fn build(&self, app: &mut App) {
         let rt = Runtime {
             composers: RefCell::new(HashMap::new()),
-            lock: None,
         };
 
         app.insert_non_send_resource(rt)
@@ -92,7 +90,6 @@ struct RuntimeComposer {
 
 struct Runtime {
     composers: RefCell<HashMap<Entity, RuntimeComposer>>,
-    lock: Option<RwLockWriteGuard<'static, ()>>,
 }
 
 /// Composition of some composable content.
@@ -180,9 +177,6 @@ impl<C: Compose> Compose for CompositionContent<C> {
 }
 
 fn compose(world: &mut World) {
-    let mut rt = world.non_send_resource_mut::<Runtime>();
-    rt.lock = None;
-
     RUNTIME_CONTEXT.with(|runtime_cx| {
         let mut cell = runtime_cx.borrow_mut();
         let runtime_cx = cell.get_or_insert_with(|| RuntimeContext {
