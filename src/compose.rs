@@ -138,7 +138,7 @@ impl<C: Compose> Compose for Result<C, Error> {
 }
 
 /// Create a composable from an iterator.
-/// 
+///
 /// `make_item` will be called for each item to produce a composable.
 pub fn from_iter<'a, I, C>(
     iter: I,
@@ -183,7 +183,7 @@ impl CatchContext {
 }
 
 /// Create a composable that catches errors from its children.
-/// 
+///
 /// If a child returns a `Result<T, actuate::Error>`,
 /// any errors will be caught by this composable by calling `on_error`.
 pub fn catch<'a, C: Compose>(
@@ -197,7 +197,7 @@ pub fn catch<'a, C: Compose>(
 }
 
 /// Error catch composable.
-/// 
+///
 /// See [`catch`] for more.
 #[derive(Data)]
 pub struct Catch<'a, C> {
