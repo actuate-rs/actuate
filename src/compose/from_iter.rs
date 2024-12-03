@@ -41,20 +41,10 @@ where
                         compose: None,
                         scope: ScopeData::default(),
                     };
-                    let mut state = Box::new(state);
 
-                    let item_ref: &Item = &state.item;
-                    let item_ref: &Item = unsafe { mem::transmute(item_ref) };
-                    let compose = (cx.me().make_item)(Signal {
-                        value: item_ref,
-                        generation: &cx.generation as _,
-                    });
-                    let any_compose: Box<dyn AnyCompose> = Box::new(compose);
-                    let any_compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
-
-                    state.compose = Some(any_compose);
-
+                    let state = Box::new(state);
                     let boxed: Box<()> = unsafe { mem::transmute(state) };
+
                     states.push(AnyItemState {
                         boxed: Some(boxed),
                         drop: |any_state| {
@@ -69,9 +59,22 @@ where
             }
         }
 
-        for state in states.iter() {
-            let state: &ItemState<Item> =
-                unsafe { mem::transmute(state.boxed.as_deref().unwrap()) };
+        for state in &mut *states {
+            let state: &mut ItemState<Item> =
+                unsafe { mem::transmute(state.boxed.as_deref_mut().unwrap()) };
+
+            if state.compose.is_none() || cx.is_parent_changed() {
+                let item_ref: &Item = &state.item;
+                let item_ref: &Item = unsafe { mem::transmute(item_ref) };
+                let compose = (cx.me().make_item)(Signal {
+                    value: item_ref,
+                    generation: &cx.generation as _,
+                });
+                let any_compose: Box<dyn AnyCompose> = Box::new(compose);
+                let any_compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
+
+                state.compose = Some(any_compose);
+            }
 
             *state.scope.contexts.borrow_mut() = cx.contexts.borrow().clone();
             state
