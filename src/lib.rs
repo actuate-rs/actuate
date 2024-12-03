@@ -837,7 +837,7 @@ impl<T> fmt::Display for ContextError<T> {
 ///
 /// This context must have already been provided by a parent composable with [`use_provider`],
 /// otherwise this function will return a [`ContextError`].
-pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a Rc<T>, ContextError<T>> {
+pub fn use_context<T: 'static>(cx: ScopeState) -> Result<&Rc<T>, ContextError<T>> {
     let result = use_ref(cx, || {
         let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
             return Err(ContextError {
