@@ -354,9 +354,16 @@ impl<T> Deref for Map<'_, T> {
     }
 }
 
-// Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
-// an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
-impl<C: Compose> Compose for Map<'_, C> {
+/// Unchecked, mapped immutable reference to a value of type `T`.
+///
+/// This can be created with [`Signal::map_unchecked`].
+pub struct MapUnchecked<'a, T> {
+    map: Map<'a, T>,
+}
+
+unsafe impl<T> Data for MapUnchecked<'_, T> {}
+
+impl<C: Compose> Compose for MapUnchecked<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         cx.is_container.set(true);
 
@@ -368,7 +375,9 @@ impl<C: Compose> Compose for Map<'_, C> {
 
         state.is_parent_changed.set(cx.is_parent_changed.get());
 
-        unsafe { (**cx.me()).any_compose(state) }
+        // Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
+        // an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
+        unsafe { (*cx.me().map).any_compose(state) }
     }
 }
 
@@ -406,6 +415,18 @@ impl<'a, T> Signal<'a, T> {
                 }
             },
             generation: me.generation,
+        }
+    }
+
+    /// Unsafely map this reference to a value of type `U`.
+    /// The returned `MapUnchecked` implements `Compose` to allow for borrowed child composables.
+    ///
+    /// # Safety
+    /// The returned `MapUnchecked` must only be returned once.
+    /// Composing the same `MapUnchecked` at multiple locations in the tree at the same time will result in undefined behavior.
+    pub unsafe fn map_unchecked<U>(me: Self, f: fn(&T) -> &U) -> MapUnchecked<'a, U> {
+        MapUnchecked {
+            map: Signal::map(me, f),
         }
     }
 }

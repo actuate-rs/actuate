@@ -211,7 +211,7 @@ impl<C: Compose> Compose for Catch<'_, C> {
         let f: &dyn Fn(Box<dyn StdError>) = unsafe { mem::transmute(f) };
         use_provider(&cx, move || CatchContext { f: Box::new(f) });
 
-        Signal::map(cx.me(), |me| &me.content)
+        unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
     }
 }
 
@@ -349,7 +349,7 @@ where
             cx.is_parent_changed.set(true);
         }
 
-        Signal::map(cx.me(), |me| &me.content)
+        unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
     }
 
     fn name() -> Option<Cow<'static, str>> {

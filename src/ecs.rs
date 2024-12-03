@@ -175,7 +175,7 @@ impl<C: Compose> Compose for CompositionContent<C> {
             parent_entity: cx.me().target,
         });
 
-        Signal::map(cx.me(), |me| &me.content)
+        unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
     }
 }
 
@@ -618,7 +618,7 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             *guard.lock().unwrap() = false;
         });
 
-        Signal::map(cx.me(), |me| &me.content)
+        unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
     }
 }
 
