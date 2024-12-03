@@ -1,6 +1,6 @@
 [package]
 name = "actuate"
-version = "0.14.0"
+version = "0.14.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
@@ -10,7 +10,7 @@ repository = "https://github.com/actuate-rs/actuate"
 animation = ["ecs", "dep:bevy_math", "dep:bevy_time"]
 ecs = ["dep:bevy_app", "dep:bevy_ecs", "dep:bevy_hierarchy", "dep:bevy_utils"]
 executor = ["std", "dep:tokio"]
-rt = ["executor", "tokio/rt-multi-thread"]
+rt = ["executor", "dep:tokio"]
 std = []
 tracing = ["dep:tracing"]
 full = ["animation", "ecs", "rt", "tracing"]
@@ -37,7 +37,7 @@ hashbrown = "0.15.2"
 slotmap = "1.0.7"
 thiserror = "2.0.3"
 tracing = { version = "0.1.40", optional = true }
-tokio = { version = "1.41.1", features = ["sync"], optional = true }
+tokio = { version = "1.41.1", features = ["rt-multi-thread"], optional = true }
 typeid = "1.0.2"
 
 [dev-dependencies]
