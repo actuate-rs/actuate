@@ -512,12 +512,12 @@ where
         // Safety: This cell is only accessed by this composable.
         let cell = unsafe { &mut *cell.get() };
 
-        // Scope for this composable's content.
-        let child_state = use_ref(&cx, ScopeData::default);
-
         if typeid::of::<C>() == typeid::of::<()>() {
             return;
         }
+
+        // Scope for this composable's content.
+        let child_state = use_ref(&cx, ScopeData::default);
 
         if cell.is_none()
             || cx.is_changed.take()
