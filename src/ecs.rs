@@ -161,6 +161,7 @@ where
 }
 
 #[derive(Data)]
+#[actuate(path = "crate")]
 struct CompositionContent<C> {
     content: C,
     target: Entity,

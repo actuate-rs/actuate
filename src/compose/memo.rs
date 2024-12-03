@@ -22,6 +22,7 @@ where
 ///
 /// See [`memo`] for more.
 #[derive(Data)]
+#[actuate(path = "crate")]
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct Memo<T, C> {
     dependency: T,

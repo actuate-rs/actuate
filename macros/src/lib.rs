@@ -2,15 +2,29 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, token::Comma, Data, DeriveInput,
-    GenericParam, ItemTrait, TypeParamBound,
+    GenericParam, ItemTrait, MetaNameValue, TypeParamBound,
 };
 
-#[proc_macro_derive(Data)]
+#[proc_macro_derive(Data, attributes(actuate))]
 pub fn derive_data(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let ident = &input.ident;
 
     let generics = &input.generics;
+
+    let mut cell = None;
+    if let Some(attr) = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("actuate"))
+    {
+        let args: MetaNameValue = attr.parse_args().unwrap();
+        if args.path.get_ident().unwrap().to_string() == "path" {
+            let value = args.value.to_token_stream().to_string();
+            cell = Some(format_ident!("{}", &value[1..value.len() - 1]));
+        }
+    }
+    let actuate = cell.unwrap_or(format_ident!("actuate"));
 
     let generic_params: Punctuated<_, Comma> = generics
         .params
@@ -21,7 +35,7 @@ pub fn derive_data(input: TokenStream) -> TokenStream {
                 let ident = &type_param.ident;
 
                 let mut bounds = type_param.bounds.clone();
-                bounds.push(parse_quote!(Data));
+                bounds.push(parse_quote!(#actuate::data::Data));
 
                 quote! {
                     #ident: #bounds
@@ -61,7 +75,7 @@ pub fn derive_data(input: TokenStream) -> TokenStream {
         #( #checks )*
 
         #[doc(hidden)]
-        unsafe impl <#generic_params> Data for #ident <#generic_ty_params> {}
+        unsafe impl <#generic_params> #actuate::data::Data for #ident <#generic_ty_params> {}
     };
     gen.into()
 }
@@ -95,7 +109,7 @@ pub fn data(_attrs: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         #item
 
-        unsafe impl Data for Box<dyn #ident + '_> {}
+        unsafe impl actuate::data::Data for Box<dyn #ident + '_> {}
     }
     .into()
 }

@@ -102,6 +102,7 @@ impl<C: Compose> Compose for Option<C> {
 ///
 /// This can be handled by a parent composable with [`Catch`].
 #[derive(Data)]
+#[actuate(path = "crate")]
 pub struct Error {
     make_error: Box<dyn Fn() -> Box<dyn core::error::Error>>,
 }

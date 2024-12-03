@@ -20,6 +20,7 @@ pub fn catch<'a, C: Compose>(
 ///
 /// See [`catch`] for more.
 #[derive(Data)]
+#[actuate(path = "crate")]
 pub struct Catch<'a, C> {
     content: C,
     f: Box<dyn Fn(Box<dyn StdError>) + 'a>,

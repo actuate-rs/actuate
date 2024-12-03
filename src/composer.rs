@@ -209,6 +209,7 @@ mod tests {
     };
 
     #[derive(Data)]
+    #[actuate(path = "crate")]
     struct Counter {
         x: Rc<Cell<i32>>,
     }
@@ -222,6 +223,7 @@ mod tests {
     }
 
     #[derive(Data)]
+    #[actuate(path = "crate")]
     struct NonUpdateCounter {
         x: Rc<Cell<i32>>,
     }
@@ -235,6 +237,7 @@ mod tests {
     #[test]
     fn it_composes() {
         #[derive(Data)]
+        #[actuate(path = "crate")]
         struct Wrap {
             x: Rc<Cell<i32>>,
         }
@@ -260,6 +263,7 @@ mod tests {
     #[test]
     fn it_skips_recomposes() {
         #[derive(Data)]
+        #[actuate(path = "crate")]
         struct Wrap {
             x: Rc<Cell<i32>>,
         }
@@ -285,6 +289,7 @@ mod tests {
     #[test]
     fn it_composes_any_compose() {
         #[derive(Data)]
+        #[actuate(path = "crate")]
         struct Wrap {
             x: Rc<Cell<i32>>,
         }
@@ -310,6 +315,7 @@ mod tests {
     #[test]
     fn it_memoizes_composables() {
         #[derive(Data)]
+        #[actuate(path = "crate")]
         struct B {
             x: Rc<RefCell<i32>>,
         }
@@ -321,6 +327,7 @@ mod tests {
         }
 
         #[derive(Data)]
+        #[actuate(path = "crate")]
         struct A {
             x: Rc<RefCell<i32>>,
         }
