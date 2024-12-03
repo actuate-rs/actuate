@@ -1,6 +1,8 @@
-use crate::{prelude::*, ScopeData};
+use crate::{
+    compose::{AnyCompose, CatchContext, Compose},
+    ScopeData,
+};
 use alloc::{rc::Rc, sync::Arc, task::Wake};
-use compose::{AnyCompose, CatchContext};
 use core::{
     any::TypeId,
     cell::{Cell, RefCell},

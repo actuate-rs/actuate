@@ -138,7 +138,7 @@ use std::collections::HashMap;
 pub mod prelude {
     pub use crate::{
         compose::{self, catch, dyn_compose, memo, Compose, DynCompose, Error, Memo},
-        data::{data, Data, DataField, FieldWrap, FnField, StaticField},
+        data::{data, Data},
         use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
         use_ref, Cow, Map, RefMap, Scope, ScopeState, Signal, SignalMut,
     };

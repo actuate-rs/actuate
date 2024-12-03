@@ -1,5 +1,5 @@
 use super::AnyCompose;
-use crate::{prelude::*, ScopeData};
+use crate::{compose::Compose, use_ref, Scope, ScopeData};
 use core::{any::TypeId, cell::UnsafeCell, mem};
 
 /// Create a new dynamically-typed composable.

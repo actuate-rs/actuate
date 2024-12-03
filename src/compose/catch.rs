@@ -1,5 +1,5 @@
 use super::CatchContext;
-use crate::prelude::*;
+use crate::{compose::Compose, data::Data, use_provider, Scope, Signal};
 use core::{error::Error as StdError, mem};
 
 /// Create a composable that catches errors from its children.

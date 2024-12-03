@@ -66,6 +66,8 @@ pub fn derive_data(input: TokenStream) -> TokenStream {
            #[doc(hidden)]
            #[allow(non_snake_case)]
            fn #check_ident <#generic_params> (t: #ident <#generic_ty_params>) {
+                use #actuate::data::{FieldWrap, DataField, FnField, StaticField};
+
                 (&&FieldWrap(t.#field_ident)).check()
            }
         }

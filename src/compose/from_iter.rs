@@ -1,5 +1,5 @@
 use super::AnyCompose;
-use crate::{prelude::*, ScopeData};
+use crate::{compose::Compose, data::Data, use_ref, Scope, ScopeData, Signal};
 use core::{cell::RefCell, mem};
 
 /// Composable from an iterator, created with [`from_iter`].
