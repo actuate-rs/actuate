@@ -96,6 +96,22 @@ impl Wake for TaskWaker {
     }
 }
 
+/// Error for [`Composer::try_compose`].
+#[derive(Debug)]
+pub enum TryComposeError {
+    /// No updates are ready to be applied.
+    Pending,
+
+    /// An error occurred during composition.
+    Error(Box<dyn Error>),
+}
+
+impl PartialEq for TryComposeError {
+    fn eq(&self, other: &Self) -> bool {
+        core::mem::discriminant(self) == core::mem::discriminant(other)
+    }
+}
+
 /// Composer for composable content.
 pub struct Composer {
     compose: Box<dyn AnyCompose>,
@@ -134,7 +150,7 @@ impl Composer {
     }
 
     /// Try to immediately compose the content in this composer.
-    pub fn try_compose(&mut self) -> Option<Result<(), Box<dyn Error>>> {
+    pub fn try_compose(&mut self) -> Result<(), TryComposeError> {
         self.rt.enter();
 
         let error_cell = Rc::new(Cell::new(None));
@@ -170,7 +186,7 @@ impl Composer {
             }
 
             if !is_ready {
-                return None;
+                return Err(TryComposeError::Pending);
             }
         } else {
             self.is_initial = false;
@@ -182,17 +198,20 @@ impl Composer {
         // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
         unsafe { self.compose.any_compose(&self.scope_state) };
 
-        Some(error_cell.take().map(Err).unwrap_or(Ok(())))
+        error_cell
+            .take()
+            .map(|error| Err(TryComposeError::Error(error)))
+            .unwrap_or_else(|| Ok(()))
     }
 
     /// Poll a composition of the content in this composer.
     pub fn poll_compose(&mut self, cx: &mut Context) -> Poll<Result<(), Box<dyn Error>>> {
         *self.rt.waker.borrow_mut() = Some(cx.waker().clone());
 
-        if let Some(result) = self.try_compose() {
-            Poll::Ready(result)
-        } else {
-            Poll::Pending
+        match self.try_compose() {
+            Ok(()) => Poll::Ready(Ok(())),
+            Err(TryComposeError::Pending) => Poll::Pending,
+            Err(TryComposeError::Error(error)) => Poll::Ready(Err(error)),
         }
     }
 
@@ -204,7 +223,10 @@ impl Composer {
 
 #[cfg(all(test, feature = "rt"))]
 mod tests {
-    use crate::{composer::Composer, prelude::*};
+    use crate::{
+        composer::{Composer, TryComposeError},
+        prelude::*,
+    };
     use std::{
         cell::{Cell, RefCell},
         rc::Rc,
@@ -255,10 +277,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.try_compose().unwrap().unwrap();
+        composer.try_compose().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.try_compose().unwrap().unwrap();
+        composer.try_compose().unwrap();
         assert_eq!(x.get(), 2);
     }
 
@@ -281,10 +303,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.try_compose().unwrap().unwrap();
+        composer.try_compose().unwrap();
         assert_eq!(x.get(), 1);
 
-        assert!(composer.try_compose().is_none());
+        assert_eq!(composer.try_compose(), Err(TryComposeError::Pending));
         assert_eq!(x.get(), 1);
     }
 
@@ -307,10 +329,10 @@ mod tests {
         let x = Rc::new(Cell::new(0));
         let mut composer = Composer::new(Wrap { x: x.clone() });
 
-        composer.try_compose().unwrap().unwrap();
+        composer.try_compose().unwrap();
         assert_eq!(x.get(), 1);
 
-        composer.try_compose().unwrap().unwrap();
+        composer.try_compose().unwrap();
         assert_eq!(x.get(), 2);
     }
 
@@ -344,10 +366,10 @@ mod tests {
         let x = Rc::new(RefCell::new(0));
         let mut composer = Composer::new(A { x: x.clone() });
 
-        composer.try_compose().unwrap().unwrap();
+        composer.try_compose().unwrap();
         assert_eq!(*x.borrow(), 1);
 
-        assert!(composer.try_compose().is_none());
+        assert_eq!(composer.try_compose(), Err(TryComposeError::Pending));
         assert_eq!(*x.borrow(), 1);
     }
 }

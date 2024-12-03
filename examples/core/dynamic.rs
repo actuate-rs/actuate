@@ -48,6 +48,6 @@ fn main() {
 
     let mut composer = Composer::new(App);
     for _ in 0..3 {
-        composer.try_compose().unwrap().unwrap();
+        composer.try_compose().unwrap();
     }
 }

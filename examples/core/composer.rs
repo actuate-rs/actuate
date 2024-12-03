@@ -1,6 +1,9 @@
 // Example using the core `Composer` struct.
 
-use actuate::{composer::Composer, prelude::*};
+use actuate::{
+    composer::{Composer, TryComposeError},
+    prelude::*,
+};
 
 #[derive(Data)]
 struct A;
@@ -32,7 +35,7 @@ fn main() {
     .unwrap();
 
     let mut composer = Composer::new(App);
-    composer.try_compose().unwrap().unwrap();
+    composer.try_compose().unwrap();
 
-    assert!(composer.try_compose().is_none());
+    assert_eq!(composer.try_compose(), Err(TryComposeError::Pending));
 }
