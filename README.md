@@ -26,7 +26,7 @@ A high-performance and borrow-checker friendly framework for declarative program
 This crate provides a generic library that lets you define reactive components (also known as composables).
 
 ## Features
-- Declarative and reactive scenes for [Bevy](https://github.com/bevyengine/bevy)
+- Declarative scenes and UI for [Bevy](https://github.com/bevyengine/bevy)
 - Efficient and borrow-checker friendly state management: Manage state with components and hooks, all using zero-cost smart pointers
 - Generic core for custom backends
 
