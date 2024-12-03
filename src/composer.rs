@@ -291,7 +291,7 @@ mod tests {
 
         impl Compose for Wrap {
             fn compose(cx: crate::Scope<Self>) -> impl Compose {
-                DynCompose::new(Counter {
+                dyn_compose(Counter {
                     x: cx.me().x.clone(),
                 })
             }

@@ -30,9 +30,9 @@ impl Compose for App {
         SignalMut::update(count, |x| *x += 1);
 
         if *count == 0 {
-            DynCompose::new(A)
+            dyn_compose(A)
         } else {
-            DynCompose::new(B)
+            dyn_compose(B)
         }
     }
 }

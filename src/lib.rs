@@ -137,7 +137,7 @@ use std::collections::HashMap;
 /// Prelude of commonly used items.
 pub mod prelude {
     pub use crate::{
-        compose::{self, catch, memo, Compose, DynCompose, Error, Memo},
+        compose::{self, catch, memo, Compose, DynCompose, Error, Memo,dyn_compose},
         data::{data, Data, DataField, FieldWrap, FnField, StaticField},
         use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
         use_ref, Cow, Map, RefMap, Scope, ScopeState, Signal, SignalMut,

@@ -7,6 +7,18 @@ use core::{
     mem,
 };
 
+mod catch;
+pub use self::catch::{catch, Catch};
+
+mod dyn_compose;
+pub use self::dyn_compose::{dyn_compose, DynCompose};
+
+mod from_iter;
+pub use self::from_iter::{from_iter, FromIter};
+
+mod memo;
+pub use self::memo::{memo, Memo};
+
 /// A composable function.
 ///
 /// For a dynamically-typed composable, see [`DynCompose`].
@@ -137,41 +149,6 @@ impl<C: Compose> Compose for Result<C, Error> {
     }
 }
 
-/// Create a composable from an iterator.
-///
-/// `make_item` will be called for each item to produce a composable.
-pub fn from_iter<'a, I, C>(
-    iter: I,
-    make_item: impl Fn(Signal<'a, I::Item>) -> C + 'a,
-) -> FromIter<'a, I, I::Item, C>
-where
-    I: IntoIterator + Clone + Data,
-    I::Item: Data,
-    C: Compose,
-{
-    FromIter {
-        iter,
-        make_item: Box::new(make_item),
-    }
-}
-
-struct ItemState<T> {
-    item: T,
-    compose: Option<Box<dyn AnyCompose>>,
-    scope: ScopeData<'static>,
-}
-
-struct AnyItemState {
-    boxed: Option<Box<()>>,
-    drop: fn(&mut Self),
-}
-
-impl Drop for AnyItemState {
-    fn drop(&mut self) {
-        (self.drop)(self)
-    }
-}
-
 pub(crate) struct CatchContext {
     f: Box<dyn Fn(Box<dyn StdError>)>,
 }
@@ -179,253 +156,6 @@ pub(crate) struct CatchContext {
 impl CatchContext {
     pub(crate) fn new(f: impl Fn(Box<dyn StdError>) + 'static) -> Self {
         Self { f: Box::new(f) }
-    }
-}
-
-/// Create a composable that catches errors from its children.
-///
-/// If a child returns a `Result<T, actuate::Error>`,
-/// any errors will be caught by this composable by calling `on_error`.
-pub fn catch<'a, C: Compose>(
-    on_error: impl Fn(Box<dyn StdError>) + 'a,
-    content: C,
-) -> Catch<'a, C> {
-    Catch {
-        content,
-        f: Box::new(on_error),
-    }
-}
-
-/// Error catch composable.
-///
-/// See [`catch`] for more.
-#[derive(Data)]
-pub struct Catch<'a, C> {
-    content: C,
-    f: Box<dyn Fn(Box<dyn StdError>) + 'a>,
-}
-
-impl<C: Compose> Compose for Catch<'_, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        let f: &dyn Fn(Box<dyn StdError>) = &*cx.me().f;
-        let f: &dyn Fn(Box<dyn StdError>) = unsafe { mem::transmute(f) };
-        use_provider(&cx, move || CatchContext { f: Box::new(f) });
-
-        unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
-    }
-}
-
-/// Composable from an iterator, created with [`from_iter`].
-#[must_use = "Composables do nothing unless composed or returned from other composables."]
-pub struct FromIter<'a, I, Item, C> {
-    iter: I,
-    make_item: Box<dyn Fn(Signal<'a, Item>) -> C + 'a>,
-}
-
-unsafe impl<I, Item, C> Data for FromIter<'_, I, Item, C>
-where
-    I: Data,
-    Item: Data,
-    C: Data,
-{
-}
-
-impl<I, Item, C> Compose for FromIter<'_, I, Item, C>
-where
-    I: IntoIterator<Item = Item> + Clone + Data,
-    Item: Data,
-    C: Compose,
-{
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
-        let states: &RefCell<Vec<AnyItemState>> = use_ref(&cx, || RefCell::new(Vec::new()));
-        let mut states = states.borrow_mut();
-
-        if cx.is_parent_changed() {
-            let mut items: Vec<Option<_>> = cx.me().iter.clone().into_iter().map(Some).collect();
-
-            if items.len() >= states.len() {
-                for item in &mut items[states.len()..] {
-                    let item = item.take().unwrap();
-
-                    let state = ItemState {
-                        item,
-                        compose: None,
-                        scope: ScopeData::default(),
-                    };
-                    let mut state = Box::new(state);
-
-                    let item_ref: &Item = &state.item;
-                    let item_ref: &Item = unsafe { mem::transmute(item_ref) };
-                    let compose = (cx.me().make_item)(Signal {
-                        value: item_ref,
-                        generation: &cx.generation as _,
-                    });
-                    let any_compose: Box<dyn AnyCompose> = Box::new(compose);
-                    let any_compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
-
-                    state.compose = Some(any_compose);
-
-                    let boxed: Box<()> = unsafe { mem::transmute(state) };
-                    states.push(AnyItemState {
-                        boxed: Some(boxed),
-                        drop: |any_state| {
-                            let state: Box<ItemState<Item>> =
-                                unsafe { mem::transmute(any_state.boxed.take().unwrap()) };
-                            drop(state);
-                        },
-                    });
-                }
-            } else {
-                states.truncate(items.len());
-            }
-        }
-
-        for state in states.iter() {
-            let state: &ItemState<Item> =
-                unsafe { mem::transmute(state.boxed.as_deref().unwrap()) };
-
-            *state.scope.contexts.borrow_mut() = cx.contexts.borrow().clone();
-            state
-                .scope
-                .contexts
-                .borrow_mut()
-                .values
-                .extend(cx.child_contexts.borrow().values.clone());
-
-            state
-                .scope
-                .is_parent_changed
-                .set(cx.is_parent_changed.get());
-
-            let compose = state.compose.as_ref().unwrap();
-            unsafe { compose.any_compose(&state.scope) }
-        }
-    }
-}
-
-/// Create a new memoized composable.
-///
-/// The content of the memoized composable is only re-composed when the dependency changes.
-///
-/// Children of this `Memo` may still be re-composed if their state has changed.
-pub fn memo<D, C>(dependency: D, content: C) -> Memo<D, C>
-where
-    D: Data + Clone + PartialEq + 'static,
-    C: Compose,
-{
-    Memo {
-        dependency,
-        content,
-    }
-}
-
-/// Memoized composable.
-///
-/// See [`memo`] for more.
-#[derive(Data)]
-#[must_use = "Composables do nothing unless composed or returned from other composables."]
-pub struct Memo<T, C> {
-    dependency: T,
-    content: C,
-}
-
-impl<T, C> Compose for Memo<T, C>
-where
-    T: Clone + Data + PartialEq + 'static,
-    C: Compose,
-{
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        let last = use_ref(&cx, RefCell::default);
-        let mut last = last.borrow_mut();
-        if let Some(last) = &mut *last {
-            if cx.me().dependency != *last {
-                *last = cx.me().dependency.clone();
-                cx.is_parent_changed.set(true);
-            }
-        } else {
-            *last = Some(cx.me().dependency.clone());
-            cx.is_parent_changed.set(true);
-        }
-
-        unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
-    }
-
-    fn name() -> Option<Cow<'static, str>> {
-        Some(
-            C::name()
-                .map(|name| format!("Memo<{}>", name).into())
-                .unwrap_or("Memo".into()),
-        )
-    }
-}
-
-/// Dynamically-typed composable.
-#[must_use = "Composables do nothing unless composed or returned from other composables."]
-pub struct DynCompose<'a> {
-    compose: UnsafeCell<Option<Box<dyn AnyCompose + 'a>>>,
-}
-
-impl<'a> DynCompose<'a> {
-    /// Create a new dynamically-typed composable.
-    pub fn new(content: impl Compose + 'a) -> Self {
-        Self {
-            compose: UnsafeCell::new(Some(Box::new(content))),
-        }
-    }
-}
-
-struct DynComposeState {
-    compose: Box<dyn AnyCompose>,
-    data_id: TypeId,
-}
-
-impl Compose for DynCompose<'_> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
-        let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
-        let cell = unsafe { &mut *cell.get() };
-
-        let inner = unsafe { &mut *cx.me().compose.get() };
-
-        let child_state = use_ref(&cx, || UnsafeCell::new(ScopeData::default()));
-        let child_state = unsafe { &mut *child_state.get() };
-
-        *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
-        child_state
-            .contexts
-            .borrow_mut()
-            .values
-            .extend(cx.child_contexts.borrow().values.clone());
-
-        child_state
-            .is_parent_changed
-            .set(cx.is_parent_changed.get());
-
-        if let Some(any_compose) = inner.take() {
-            let mut compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
-
-            if let Some(state) = cell {
-                if state.data_id != compose.data_id() {
-                    *child_state = ScopeData::default();
-                    state.compose = compose;
-                } else {
-                    let ptr = (*state.compose).as_ptr_mut();
-                    unsafe {
-                        compose.reborrow(ptr);
-                    }
-                }
-            } else {
-                *cell = Some(DynComposeState {
-                    data_id: compose.data_id(),
-                    compose,
-                })
-            }
-        }
-
-        unsafe { cell.as_mut().unwrap().compose.any_compose(child_state) }
     }
 }
 
