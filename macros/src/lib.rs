@@ -19,7 +19,7 @@ pub fn derive_data(input: TokenStream) -> TokenStream {
         .find(|attr| attr.path().is_ident("actuate"))
     {
         let args: MetaNameValue = attr.parse_args().unwrap();
-        if args.path.get_ident().unwrap().to_string() == "path" {
+        if args.path.get_ident().unwrap() == "path" {
             let value = args.value.to_token_stream().to_string();
             cell = Some(format_ident!("{}", &value[1..value.len() - 1]));
         }
