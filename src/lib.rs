@@ -808,6 +808,14 @@ pub struct ContextError<T> {
     _marker: PhantomData<T>,
 }
 
+impl<T> Clone for ContextError<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for ContextError<T> {}
+
 impl<T> fmt::Debug for ContextError<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("ContextError")
@@ -829,17 +837,19 @@ impl<T> fmt::Display for ContextError<T> {
 ///
 /// This context must have already been provided by a parent composable with [`use_provider`],
 /// otherwise this function will return a [`ContextError`].
-pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a T, ContextError<T>> {
-    let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
-        return Err(ContextError {
-            _marker: PhantomData,
-        });
-    };
+pub fn use_context<'a, T: 'static>(cx: ScopeState<'a>) -> Result<&'a Rc<T>, ContextError<T>> {
+    let result = use_ref(cx, || {
+        let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
+            return Err(ContextError {
+                _marker: PhantomData,
+            });
+        };
 
-    let value: &T = (*any).downcast_ref().unwrap();
-    let value: &'a T = unsafe { mem::transmute(value) };
+        let value: Rc<T> = Rc::downcast(any).unwrap();
+        Ok(value)
+    });
 
-    Ok(value)
+    result.as_ref().map_err(|e| *e)
 }
 
 /// Provide a context value of type `T`.
