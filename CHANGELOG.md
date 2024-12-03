@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.13.0...actuate-v0.14.0) - 2024-12-03
+
+### Breaking Changes
+
+- Remove unsound `Compose` impl for `Map` and create `MapUnchecked` struct
+  - The original `Compose` impl for `Map` would cause undefined behavior if multiple references to the same composable were used. The new unsafe `MapUnchecked` keeps this functionality for low-level components, where the documented safety contract can be checked. However, for most composables I now see `Compose + Clone` being a typical pattern (which I think is fine given some composables only copy references when cloned, and references to composables can still be passed around).
+
+### Fixes
+
+- Impl re-composition when the type has changed in `DynCompose` (7d41100)
+
+### Documentation
+
+- Update docs for `Spawn` composable (205b88a)
+- Add example to showcase `DynCompose` (7d41100)
+
 ## [0.13.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.12.0...actuate-v0.13.0) - 2024-12-02
 
 ### Breaking Changes
