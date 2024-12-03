@@ -485,9 +485,9 @@ type ObserverFn<'a> = Box<dyn Fn(&mut EntityWorldMut) + 'a>;
 
 type OnAddFn<'a> = Box<dyn FnOnce(EntityWorldMut) + 'a>;
 
-/// Spawn composable with content.
+/// Composable to spawn an entity.
 ///
-/// See [`spawn`] and [`spawn_with`] for more information.
+/// See [`spawn`] for more information.
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct Spawn<'a, C> {
     spawn_fn: SpawnFn,
