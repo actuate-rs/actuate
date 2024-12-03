@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.14.2...actuate-v0.15.0) - 2024-12-03
+
+### Breaking changes
+
+- Add `#[actuate(path = "..")]` attribute to `Data` macro and use fully-qualified path to Actuate by default (b159478).
+  - This allows for use of the `Data` macro without importing the full `prelude`.
+- Replace `DynCompose::new` with `dyn_compose` constructor fn (9d65ec8).
+- Return `Rc` from use_context
+  - `fn use_context<T: 'static>(cx: ScopeState) -> Result<&Rc<T>, ContextError<T>> { .. }`
+  - This allows for cloning context into `'static` environments.
+
+### Refactors
+
+- Use explicit imports internally to speed up compile times and exclude hidden `Data` traits from prelude (07bfd96).
+
 ## [0.14.2](https://github.com/actuate-rs/actuate/compare/actuate-v0.14.1...actuate-v0.14.2) - 2024-12-03
 
 ### Features
