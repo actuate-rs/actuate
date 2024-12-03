@@ -17,9 +17,8 @@ use std::{
     cell::{Cell, RefCell},
     mem, ptr,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLockWriteGuard},
 };
-use tokio::sync::RwLockWriteGuard;
 
 macro_rules! impl_trait_for_tuples {
     ($t:tt) => {
