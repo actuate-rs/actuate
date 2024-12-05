@@ -105,6 +105,7 @@
 //!   (enables the `ecs` feature).
 //! - `ecs`: Enables the `ecs` module for bindings to the [Bevy](https://crates.io/crates/bevy) ECS.
 //! - `executor`: Enables the `executor` module for multi-threaded tasks.
+//! - `material`: Enables the `material` module for Material UI (enables the `ecs` feature).
 //! - `rt` Enables support for the [Tokio](https://crates.io/crates/tokio) runtime with the Executor trait.
 //!   (enables the `executor` feature).
 //! - `tracing`: Enables the `tracing` module for logging.
