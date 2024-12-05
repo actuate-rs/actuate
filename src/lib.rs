@@ -126,6 +126,7 @@ use core::{
     pin::Pin,
     ptr::NonNull,
 };
+use slotmap::DefaultKey;
 use thiserror::Error;
 
 #[cfg(not(feature = "std"))]
@@ -458,8 +459,8 @@ pub struct SignalMut<'a, T> {
     /// Pointer to the boxed value.
     ptr: NonNull<T>,
 
-    /// Pointer to the scope's `is_changed` flag.
-    scope_is_changed: *const Cell<bool>,
+    /// Key to this signal's scope.
+    scope_key: DefaultKey,
 
     /// Pointer to this value's generation.
     generation: *const Cell<u64>,
@@ -476,13 +477,10 @@ impl<'a, T: 'static> SignalMut<'a, T> {
 
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(me: Self, f: impl FnOnce(&mut T) + Send + 'static) {
-        let is_changed = UnsafeWrap(me.scope_is_changed);
+        let scope_key = me.scope_key;
 
         Self::with(me, move |value| {
-            let is_changed = is_changed;
-            // Set this scope as changed.
-            // Safety: the pointer to this scope is guranteed to outlive `me`.
-            unsafe { (*is_changed.0).set(true) };
+            Runtime::current().pending.borrow_mut().push(scope_key);
 
             f(value)
         })
@@ -646,17 +644,6 @@ impl ScopeData<'_> {
         self.is_changed.get()
     }
 
-    /// Set this scope as changed during the next re-composition.
-    pub fn set_changed(&self) {
-        let is_changed = UnsafeWrap(&self.is_changed as *const Cell<bool>);
-
-        Runtime::current().update(move || {
-            let is_changed = is_changed;
-            let is_changed = unsafe { &*is_changed.0 };
-            is_changed.set(true);
-        });
-    }
-
     /// Returns `true` if an ancestor to this scope is changed.
     pub fn is_parent_changed(&self) -> bool {
         self.is_parent_changed.get()
@@ -771,7 +758,7 @@ pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Si
 
     SignalMut {
         ptr: unsafe { NonNull::new_unchecked(&mut state.value as *mut _) },
-        scope_is_changed: &cx.is_changed,
+        scope_key: Runtime::current().current_key.get(),
         generation: &state.generation,
         _marker: PhantomData,
     }

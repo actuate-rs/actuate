@@ -35,7 +35,7 @@ fn main() {
     .unwrap();
 
     let mut composer = Composer::new(App);
-    
+
     // Compose each composable.
     for _ in 0..3 {
         composer.try_compose().unwrap();
