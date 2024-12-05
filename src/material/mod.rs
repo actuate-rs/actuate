@@ -1,18 +1,18 @@
-use core::mem;
-use std::cell::Cell;
-
 use crate::{
-    ecs::{spawn, Spawn, SystemParamFunction},
+    ecs::{Spawn, SystemParamFunction},
     Data,
 };
 use bevy_color::Color;
 use bevy_ecs::prelude::{Bundle, Event, Trigger};
 use bevy_picking::prelude::*;
-use bevy_text::TextFont;
-use bevy_ui::prelude::Text;
+use core::mem;
+use std::cell::Cell;
 
 mod button;
 pub use self::button::{button, Button};
+
+/// Text composables.
+pub mod text;
 
 /// Material UI theme.
 pub struct MaterialTheme {
@@ -26,28 +26,6 @@ impl Default for MaterialTheme {
             primary: Color::srgb_u8(103, 80, 164),
         }
     }
-}
-
-/// Create a material UI text label.
-pub fn headline<'a>(content: impl Into<String>) -> Spawn<'a> {
-    spawn((
-        Text::new(content),
-        TextFont {
-            font_size: 36.,
-            ..Default::default()
-        },
-    ))
-}
-
-/// Create a material UI text label.
-pub fn label<'a>(content: impl Into<String>) -> Spawn<'a> {
-    spawn((
-        Text::new(content),
-        TextFont {
-            font_size: 16.,
-            ..Default::default()
-        },
-    ))
 }
 
 /// TODO
