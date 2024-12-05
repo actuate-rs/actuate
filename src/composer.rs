@@ -13,9 +13,9 @@ use core::{
     pin::Pin,
     task::{Context, Poll, Waker},
 };
-use std::collections::VecDeque;
 use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
+use std::collections::VecDeque;
 
 #[cfg(feature = "executor")]
 use tokio::sync::RwLock;
@@ -74,7 +74,7 @@ pub(crate) struct Node {
 
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
-pub struct Runtime {
+pub (crate) struct Runtime {
     /// Local task stored on this runtime.
     pub(crate) tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
 
