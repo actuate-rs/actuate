@@ -456,7 +456,7 @@ type SpawnFn = Arc<dyn Fn(&mut World, &mut Option<Entity>)>;
 /// Create a [`Spawn`] composable that spawns the provided `bundle` when composed.
 ///
 /// On re-composition, the spawned entity is updated to the latest provided value.
-pub fn spawn<'a, B>(bundle: B) -> Spawn<'a, ()>
+pub fn spawn<'a, B>(bundle: B) -> Spawn<'a>
 where
     B: Bundle + Clone,
 {
@@ -484,7 +484,7 @@ type OnAddFn<'a> = Box<dyn FnOnce(EntityWorldMut) + 'a>;
 ///
 /// See [`spawn`] for more information.
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
-pub struct Spawn<'a, C> {
+pub struct Spawn<'a, C = ()> {
     spawn_fn: SpawnFn,
     content: C,
     target: Option<Entity>,

@@ -1,6 +1,9 @@
 // Counter UI example.
 
-use actuate::prelude::*;
+use actuate::{
+    material::{button, headline, label},
+    prelude::*,
+};
 use bevy::prelude::*;
 
 // Counter composable.
@@ -14,13 +17,11 @@ impl Compose for Counter {
         let count = use_mut(&cx, || cx.me().start);
 
         (
-            spawn(Text::new(format!("High five count: {}", count))),
-            spawn(Text::new("Up high"))
-                .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x += 1)),
-            spawn(Text::new("Down low"))
-                .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x -= 1)),
+            headline(format!("High five count: {}", count)),
+            button(label("Up high")).on_click(move || SignalMut::update(count, |x| *x += 1)),
+            button(label("Down low")).on_click(move || SignalMut::update(count, |x| *x -= 1)),
             if *count == 0 {
-                Some(spawn(Text::new("Gimme five!")))
+                Some(label("Gimme five!"))
             } else {
                 None
             },
@@ -35,6 +36,8 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Node {
             flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: Val::Px(10.),
             ..default()
         },
         Composition::new(Counter { start: 0 }),

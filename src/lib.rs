@@ -192,6 +192,11 @@ pub mod ecs;
 /// Task execution context.
 pub mod executor;
 
+#[cfg(feature = "material")]
+#[cfg_attr(docsrs, doc(cfg(feature = "material")))]
+/// Material UI.
+pub mod material;
+
 /// Clone-on-write value.
 ///
 /// This represents either a borrowed or owned value.
