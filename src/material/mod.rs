@@ -28,14 +28,14 @@ impl Default for MaterialTheme {
     }
 }
 
-/// TODO
+/// ECS bundle modifier.
 #[derive(Default)]
 pub struct Modifier<'a> {
     fns: Vec<Box<dyn Fn(Spawn<'a>) -> Spawn<'a>>>,
 }
 
 impl<'a> Modifier<'a> {
-    /// TODO
+    /// Apply this modifier.
     pub fn apply(&self, spawn: Spawn<'a>) -> Spawn<'a> {
         self.fns
             .iter()
@@ -45,9 +45,9 @@ impl<'a> Modifier<'a> {
 
 unsafe impl Data for Modifier<'_> {}
 
-/// TODO
+/// Modifiable composable.
 pub trait Modify<'a> {
-    /// TODO
+    /// Get a mutable reference to the modifier of this button.
     fn modifier(&mut self) -> &mut Modifier<'a>;
 
     /// Add an observer to the container of this button.
