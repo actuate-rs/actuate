@@ -21,9 +21,52 @@ use tokio::sync::RwLock;
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
 
+pub(crate) enum ComposePtr {
+    Owned(Box<dyn AnyCompose>),
+    Ptr(*const dyn AnyCompose),
+}
+
+impl AnyCompose for ComposePtr {
+    fn data_id(&self) -> TypeId {
+        match self {
+            ComposePtr::Owned(compose) => compose.data_id(),
+            ComposePtr::Ptr(ptr) => unsafe { (**ptr).data_id() },
+        }
+    }
+
+    fn as_ptr_mut(&mut self) -> *mut () {
+        match self {
+            ComposePtr::Owned(compose) => compose.as_ptr_mut(),
+            ComposePtr::Ptr(ptr) => *ptr as *mut (),
+        }
+    }
+
+    unsafe fn reborrow(&mut self, ptr: *mut ()) {
+        match self {
+            ComposePtr::Owned(compose) => compose.reborrow(ptr),
+            // TODO
+            ComposePtr::Ptr(_) => {},
+        }
+    }
+
+    unsafe fn any_compose(&self, state: &ScopeData) {
+        match self {
+            ComposePtr::Owned(compose) => compose.any_compose(state),
+            ComposePtr::Ptr(ptr) => (**ptr).any_compose(state),
+        }
+    }
+
+    fn name(&self) -> Option<std::borrow::Cow<'static, str>> {
+        match self {
+            ComposePtr::Owned(compose) => compose.name(),
+            ComposePtr::Ptr(_) => None,
+        }
+    }
+}
+
 // Safety: `scope` must be dropped before `compose`.
 pub(crate) struct Node {
-    pub(crate) compose: RefCell<Box<dyn AnyCompose>>,
+    pub(crate) compose: RefCell<ComposePtr>,
     pub(crate) scope: ScopeData<'static>,
     pub(crate) children: RefCell<Vec<DefaultKey>>,
 }
@@ -148,7 +191,7 @@ impl Composer {
 
         let mut nodes = SlotMap::new();
         let root_key = nodes.insert(Rc::new(Node {
-            compose: RefCell::new(Box::new(content)),
+            compose: RefCell::new(ComposePtr::Owned(Box::new(content))),
             scope: ScopeData::default(),
             children: RefCell::new(Vec::new()),
         }));
