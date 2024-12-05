@@ -183,7 +183,7 @@ macro_rules! impl_tuples {
 
                         let mut nodes = rt.nodes.borrow_mut();
 
-                        let ptr = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
+                        let ptr: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
                         let child_key = nodes.insert(Rc::new(Node {
                             compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
                             scope: ScopeData::default(),
@@ -213,14 +213,11 @@ macro_rules! impl_tuples {
 
                     if !is_init {
                         let last = rt.nodes.borrow().get(*child_key).unwrap().clone();
-                        let ptr = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
+                        let ptr: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
                         *last.compose.borrow_mut() = crate::composer::ComposePtr::Ptr(ptr);
                     }
 
-                    let node = rt.nodes.borrow().get(*child_key).unwrap().clone();
-                    let compose: &dyn AnyCompose = &*node.compose.borrow();
-                    let compose: &dyn AnyCompose = unsafe { mem::transmute(compose) };
-                    unsafe { compose.any_compose(&node.scope) }
+                    rt.pending.borrow_mut().push_back(*child_key);
                 )*
             }
         }
@@ -353,7 +350,7 @@ where
         }
 
         if let Some(key) = child_key_cell.get() {
-            rt.pending.borrow_mut().push(key);
+            rt.pending.borrow_mut().push_back(key);
         }
     }
 

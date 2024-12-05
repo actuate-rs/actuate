@@ -464,7 +464,7 @@ impl<'a, T: 'static> SignalMut<'a, T> {
         let scope_key = me.scope_key;
 
         Self::with(me, move |value| {
-            Runtime::current().pending.borrow_mut().push(scope_key);
+            Runtime::current().pending.borrow_mut().push_back(scope_key);
 
             f(value)
         })

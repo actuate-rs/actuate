@@ -13,6 +13,7 @@ use core::{
     pin::Pin,
     task::{Context, Poll, Waker},
 };
+use std::collections::VecDeque;
 use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
 
@@ -95,7 +96,7 @@ pub struct Runtime {
 
     pub(crate) root: DefaultKey,
 
-    pub(crate) pending: Rc<RefCell<Vec<DefaultKey>>>,
+    pub(crate) pending: Rc<RefCell<VecDeque<DefaultKey>>>,
 }
 
 impl Runtime {
@@ -207,7 +208,7 @@ impl Composer {
                 nodes: Rc::new(RefCell::new(nodes)),
                 current_key: Rc::new(Cell::new(root_key)),
                 root: root_key,
-                pending: Rc::new(RefCell::new(Vec::new())),
+                pending: Rc::new(RefCell::new(VecDeque::new())),
             },
             task_queue,
             update_queue,
@@ -284,7 +285,7 @@ impl Iterator for Composer {
         );
 
         if !self.is_initial {
-            let key_cell = self.rt.pending.borrow_mut().pop();
+            let key_cell = self.rt.pending.borrow_mut().pop_front();
             if let Some(key) = key_cell {
                 self.rt.current_key.set(key);
 
