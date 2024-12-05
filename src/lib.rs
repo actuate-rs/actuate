@@ -17,11 +17,8 @@
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
 //!         let count = use_mut(&cx, || cx.me().start);
 //!
-//!         spawn(Node {
-//!             flex_direction: FlexDirection::Column,
-//!             ..default()
-//!         })
-//!         .content((
+//!         (
+//!             spawn(Text::new(format!("High five count: {}", count))),
 //!             spawn(Text::new("Up high"))
 //!                 .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x += 1)),
 //!             spawn(Text::new("Down low"))
@@ -31,7 +28,7 @@
 //!             } else {
 //!                 None
 //!             },
-//!         ))
+//!         )
 //!     }
 //! }
 //!
@@ -39,14 +36,22 @@
 //!     commands.spawn(Camera2d::default());
 //!
 //!     // Spawn a composition with a `Counter`, adding it to the Actuate runtime.
-//!     commands.spawn((Node::default(), Composition::new(Counter { start: 0 })));
+//!     commands.spawn((
+//!         Node {
+//!             flex_direction: FlexDirection::Column,
+//!             ..default()
+//!         },
+//!         Composition::new(Counter { start: 0 }),
+//!    ));
 //! }
 //!
-//! App::new()
-//!     .add_plugins((DefaultPlugins, ActuatePlugin))
-//!     .add_systems(Startup, setup)
-//!     .run();
-//! ```
+//! fn main() {
+//!     App::new()
+//!         .add_plugins((DefaultPlugins, ActuatePlugin))
+//!         .add_systems(Startup, setup)
+//!         .run();
+//! }
+//!```
 //!
 //! ## Borrowing
 //! Composables can borrow from their ancestors, as well as state.
