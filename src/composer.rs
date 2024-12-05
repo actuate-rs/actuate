@@ -175,7 +175,7 @@ impl Composer {
     pub fn try_compose(&mut self) -> Result<(), TryComposeError> {
         let mut is_pending = true;
 
-        while let Some(res) = self.next() {
+        for res in self.by_ref() {
             res.map_err(TryComposeError::Error)?;
 
             is_pending = false;
