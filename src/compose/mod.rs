@@ -131,8 +131,6 @@ fn drop_node(nodes: &mut SlotMap<DefaultKey, Rc<Node>>, key: DefaultKey) {
         parent.children.borrow_mut().retain(|&x| x != key);
     }
 
-    //Runtime::current().pending.borrow_mut().retain(|&x| x != key);
-
     let children = node.children.borrow().clone();
     for key in children {
         drop_node(nodes, key)

@@ -45,7 +45,6 @@ impl AnyCompose for ComposePtr {
     unsafe fn reborrow(&mut self, ptr: *mut ()) {
         match self {
             ComposePtr::Boxed(compose) => compose.reborrow(ptr),
-            // TODO
             ComposePtr::Ptr(_) => {}
         }
     }
