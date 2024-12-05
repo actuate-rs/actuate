@@ -350,15 +350,11 @@ unsafe impl<T> Data for MapUnchecked<'_, T> {}
 
 impl<C: Compose> Compose for MapUnchecked<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
         let state = use_ref(&cx, || {
             let mut state = ScopeData::default();
             state.contexts = cx.contexts.clone();
             state
         });
-
-        state.is_parent_changed.set(cx.is_parent_changed.get());
 
         // Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
         // an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
@@ -597,15 +593,6 @@ pub struct ScopeData<'a> {
     /// Current hook index.
     hook_idx: Cell<usize>,
 
-    /// `true` if this scope is changed.
-    is_changed: Cell<bool>,
-
-    /// `true` if an ancestor to this scope is changed.
-    is_parent_changed: Cell<bool>,
-
-    /// `true` if this scope contains a container composable.
-    is_container: Cell<bool>,
-
     /// Context values stored in this scope.
     contexts: RefCell<Contexts>,
 
@@ -620,33 +607,6 @@ pub struct ScopeData<'a> {
 
     /// Marker for the invariant lifetime of this scope.
     _marker: PhantomData<&'a fn(ScopeData<'a>) -> ScopeData<'a>>,
-}
-
-impl ScopeData<'_> {
-    /// Returns `true` if this is this scope's state has changed since the last re-composition.
-    pub fn is_changed(&self) -> bool {
-        self.is_changed.get()
-    }
-
-    /// Returns `true` if an ancestor to this scope is changed.
-    pub fn is_parent_changed(&self) -> bool {
-        self.is_parent_changed.get()
-    }
-
-    /// Returns `true` if this scope contains a container composable.
-    ///
-    /// A container composable will be re-composed during every re-composition of the tree.
-    /// This is useful for low-level composables that manage child state or external elements.
-    pub fn is_container(&self) -> bool {
-        self.is_container.get()
-    }
-
-    /// Set this scope as a container composable.
-    ///
-    /// See [`ScopeData::is_container`] for more.
-    pub fn set_is_container(&self) {
-        self.is_container.set(true)
-    }
 }
 
 impl Drop for ScopeData<'_> {

@@ -74,8 +74,6 @@ where
                 .values
                 .extend(cx.child_contexts.borrow().values.clone());
 
-            child_state.is_parent_changed.set(true);
-
             child_key
         });
 

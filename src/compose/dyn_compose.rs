@@ -22,8 +22,6 @@ struct DynComposeState {
 
 impl Compose for DynCompose<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
         let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
         let cell = unsafe { &mut *cell.get() };
 
@@ -38,10 +36,6 @@ impl Compose for DynCompose<'_> {
             .borrow_mut()
             .values
             .extend(cx.child_contexts.borrow().values.clone());
-
-        child_state
-            .is_parent_changed
-            .set(cx.is_parent_changed.get());
 
         if let Some(any_compose) = inner.take() {
             let mut compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };

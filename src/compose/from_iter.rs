@@ -24,46 +24,42 @@ where
     C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
         let states: &RefCell<Vec<AnyItemState>> = use_ref(&cx, || RefCell::new(Vec::new()));
         let mut states = states.borrow_mut();
 
-        if cx.is_parent_changed() {
-            let mut items: Vec<Option<_>> = cx.me().iter.clone().into_iter().map(Some).collect();
+        let mut items: Vec<Option<_>> = cx.me().iter.clone().into_iter().map(Some).collect();
 
-            if items.len() >= states.len() {
-                for item in &mut items[states.len()..] {
-                    let item = item.take().unwrap();
+        if items.len() >= states.len() {
+            for item in &mut items[states.len()..] {
+                let item = item.take().unwrap();
 
-                    let state = ItemState {
-                        item,
-                        compose: None,
-                        scope: ScopeData::default(),
-                    };
+                let state = ItemState {
+                    item,
+                    compose: None,
+                    scope: ScopeData::default(),
+                };
 
-                    let state = Box::new(state);
-                    let boxed: Box<()> = unsafe { mem::transmute(state) };
+                let state = Box::new(state);
+                let boxed: Box<()> = unsafe { mem::transmute(state) };
 
-                    states.push(AnyItemState {
-                        boxed: Some(boxed),
-                        drop: |any_state| {
-                            let state: Box<ItemState<Item>> =
-                                unsafe { mem::transmute(any_state.boxed.take().unwrap()) };
-                            drop(state);
-                        },
-                    });
-                }
-            } else {
-                states.truncate(items.len());
+                states.push(AnyItemState {
+                    boxed: Some(boxed),
+                    drop: |any_state| {
+                        let state: Box<ItemState<Item>> =
+                            unsafe { mem::transmute(any_state.boxed.take().unwrap()) };
+                        drop(state);
+                    },
+                });
             }
+        } else {
+            states.truncate(items.len());
         }
 
         for state in &mut *states {
             let state: &mut ItemState<Item> =
                 unsafe { mem::transmute(state.boxed.as_deref_mut().unwrap()) };
 
-            if state.compose.is_none() || cx.is_parent_changed() {
+            if state.compose.is_none() {
                 let item_ref: &Item = &state.item;
                 let item_ref: &Item = unsafe { mem::transmute(item_ref) };
                 let compose = (cx.me().make_item)(Signal {
@@ -83,11 +79,6 @@ where
                 .borrow_mut()
                 .values
                 .extend(cx.child_contexts.borrow().values.clone());
-
-            state
-                .scope
-                .is_parent_changed
-                .set(cx.is_parent_changed.get());
 
             let compose = state.compose.as_ref().unwrap();
             unsafe { compose.any_compose(&state.scope) }

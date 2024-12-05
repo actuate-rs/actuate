@@ -78,14 +78,14 @@ impl<C: Compose> Compose for &C {
 
 impl<C: Compose> Compose for Option<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
+        // cx.is_container.set(true);
 
         let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
         let mut state_cell = state_cell.borrow_mut();
 
         if let Some(content) = &*cx.me() {
             if let Some(state) = &*state_cell {
-                state.is_parent_changed.set(cx.is_parent_changed.get());
+                //state.is_parent_changed.set(cx.is_parent_changed.get());
                 unsafe {
                     content.any_compose(state);
                 }
@@ -125,7 +125,7 @@ impl<C: Compose> Compose for Result<C, Error> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let catch_cx = use_context::<CatchContext>(&cx).unwrap();
 
-        cx.is_container.set(true);
+        //cx.is_container.set(true);
 
         let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
         let mut state_cell = state_cell.borrow_mut();
@@ -133,7 +133,7 @@ impl<C: Compose> Compose for Result<C, Error> {
         match &*cx.me() {
             Ok(content) => {
                 if let Some(state) = &*state_cell {
-                    state.is_parent_changed.set(cx.is_parent_changed.get());
+                    //state.is_parent_changed.set(cx.is_parent_changed.get());
                     unsafe {
                         content.any_compose(state);
                     }
@@ -171,8 +171,6 @@ macro_rules! impl_tuples {
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
-                cx.is_container.set(true);
-
                 let rt = Runtime::current();
 
                 $(
@@ -205,8 +203,6 @@ macro_rules! impl_tuples {
                             .borrow_mut()
                             .values
                             .extend(cx.child_contexts.borrow().values.clone());
-
-                        child_state.is_parent_changed.set(true);
 
                         child_key
                     });
@@ -288,21 +284,13 @@ where
 
         let rt = Runtime::current();
 
-        if cell.is_none()
-            || cx.is_changed.take()
-            || cx.is_parent_changed.get()
-            || cx.is_container.get()
-        {
+        if cell.is_none() {
             #[cfg(feature = "tracing")]
-            if !cx.is_container.get() {
-                if let Some(name) = C::name() {
-                    tracing::trace!("Compose: {}", name);
-                }
+            if let Some(name) = C::name() {
+                tracing::trace!("Compose: {}", name);
             }
 
             let child = C::compose(cx);
-
-            cx.is_parent_changed.set(false);
 
             let child: Box<dyn AnyCompose> = Box::new(child);
             let mut child: Box<dyn AnyCompose> = unsafe { mem::transmute(child) };
@@ -336,16 +324,7 @@ where
                         .borrow_mut()
                         .values
                         .extend(cx.child_contexts.borrow().values.clone());
-
-                    child_state.is_parent_changed.set(true);
                 }
-            }
-        } else {
-            let nodes = rt.nodes.borrow();
-
-            if let Some(key) = child_key_cell.get() {
-                let child_state = &nodes[key].scope;
-                child_state.is_parent_changed.set(false);
             }
         }
 
