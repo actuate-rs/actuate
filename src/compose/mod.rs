@@ -116,6 +116,8 @@ impl<C: Compose> Compose for Option<C> {
                 rt.pending.borrow_mut().push_back(key);
             }
         } else if let Some(key) = child_key.get() {
+            child_key.set(None);
+
             drop_node(&mut nodes, key);
         }
     }
@@ -128,6 +130,8 @@ fn drop_node(nodes: &mut SlotMap<DefaultKey, Rc<Node>>, key: DefaultKey) {
         let parent = nodes.get_mut(parent).unwrap();
         parent.children.borrow_mut().retain(|&x| x != key);
     }
+
+    //Runtime::current().pending.borrow_mut().retain(|&x| x != key);
 
     let children = node.children.borrow().clone();
     for key in children {
@@ -321,10 +325,6 @@ where
     }
 
     unsafe fn any_compose(&self, state: &ScopeData) {
-        if typeid::of::<C>() == typeid::of::<()>() {
-            return;
-        }
-
         // Reset the hook index.
         state.hook_idx.set(0);
 
@@ -353,6 +353,10 @@ where
             }
 
             let child = C::compose(cx);
+
+            if child.data_id() == typeid::of::<()>() {
+                return;
+            }
 
             let child: Box<dyn AnyCompose> = Box::new(child);
             let mut child: Box<dyn AnyCompose> = unsafe { mem::transmute(child) };
