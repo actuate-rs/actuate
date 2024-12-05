@@ -21,6 +21,7 @@ use tokio::sync::RwLock;
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
 
+// Safety: `scope` must be dropped before `compose`.
 pub(crate) struct Node {
     pub(crate) compose: RefCell<Box<dyn AnyCompose>>,
     pub(crate) scope: ScopeData<'static>,
@@ -203,6 +204,23 @@ impl Composer {
     pub async fn compose(&mut self) -> Result<(), Box<dyn Error>> {
         futures::future::poll_fn(|cx| self.poll_compose(cx)).await
     }
+}
+
+impl Drop for Composer {
+    fn drop(&mut self) {
+        let node = self.rt.nodes.borrow()[self.rt.root].clone();
+        drop_recursive(&self.rt, self.rt.root, node)
+    }
+}
+
+fn drop_recursive(rt: &Runtime, key: DefaultKey, node: Rc<Node>) {
+    let children = node.children.borrow().clone();
+    for child_key in children {
+        let child = rt.nodes.borrow()[child_key].clone();
+        drop_recursive(rt, child_key, child)
+    }
+
+    rt.nodes.borrow_mut().remove(key);
 }
 
 impl Iterator for Composer {

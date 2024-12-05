@@ -321,22 +321,6 @@ impl<T: fmt::Display> fmt::Display for RefMap<'_, T> {
 
 unsafe impl<T: Data> Data for RefMap<'_, T> {}
 
-impl<C: Compose> Compose for RefMap<'_, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
-        let state = use_ref(&cx, || {
-            let mut state = ScopeData::default();
-            state.contexts = cx.contexts.clone();
-            state
-        });
-
-        state.is_parent_changed.set(cx.is_parent_changed.get());
-
-        unsafe { (**cx.me()).any_compose(state) }
-    }
-}
-
 /// Mapped immutable reference to a value of type `T`.
 ///
 /// This can be created with [`Signal::map`].
