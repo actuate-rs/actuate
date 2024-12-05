@@ -11,6 +11,9 @@ use std::cell::Cell;
 mod button;
 pub use self::button::{button, Button};
 
+mod radio;
+pub use self::radio::{radio_button, RadioButton};
+
 /// Text composables.
 pub mod text;
 

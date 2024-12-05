@@ -82,6 +82,11 @@ path = "examples/ecs/http.rs"
 required-features = ["ecs", "rt"]
 
 [[example]]
+name = "radio"
+path = "examples/ecs/radio_button.rs"
+required-features = ["ecs", "material"]
+
+[[example]]
 name = "timer"
 path = "examples/ecs/timer.rs"
 required-features = ["ecs"]
