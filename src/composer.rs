@@ -45,7 +45,7 @@ impl AnyCompose for ComposePtr {
         match self {
             ComposePtr::Owned(compose) => compose.reborrow(ptr),
             // TODO
-            ComposePtr::Ptr(_) => {},
+            ComposePtr::Ptr(_) => {}
         }
     }
 

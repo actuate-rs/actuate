@@ -176,7 +176,11 @@ macro_rules! impl_tuples {
                 let rt = Runtime::current();
 
                 $(
+                    let mut is_init = false;
+
                     let child_key = use_ref(&cx, || {
+                        is_init = true;
+
                         let mut nodes = rt.nodes.borrow_mut();
 
                         let ptr = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
@@ -206,6 +210,12 @@ macro_rules! impl_tuples {
 
                         child_key
                     });
+
+                    if !is_init {
+                        let last = rt.nodes.borrow().get(*child_key).unwrap().clone();
+                        let ptr = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
+                        *last.compose.borrow_mut() = crate::composer::ComposePtr::Ptr(ptr);
+                    }
 
                     let node = rt.nodes.borrow().get(*child_key).unwrap().clone();
                     let compose: &dyn AnyCompose = &*node.compose.borrow();
