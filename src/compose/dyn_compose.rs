@@ -1,6 +1,12 @@
-use super::AnyCompose;
+use slotmap::DefaultKey;
+
+use super::{drop_node, AnyCompose, Node, Runtime};
 use crate::{compose::Compose, use_ref, Scope, ScopeData};
 use core::{any::TypeId, cell::UnsafeCell, mem};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 /// Create a new dynamically-typed composable.
 pub fn dyn_compose<'a>(content: impl Compose + 'a) -> DynCompose<'a> {
@@ -15,22 +21,64 @@ pub struct DynCompose<'a> {
     compose: UnsafeCell<Option<Box<dyn AnyCompose + 'a>>>,
 }
 
+#[derive(Clone, Copy)]
 struct DynComposeState {
-    compose: Box<dyn AnyCompose>,
+    key: DefaultKey,
     data_id: TypeId,
 }
 
 impl Compose for DynCompose<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
+        let state: &Cell<Option<DynComposeState>> = use_ref(&cx, || Cell::new(None));
 
-        let cell: &UnsafeCell<Option<DynComposeState>> = use_ref(&cx, || UnsafeCell::new(None));
-        let cell = unsafe { &mut *cell.get() };
+        let rt = Runtime::current();
+        let mut nodes = rt.nodes.borrow_mut();
 
-        let inner = unsafe { &mut *cx.me().compose.get() };
+        if let Some(state) = state.get() {
+            let compose: &mut dyn AnyCompose = unsafe { &mut *cx.me().compose.get() }
+                .as_deref_mut()
+                .unwrap();
+            let mut compose: Box<dyn AnyCompose> = unsafe { mem::transmute(compose) };
+            let data_id = compose.data_id();
 
-        let child_state = use_ref(&cx, || UnsafeCell::new(ScopeData::default()));
-        let child_state = unsafe { &mut *child_state.get() };
+            if data_id == state.data_id {
+                let mut last = nodes[state.key].compose.borrow_mut();
+                unsafe { compose.reborrow(last.as_ptr_mut()) };
+
+                rt.pending.borrow_mut().push_back(state.key);
+
+                return;
+            } else {
+                drop_node(&mut nodes, state.key);
+            }
+        }
+
+        let Some(compose) = unsafe { &mut *cx.me().compose.get() }.take() else {
+            if let Some(state) = state.get() {
+                rt.pending.borrow_mut().push_back(state.key);
+            }
+
+            return;
+        };
+        let compose: Box<dyn AnyCompose> = unsafe { mem::transmute(compose) };
+        let data_id = compose.data_id();
+
+        let key = nodes.insert(Rc::new(Node {
+            compose: RefCell::new(crate::composer::ComposePtr::Boxed(compose)),
+            scope: ScopeData::default(),
+            parent: Some(rt.current_key.get()),
+            children: RefCell::new(Vec::new()),
+        }));
+        state.set(Some(DynComposeState { key, data_id }));
+
+        nodes
+            .get(rt.current_key.get())
+            .unwrap()
+            .children
+            .borrow_mut()
+            .push(key);
+
+        let child_state = &nodes[key].scope;
 
         *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
         child_state
@@ -39,31 +87,6 @@ impl Compose for DynCompose<'_> {
             .values
             .extend(cx.child_contexts.borrow().values.clone());
 
-        child_state
-            .is_parent_changed
-            .set(cx.is_parent_changed.get());
-
-        if let Some(any_compose) = inner.take() {
-            let mut compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
-
-            if let Some(state) = cell {
-                if state.data_id != compose.data_id() {
-                    *child_state = ScopeData::default();
-                    state.compose = compose;
-                } else {
-                    let ptr = (*state.compose).as_ptr_mut();
-                    unsafe {
-                        compose.reborrow(ptr);
-                    }
-                }
-            } else {
-                *cell = Some(DynComposeState {
-                    data_id: compose.data_id(),
-                    compose,
-                })
-            }
-        }
-
-        unsafe { cell.as_mut().unwrap().compose.any_compose(child_state) }
+        rt.pending.borrow_mut().push_back(key);
     }
 }

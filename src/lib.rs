@@ -126,6 +126,7 @@ use core::{
     pin::Pin,
     ptr::NonNull,
 };
+use slotmap::DefaultKey;
 use thiserror::Error;
 
 #[cfg(not(feature = "std"))]
@@ -320,22 +321,6 @@ impl<T: fmt::Display> fmt::Display for RefMap<'_, T> {
 
 unsafe impl<T: Data> Data for RefMap<'_, T> {}
 
-impl<C: Compose> Compose for RefMap<'_, C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
-        let state = use_ref(&cx, || {
-            let mut state = ScopeData::default();
-            state.contexts = cx.contexts.clone();
-            state
-        });
-
-        state.is_parent_changed.set(cx.is_parent_changed.get());
-
-        unsafe { (**cx.me()).any_compose(state) }
-    }
-}
-
 /// Mapped immutable reference to a value of type `T`.
 ///
 /// This can be created with [`Signal::map`].
@@ -365,15 +350,11 @@ unsafe impl<T> Data for MapUnchecked<'_, T> {}
 
 impl<C: Compose> Compose for MapUnchecked<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
         let state = use_ref(&cx, || {
             let mut state = ScopeData::default();
             state.contexts = cx.contexts.clone();
             state
         });
-
-        state.is_parent_changed.set(cx.is_parent_changed.get());
 
         // Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
         // an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
@@ -458,8 +439,8 @@ pub struct SignalMut<'a, T> {
     /// Pointer to the boxed value.
     ptr: NonNull<T>,
 
-    /// Pointer to the scope's `is_changed` flag.
-    scope_is_changed: *const Cell<bool>,
+    /// Key to this signal's scope.
+    scope_key: DefaultKey,
 
     /// Pointer to this value's generation.
     generation: *const Cell<u64>,
@@ -476,13 +457,10 @@ impl<'a, T: 'static> SignalMut<'a, T> {
 
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(me: Self, f: impl FnOnce(&mut T) + Send + 'static) {
-        let is_changed = UnsafeWrap(me.scope_is_changed);
+        let scope_key = me.scope_key;
 
         Self::with(me, move |value| {
-            let is_changed = is_changed;
-            // Set this scope as changed.
-            // Safety: the pointer to this scope is guranteed to outlive `me`.
-            unsafe { (*is_changed.0).set(true) };
+            Runtime::current().pending.borrow_mut().push_back(scope_key);
 
             f(value)
         })
@@ -615,15 +593,6 @@ pub struct ScopeData<'a> {
     /// Current hook index.
     hook_idx: Cell<usize>,
 
-    /// `true` if this scope is changed.
-    is_changed: Cell<bool>,
-
-    /// `true` if an ancestor to this scope is changed.
-    is_parent_changed: Cell<bool>,
-
-    /// `true` if this scope contains a container composable.
-    is_container: Cell<bool>,
-
     /// Context values stored in this scope.
     contexts: RefCell<Contexts>,
 
@@ -638,44 +607,6 @@ pub struct ScopeData<'a> {
 
     /// Marker for the invariant lifetime of this scope.
     _marker: PhantomData<&'a fn(ScopeData<'a>) -> ScopeData<'a>>,
-}
-
-impl ScopeData<'_> {
-    /// Returns `true` if this is this scope's state has changed since the last re-composition.
-    pub fn is_changed(&self) -> bool {
-        self.is_changed.get()
-    }
-
-    /// Set this scope as changed during the next re-composition.
-    pub fn set_changed(&self) {
-        let is_changed = UnsafeWrap(&self.is_changed as *const Cell<bool>);
-
-        Runtime::current().update(move || {
-            let is_changed = is_changed;
-            let is_changed = unsafe { &*is_changed.0 };
-            is_changed.set(true);
-        });
-    }
-
-    /// Returns `true` if an ancestor to this scope is changed.
-    pub fn is_parent_changed(&self) -> bool {
-        self.is_parent_changed.get()
-    }
-
-    /// Returns `true` if this scope contains a container composable.
-    ///
-    /// A container composable will be re-composed during every re-composition of the tree.
-    /// This is useful for low-level composables that manage child state or external elements.
-    pub fn is_container(&self) -> bool {
-        self.is_container.get()
-    }
-
-    /// Set this scope as a container composable.
-    ///
-    /// See [`ScopeData::is_container`] for more.
-    pub fn set_is_container(&self) {
-        self.is_container.set(true)
-    }
 }
 
 impl Drop for ScopeData<'_> {
@@ -771,7 +702,7 @@ pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> Si
 
     SignalMut {
         ptr: unsafe { NonNull::new_unchecked(&mut state.value as *mut _) },
-        scope_is_changed: &cx.is_changed,
+        scope_key: Runtime::current().current_key.get(),
         generation: &state.generation,
         _marker: PhantomData,
     }

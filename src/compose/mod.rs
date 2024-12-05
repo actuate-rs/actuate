@@ -1,4 +1,8 @@
-use crate::{data::Data, use_context, use_ref, Scope, ScopeData, ScopeState};
+use crate::{
+    composer::{ComposePtr, Node, Runtime},
+    data::Data,
+    use_context, use_ref, Scope, ScopeData, ScopeState,
+};
 use alloc::borrow::Cow;
 use core::{
     any::TypeId,
@@ -6,6 +10,8 @@ use core::{
     error::Error as StdError,
     mem,
 };
+use slotmap::{DefaultKey, SlotMap};
+use std::{cell::Cell, rc::Rc};
 
 mod catch;
 pub use self::catch::{catch, Catch};
@@ -63,39 +69,74 @@ impl Compose for () {
     }
 }
 
-impl<C: Compose> Compose for &C {
+impl<C: Compose> Compose for Option<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        unsafe {
-            (**cx.me()).any_compose(&cx);
+        let child_key = use_ref(&cx, || Cell::new(None));
+
+        let rt = Runtime::current();
+        let mut nodes = rt.nodes.borrow_mut();
+
+        if let Some(content) = &*cx.me() {
+            if let Some(key) = child_key.get() {
+                let last = nodes.get_mut(key).unwrap();
+
+                let ptr = content as *const dyn AnyCompose;
+                let ptr: *const dyn AnyCompose = unsafe { mem::transmute(ptr) };
+
+                *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
+
+                rt.pending.borrow_mut().push_back(key);
+            } else {
+                let ptr: *const dyn AnyCompose =
+                    unsafe { mem::transmute(content as *const dyn AnyCompose) };
+                let key = nodes.insert(Rc::new(Node {
+                    compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
+                    scope: ScopeData::default(),
+                    parent: Some(rt.current_key.get()),
+                    children: RefCell::new(Vec::new()),
+                }));
+                child_key.set(Some(key));
+
+                nodes
+                    .get(rt.current_key.get())
+                    .unwrap()
+                    .children
+                    .borrow_mut()
+                    .push(key);
+
+                let child_state = &nodes[key].scope;
+
+                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                child_state
+                    .contexts
+                    .borrow_mut()
+                    .values
+                    .extend(cx.child_contexts.borrow().values.clone());
+
+                rt.pending.borrow_mut().push_back(key);
+            }
+        } else if let Some(key) = child_key.get() {
+            child_key.set(None);
+
+            drop_node(&mut nodes, key);
         }
     }
 }
 
-impl<C: Compose> Compose for Option<C> {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        cx.is_container.set(true);
-
-        let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
-        let mut state_cell = state_cell.borrow_mut();
-
-        if let Some(content) = &*cx.me() {
-            if let Some(state) = &*state_cell {
-                state.is_parent_changed.set(cx.is_parent_changed.get());
-                unsafe {
-                    content.any_compose(state);
-                }
-            } else {
-                let mut state = ScopeData::default();
-                state.contexts = cx.contexts.clone();
-                *state_cell = Some(state);
-                unsafe {
-                    content.any_compose(state_cell.as_ref().unwrap());
-                }
-            }
-        } else {
-            *state_cell = None;
-        }
+// TODO replace with non-recursive algorithm.
+fn drop_node(nodes: &mut SlotMap<DefaultKey, Rc<Node>>, key: DefaultKey) {
+    let node = nodes[key].clone();
+    if let Some(parent) = node.parent {
+        let parent = nodes.get_mut(parent).unwrap();
+        parent.children.borrow_mut().retain(|&x| x != key);
     }
+
+    let children = node.children.borrow().clone();
+    for key in children {
+        drop_node(nodes, key)
+    }
+
+    nodes.remove(key);
 }
 
 /// Composable error.
@@ -120,31 +161,58 @@ impl<C: Compose> Compose for Result<C, Error> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let catch_cx = use_context::<CatchContext>(&cx).unwrap();
 
-        cx.is_container.set(true);
+        let child_key = use_ref(&cx, || Cell::new(None));
 
-        let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
-        let mut state_cell = state_cell.borrow_mut();
+        let rt = Runtime::current();
+        let mut nodes = rt.nodes.borrow_mut();
 
         match &*cx.me() {
             Ok(content) => {
-                if let Some(state) = &*state_cell {
-                    state.is_parent_changed.set(cx.is_parent_changed.get());
-                    unsafe {
-                        content.any_compose(state);
-                    }
+                if let Some(key) = child_key.get() {
+                    let last = nodes.get_mut(key).unwrap();
+
+                    let ptr = content as *const dyn AnyCompose;
+                    let ptr: *const dyn AnyCompose = unsafe { mem::transmute(ptr) };
+
+                    *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
+
+                    rt.pending.borrow_mut().push_back(key);
                 } else {
-                    let mut state = ScopeData::default();
-                    state.contexts = cx.contexts.clone();
-                    *state_cell = Some(state);
-                    unsafe {
-                        content.any_compose(state_cell.as_ref().unwrap());
-                    }
+                    let ptr: *const dyn AnyCompose =
+                        unsafe { mem::transmute(content as *const dyn AnyCompose) };
+                    let key = nodes.insert(Rc::new(Node {
+                        compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
+                        scope: ScopeData::default(),
+                        parent: Some(rt.current_key.get()),
+                        children: RefCell::new(Vec::new()),
+                    }));
+                    child_key.set(Some(key));
+
+                    nodes
+                        .get(rt.current_key.get())
+                        .unwrap()
+                        .children
+                        .borrow_mut()
+                        .push(key);
+
+                    let child_state = &nodes[key].scope;
+
+                    *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                    child_state
+                        .contexts
+                        .borrow_mut()
+                        .values
+                        .extend(cx.child_contexts.borrow().values.clone());
+
+                    rt.pending.borrow_mut().push_back(key);
                 }
             }
             Err(error) => {
-                *state_cell = None;
+                if let Some(key) = child_key.get() {
+                    drop_node(&mut nodes, key);
+                }
 
-                (catch_cx.f)((error.make_error)());
+                (catch_cx.f)((error.make_error)())
             }
         }
     }
@@ -166,23 +234,50 @@ macro_rules! impl_tuples {
 
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
-                cx.is_container.set(true);
+                let rt = Runtime::current();
 
                 $(
-                    let state = use_ref(&cx, || {
-                        ScopeData::default()
+                    let mut is_init = false;
+
+                    let child_key = use_ref(&cx, || {
+                        is_init = true;
+
+                        let mut nodes = rt.nodes.borrow_mut();
+
+                        let ptr: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
+                        let child_key = nodes.insert(Rc::new(Node {
+                            compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
+                            scope: ScopeData::default(),
+                            parent: Some(rt.current_key.get()),
+                            children: RefCell::new(Vec::new()),
+                        }));
+
+                        nodes
+                            .get(rt.current_key.get())
+                            .unwrap()
+                            .children
+                            .borrow_mut()
+                            .push(child_key);
+
+                        let child_state = &nodes[child_key].scope;
+
+                        *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                        child_state
+                            .contexts
+                            .borrow_mut()
+                            .values
+                            .extend(cx.child_contexts.borrow().values.clone());
+
+                        child_key
                     });
 
-                    *state.contexts.borrow_mut() = cx.contexts.borrow().clone();
-                    state
-                        .contexts
-                        .borrow_mut()
-                        .values
-                        .extend(cx.child_contexts.borrow().values.clone());
+                    if !is_init {
+                        let last = rt.nodes.borrow().get(*child_key).unwrap().clone();
+                        let ptr: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
+                        *last.compose.borrow_mut() = crate::composer::ComposePtr::Ptr(ptr);
+                    }
 
-                    state.is_parent_changed.set(cx.is_parent_changed.get());
-
-                    unsafe { cx.me().$idx.any_compose(state) }
+                    rt.pending.borrow_mut().push_back(*child_key);
                 )*
             }
         }
@@ -207,6 +302,8 @@ pub(crate) trait AnyCompose {
 
     /// Safety: The caller must ensure `&self` is valid for the lifetime of `state`.
     unsafe fn any_compose(&self, state: &ScopeData);
+
+    fn name(&self) -> Option<Cow<'static, str>>;
 }
 
 impl<C> AnyCompose for C
@@ -243,52 +340,65 @@ where
         // Safety: This cell is only accessed by this composable.
         let cell = unsafe { &mut *cell.get() };
 
-        if typeid::of::<C>() == typeid::of::<()>() {
-            return;
-        }
+        let child_key_cell = use_ref(&cx, || Cell::new(None));
 
-        // Scope for this composable's content.
-        let child_state = use_ref(&cx, ScopeData::default);
+        let rt = Runtime::current();
 
-        if cell.is_none()
-            || cx.is_changed.take()
-            || cx.is_parent_changed.get()
-            || cx.is_container.get()
-        {
+        if cell.is_none() {
             #[cfg(feature = "tracing")]
-            if !cx.is_container.get() {
-                if let Some(name) = C::name() {
-                    tracing::trace!("Compose: {}", name);
-                }
+            if let Some(name) = C::name() {
+                tracing::trace!("Compose: {}", name);
             }
 
-            let mut child = C::compose(cx);
+            let child = C::compose(cx);
 
-            cx.is_parent_changed.set(false);
+            if child.data_id() == typeid::of::<()>() {
+                return;
+            }
 
-            *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
-            child_state
-                .contexts
-                .borrow_mut()
-                .values
-                .extend(cx.child_contexts.borrow().values.clone());
+            let child: Box<dyn AnyCompose> = Box::new(child);
+            let mut child: Box<dyn AnyCompose> = unsafe { mem::transmute(child) };
 
-            child_state.is_parent_changed.set(true);
+            let mut nodes = rt.nodes.borrow_mut();
 
             unsafe {
-                if let Some(ref mut content) = cell {
-                    child.reborrow((**content).as_ptr_mut());
+                if let Some(key) = child_key_cell.get() {
+                    let last = nodes.get_mut(key).unwrap();
+                    child.reborrow(last.compose.borrow_mut().as_ptr_mut());
                 } else {
-                    let boxed: Box<dyn AnyCompose> = Box::new(child);
-                    let boxed: Box<dyn AnyCompose> = mem::transmute(boxed);
-                    *cell = Some(boxed);
+                    let child_key = nodes.insert(Rc::new(Node {
+                        compose: RefCell::new(crate::composer::ComposePtr::Boxed(child)),
+                        scope: ScopeData::default(),
+                        parent: Some(rt.current_key.get()),
+                        children: RefCell::new(Vec::new()),
+                    }));
+                    child_key_cell.set(Some(child_key));
+
+                    nodes
+                        .get(rt.current_key.get())
+                        .unwrap()
+                        .children
+                        .borrow_mut()
+                        .push(child_key);
+
+                    let child_state = &nodes[child_key].scope;
+
+                    *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                    child_state
+                        .contexts
+                        .borrow_mut()
+                        .values
+                        .extend(cx.child_contexts.borrow().values.clone());
                 }
             }
-        } else {
-            child_state.is_parent_changed.set(false);
         }
 
-        let child = cell.as_mut().unwrap();
-        (*child).any_compose(child_state);
+        if let Some(key) = child_key_cell.get() {
+            rt.pending.borrow_mut().push_back(key);
+        }
+    }
+
+    fn name(&self) -> Option<Cow<'static, str>> {
+        C::name()
     }
 }

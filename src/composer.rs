@@ -7,21 +7,74 @@ use core::{
     any::TypeId,
     cell::{Cell, RefCell},
     error::Error,
+    fmt,
     future::Future,
+    mem,
     pin::Pin,
     task::{Context, Poll, Waker},
 };
 use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
+use std::collections::VecDeque;
 
 #[cfg(feature = "executor")]
 use tokio::sync::RwLock;
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
 
+pub(crate) enum ComposePtr {
+    Boxed(Box<dyn AnyCompose>),
+    Ptr(*const dyn AnyCompose),
+}
+
+impl AnyCompose for ComposePtr {
+    fn data_id(&self) -> TypeId {
+        match self {
+            ComposePtr::Boxed(compose) => compose.data_id(),
+            ComposePtr::Ptr(ptr) => unsafe { (**ptr).data_id() },
+        }
+    }
+
+    fn as_ptr_mut(&mut self) -> *mut () {
+        match self {
+            ComposePtr::Boxed(compose) => compose.as_ptr_mut(),
+            ComposePtr::Ptr(ptr) => *ptr as *mut (),
+        }
+    }
+
+    unsafe fn reborrow(&mut self, ptr: *mut ()) {
+        match self {
+            ComposePtr::Boxed(compose) => compose.reborrow(ptr),
+            ComposePtr::Ptr(_) => {}
+        }
+    }
+
+    unsafe fn any_compose(&self, state: &ScopeData) {
+        match self {
+            ComposePtr::Boxed(compose) => compose.any_compose(state),
+            ComposePtr::Ptr(ptr) => (**ptr).any_compose(state),
+        }
+    }
+
+    fn name(&self) -> Option<std::borrow::Cow<'static, str>> {
+        match self {
+            ComposePtr::Boxed(compose) => compose.name(),
+            ComposePtr::Ptr(_) => None,
+        }
+    }
+}
+
+// Safety: `scope` must be dropped before `compose`.
+pub(crate) struct Node {
+    pub(crate) compose: RefCell<ComposePtr>,
+    pub(crate) scope: ScopeData<'static>,
+    pub(crate) parent: Option<DefaultKey>,
+    pub(crate) children: RefCell<Vec<DefaultKey>>,
+}
+
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
-pub struct Runtime {
+pub(crate) struct Runtime {
     /// Local task stored on this runtime.
     pub(crate) tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
 
@@ -36,6 +89,14 @@ pub struct Runtime {
     pub(crate) lock: Arc<RwLock<()>>,
 
     pub(crate) waker: RefCell<Option<Waker>>,
+
+    pub(crate) nodes: Rc<RefCell<SlotMap<DefaultKey, Rc<Node>>>>,
+
+    pub(crate) current_key: Rc<Cell<DefaultKey>>,
+
+    pub(crate) root: DefaultKey,
+
+    pub(crate) pending: Rc<RefCell<VecDeque<DefaultKey>>>,
 }
 
 impl Runtime {
@@ -108,14 +169,12 @@ pub enum TryComposeError {
 
 impl PartialEq for TryComposeError {
     fn eq(&self, other: &Self) -> bool {
-        core::mem::discriminant(self) == core::mem::discriminant(other)
+        mem::discriminant(self) == mem::discriminant(other)
     }
 }
 
 /// Composer for composable content.
 pub struct Composer {
-    compose: Box<dyn AnyCompose>,
-    scope_state: Box<ScopeData<'static>>,
     rt: Runtime,
     task_queue: Arc<SegQueue<DefaultKey>>,
     update_queue: Rc<SegQueue<Box<dyn FnMut()>>>,
@@ -131,10 +190,15 @@ impl Composer {
         let task_queue = Arc::new(SegQueue::new());
         let update_queue = Rc::new(SegQueue::new());
 
-        let scope_data = ScopeData::default();
+        let mut nodes = SlotMap::new();
+        let root_key = nodes.insert(Rc::new(Node {
+            compose: RefCell::new(ComposePtr::Boxed(Box::new(content))),
+            scope: ScopeData::default(),
+            parent: None,
+            children: RefCell::new(Vec::new()),
+        }));
+
         Self {
-            compose: Box::new(content),
-            scope_state: Box::new(scope_data),
             rt: Runtime {
                 tasks: Rc::new(RefCell::new(SlotMap::new())),
                 task_queue: task_queue.clone(),
@@ -142,6 +206,10 @@ impl Composer {
                 waker: RefCell::new(None),
                 #[cfg(feature = "executor")]
                 lock,
+                nodes: Rc::new(RefCell::new(nodes)),
+                current_key: Rc::new(Cell::new(root_key)),
+                root: root_key,
+                pending: Rc::new(RefCell::new(VecDeque::new())),
             },
             task_queue,
             update_queue,
@@ -151,57 +219,19 @@ impl Composer {
 
     /// Try to immediately compose the content in this composer.
     pub fn try_compose(&mut self) -> Result<(), TryComposeError> {
-        self.rt.enter();
+        let mut is_pending = true;
 
-        let error_cell = Rc::new(Cell::new(None));
-        let error_cell_handle = error_cell.clone();
-        self.scope_state.contexts.borrow_mut().values.insert(
-            TypeId::of::<CatchContext>(),
-            Rc::new(CatchContext::new(move |error| {
-                error_cell_handle.set(Some(error));
-            })),
-        );
+        for res in self.by_ref() {
+            res.map_err(TryComposeError::Error)?;
 
-        if !self.is_initial {
-            let mut is_ready = false;
-
-            while let Some(key) = self.task_queue.pop() {
-                let waker = Waker::from(Arc::new(TaskWaker {
-                    key,
-                    waker: self.rt.waker.borrow().clone(),
-                    queue: self.rt.task_queue.clone(),
-                }));
-                let mut cx = Context::from_waker(&waker);
-
-                let mut tasks = self.rt.tasks.borrow_mut();
-                let task = tasks.get_mut(key).unwrap();
-                let _ = task.as_mut().poll(&mut cx);
-
-                is_ready = true;
-            }
-
-            while let Some(mut update) = self.update_queue.pop() {
-                update();
-                is_ready = true;
-            }
-
-            if !is_ready {
-                return Err(TryComposeError::Pending);
-            }
-        } else {
-            self.is_initial = false;
+            is_pending = false;
         }
 
-        #[cfg(feature = "tracing")]
-        tracing::trace!("Start composition");
-
-        // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
-        unsafe { self.compose.any_compose(&self.scope_state) };
-
-        error_cell
-            .take()
-            .map(|error| Err(TryComposeError::Error(error)))
-            .unwrap_or_else(|| Ok(()))
+        if is_pending {
+            Err(TryComposeError::Pending)
+        } else {
+            Ok(())
+        }
     }
 
     /// Poll a composition of the content in this composer.
@@ -218,6 +248,119 @@ impl Composer {
     /// Compose the content of this composer.
     pub async fn compose(&mut self) -> Result<(), Box<dyn Error>> {
         futures::future::poll_fn(|cx| self.poll_compose(cx)).await
+    }
+}
+
+impl Drop for Composer {
+    fn drop(&mut self) {
+        let node = self.rt.nodes.borrow()[self.rt.root].clone();
+        drop_recursive(&self.rt, self.rt.root, node)
+    }
+}
+
+fn drop_recursive(rt: &Runtime, key: DefaultKey, node: Rc<Node>) {
+    let children = node.children.borrow().clone();
+    for child_key in children {
+        let child = rt.nodes.borrow()[child_key].clone();
+        drop_recursive(rt, child_key, child)
+    }
+
+    rt.nodes.borrow_mut().remove(key);
+}
+
+impl Iterator for Composer {
+    type Item = Result<(), Box<dyn Error>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.rt.enter();
+
+        let error_cell = Rc::new(Cell::new(None));
+        let error_cell_handle = error_cell.clone();
+
+        let root = self.rt.nodes.borrow().get(self.rt.root).unwrap().clone();
+        root.scope.contexts.borrow_mut().values.insert(
+            TypeId::of::<CatchContext>(),
+            Rc::new(CatchContext::new(move |error| {
+                error_cell_handle.set(Some(error));
+            })),
+        );
+
+        if !self.is_initial {
+            let key_cell = self.rt.pending.borrow_mut().pop_front();
+            if let Some(key) = key_cell {
+                self.rt.current_key.set(key);
+
+                let node = self.rt.nodes.borrow().get(key).unwrap().clone();
+
+                // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
+                unsafe { node.compose.borrow().any_compose(&node.scope) };
+            } else {
+                while let Some(key) = self.task_queue.pop() {
+                    let waker = Waker::from(Arc::new(TaskWaker {
+                        key,
+                        waker: self.rt.waker.borrow().clone(),
+                        queue: self.rt.task_queue.clone(),
+                    }));
+                    let mut cx = Context::from_waker(&waker);
+
+                    let mut tasks = self.rt.tasks.borrow_mut();
+                    let task = tasks.get_mut(key).unwrap();
+                    let _ = task.as_mut().poll(&mut cx);
+                }
+
+                while let Some(mut update) = self.update_queue.pop() {
+                    update();
+                }
+
+                return None;
+            }
+        } else {
+            self.is_initial = false;
+
+            self.rt.current_key.set(self.rt.root);
+
+            // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
+            unsafe { root.compose.borrow().any_compose(&root.scope) };
+        }
+
+        Some(error_cell.take().map(Err).unwrap_or(Ok(())))
+    }
+}
+
+impl fmt::Debug for Composer {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Composer")
+            .field(
+                "nodes",
+                &Debugger {
+                    nodes: &self.rt.nodes.borrow(),
+                    key: self.rt.root,
+                },
+            )
+            .finish()
+    }
+}
+
+struct Debugger<'a> {
+    nodes: &'a SlotMap<DefaultKey, Rc<Node>>,
+    key: DefaultKey,
+}
+
+impl fmt::Debug for Debugger<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let node = &self.nodes[self.key];
+        let name = node.compose.borrow().name().unwrap_or_default();
+
+        let mut dbg_tuple = f.debug_tuple(&name);
+
+        for child in &*node.children.borrow() {
+            dbg_tuple.field(&Debugger {
+                nodes: self.nodes,
+                key: *child,
+            });
+        }
+
+        dbg_tuple.finish()
     }
 }
 
@@ -240,9 +383,10 @@ mod tests {
 
     impl Compose for Counter {
         fn compose(cx: Scope<Self>) -> impl Compose {
-            cx.me().x.set(cx.me().x.get() + 1);
+            let updater = use_mut(&cx, || ());
+            SignalMut::set(updater, ());
 
-            cx.set_changed();
+            cx.me().x.set(cx.me().x.get() + 1);
         }
     }
 
