@@ -398,7 +398,7 @@ fn dbg_composer(
         dbg_tuple.field(&Field {
             name: &name,
             nodes,
-            children: &*node.children.borrow(),
+            children: &node.children.borrow(),
         });
     } else {
         for child_key in &*node.children.borrow() {
