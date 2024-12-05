@@ -37,14 +37,9 @@ where
     C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        /*
-        unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
-        */
-
         let rt = Runtime::current();
 
         let mut is_init = false;
-
         let child_key = use_ref(&cx, || {
             is_init = true;
 

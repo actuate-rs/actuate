@@ -1,5 +1,5 @@
 use crate::{
-    composer::{Node, Runtime},
+    composer::{ComposePtr, Node, Runtime},
     data::Data,
     use_context, use_ref, Scope, ScopeData, ScopeState,
 };
@@ -10,6 +10,7 @@ use core::{
     error::Error as StdError,
     mem,
 };
+use slotmap::{DefaultKey, SlotMap};
 use std::{cell::Cell, rc::Rc};
 
 mod catch;
@@ -78,29 +79,63 @@ impl<C: Compose> Compose for &C {
 
 impl<C: Compose> Compose for Option<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        // cx.is_container.set(true);
+        let child_key = use_ref(&cx, || Cell::new(None));
 
-        let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
-        let mut state_cell = state_cell.borrow_mut();
+        let rt = Runtime::current();
+        let mut nodes = rt.nodes.borrow_mut();
 
         if let Some(content) = &*cx.me() {
-            if let Some(state) = &*state_cell {
-                //state.is_parent_changed.set(cx.is_parent_changed.get());
-                unsafe {
-                    content.any_compose(state);
-                }
+            if let Some(key) = child_key.get() {
+                let last = nodes.get_mut(key).unwrap();
+
+                let ptr = content as *const dyn AnyCompose;
+                let ptr: *const dyn AnyCompose = unsafe { mem::transmute(ptr) };
+
+                *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
+
+                rt.pending.borrow_mut().push_back(key);
             } else {
-                let mut state = ScopeData::default();
-                state.contexts = cx.contexts.clone();
-                *state_cell = Some(state);
-                unsafe {
-                    content.any_compose(state_cell.as_ref().unwrap());
-                }
+                let ptr: *const dyn AnyCompose =
+                    unsafe { mem::transmute(content as *const dyn AnyCompose) };
+                let key = nodes.insert(Rc::new(Node {
+                    compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
+                    scope: ScopeData::default(),
+                    children: RefCell::new(Vec::new()),
+                }));
+                child_key.set(Some(key));
+
+                nodes
+                    .get(rt.current_key.get())
+                    .unwrap()
+                    .children
+                    .borrow_mut()
+                    .push(key);
+
+                let child_state = &nodes[key].scope;
+
+                *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                child_state
+                    .contexts
+                    .borrow_mut()
+                    .values
+                    .extend(cx.child_contexts.borrow().values.clone());
+
+                rt.pending.borrow_mut().push_back(key);
             }
-        } else {
-            *state_cell = None;
+        } else if let Some(key) = child_key.get() {
+            drop_node(&mut nodes, key);
         }
     }
+}
+
+// TODO replace with non-recursive algorithm.
+fn drop_node(nodes: &mut SlotMap<DefaultKey, Rc<Node>>, key: DefaultKey) {
+    let children = nodes[key].children.borrow().clone();
+    for key in children {
+        drop_node(nodes, key)
+    }
+
+    nodes.remove(key);
 }
 
 /// Composable error.
@@ -125,31 +160,57 @@ impl<C: Compose> Compose for Result<C, Error> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let catch_cx = use_context::<CatchContext>(&cx).unwrap();
 
-        //cx.is_container.set(true);
+        let child_key = use_ref(&cx, || Cell::new(None));
 
-        let state_cell: &RefCell<Option<ScopeData>> = use_ref(&cx, || RefCell::new(None));
-        let mut state_cell = state_cell.borrow_mut();
+        let rt = Runtime::current();
+        let mut nodes = rt.nodes.borrow_mut();
 
         match &*cx.me() {
             Ok(content) => {
-                if let Some(state) = &*state_cell {
-                    //state.is_parent_changed.set(cx.is_parent_changed.get());
-                    unsafe {
-                        content.any_compose(state);
-                    }
+                if let Some(key) = child_key.get() {
+                    let last = nodes.get_mut(key).unwrap();
+
+                    let ptr = content as *const dyn AnyCompose;
+                    let ptr: *const dyn AnyCompose = unsafe { mem::transmute(ptr) };
+
+                    *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
+
+                    rt.pending.borrow_mut().push_back(key);
                 } else {
-                    let mut state = ScopeData::default();
-                    state.contexts = cx.contexts.clone();
-                    *state_cell = Some(state);
-                    unsafe {
-                        content.any_compose(state_cell.as_ref().unwrap());
-                    }
+                    let ptr: *const dyn AnyCompose =
+                        unsafe { mem::transmute(content as *const dyn AnyCompose) };
+                    let key = nodes.insert(Rc::new(Node {
+                        compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
+                        scope: ScopeData::default(),
+                        children: RefCell::new(Vec::new()),
+                    }));
+                    child_key.set(Some(key));
+
+                    nodes
+                        .get(rt.current_key.get())
+                        .unwrap()
+                        .children
+                        .borrow_mut()
+                        .push(key);
+
+                    let child_state = &nodes[key].scope;
+
+                    *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                    child_state
+                        .contexts
+                        .borrow_mut()
+                        .values
+                        .extend(cx.child_contexts.borrow().values.clone());
+
+                    rt.pending.borrow_mut().push_back(key);
                 }
             }
             Err(error) => {
-                *state_cell = None;
+                if let Some(key) = child_key.get() {
+                    drop_node(&mut nodes, key);
+                }
 
-                (catch_cx.f)((error.make_error)());
+                (catch_cx.f)((error.make_error)())
             }
         }
     }
