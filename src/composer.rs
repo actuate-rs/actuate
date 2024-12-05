@@ -7,6 +7,7 @@ use core::{
     any::TypeId,
     cell::{Cell, RefCell},
     error::Error,
+    fmt,
     future::Future,
     pin::Pin,
     task::{Context, Poll, Waker},
@@ -18,6 +19,12 @@ use slotmap::{DefaultKey, SlotMap};
 use tokio::sync::RwLock;
 
 type RuntimeFuture = Pin<Box<dyn Future<Output = ()>>>;
+
+pub(crate) struct Node {
+    pub(crate) compose: RefCell<Box<dyn AnyCompose>>,
+    pub(crate) scope: ScopeData<'static>,
+    pub(crate) children: RefCell<Vec<DefaultKey>>,
+}
 
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
@@ -36,6 +43,12 @@ pub struct Runtime {
     pub(crate) lock: Arc<RwLock<()>>,
 
     pub(crate) waker: RefCell<Option<Waker>>,
+
+    pub(crate) nodes: Rc<RefCell<SlotMap<DefaultKey, Rc<Node>>>>,
+
+    pub(crate) current_key: Rc<Cell<DefaultKey>>,
+
+    pub(crate) root: DefaultKey,
 }
 
 impl Runtime {
@@ -114,8 +127,6 @@ impl PartialEq for TryComposeError {
 
 /// Composer for composable content.
 pub struct Composer {
-    compose: Box<dyn AnyCompose>,
-    scope_state: Box<ScopeData<'static>>,
     rt: Runtime,
     task_queue: Arc<SegQueue<DefaultKey>>,
     update_queue: Rc<SegQueue<Box<dyn FnMut()>>>,
@@ -131,10 +142,14 @@ impl Composer {
         let task_queue = Arc::new(SegQueue::new());
         let update_queue = Rc::new(SegQueue::new());
 
-        let scope_data = ScopeData::default();
+        let mut nodes = SlotMap::new();
+        let root_key = nodes.insert(Rc::new(Node {
+            compose: RefCell::new(Box::new(content)),
+            scope: ScopeData::default(),
+            children: RefCell::new(Vec::new()),
+        }));
+
         Self {
-            compose: Box::new(content),
-            scope_state: Box::new(scope_data),
             rt: Runtime {
                 tasks: Rc::new(RefCell::new(SlotMap::new())),
                 task_queue: task_queue.clone(),
@@ -142,6 +157,9 @@ impl Composer {
                 waker: RefCell::new(None),
                 #[cfg(feature = "executor")]
                 lock,
+                nodes: Rc::new(RefCell::new(nodes)),
+                current_key: Rc::new(Cell::new(root_key)),
+                root: root_key,
             },
             task_queue,
             update_queue,
@@ -155,7 +173,9 @@ impl Composer {
 
         let error_cell = Rc::new(Cell::new(None));
         let error_cell_handle = error_cell.clone();
-        self.scope_state.contexts.borrow_mut().values.insert(
+
+        let root = self.rt.nodes.borrow().get(self.rt.root).unwrap().clone();
+        root.scope.contexts.borrow_mut().values.insert(
             TypeId::of::<CatchContext>(),
             Rc::new(CatchContext::new(move |error| {
                 error_cell_handle.set(Some(error));
@@ -195,8 +215,10 @@ impl Composer {
         #[cfg(feature = "tracing")]
         tracing::trace!("Start composition");
 
+        self.rt.current_key.set(self.rt.root);
+
         // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
-        unsafe { self.compose.any_compose(&self.scope_state) };
+        unsafe { root.compose.borrow().any_compose(&root.scope) };
 
         error_cell
             .take()
@@ -218,6 +240,43 @@ impl Composer {
     /// Compose the content of this composer.
     pub async fn compose(&mut self) -> Result<(), Box<dyn Error>> {
         futures::future::poll_fn(|cx| self.poll_compose(cx)).await
+    }
+}
+
+impl fmt::Debug for Composer {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Composer")
+            .field(
+                "nodes",
+                &Debugger {
+                    nodes: &self.rt.nodes.borrow(),
+                    key: self.rt.root,
+                },
+            )
+            .finish()
+    }
+}
+
+struct Debugger<'a> {
+    nodes: &'a SlotMap<DefaultKey, Rc<Node>>,
+    key: DefaultKey,
+}
+
+impl fmt::Debug for Debugger<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let node = &self.nodes[self.key];
+        let name = node.compose.borrow().name().unwrap_or_default();
+
+        let mut dbg_tuple = f.debug_tuple(&name);
+
+        for child in &*node.children.borrow() {
+            dbg_tuple.field(&Debugger {
+                nodes: self.nodes,
+                key: *child,
+            });
+        }
+
+        dbg_tuple.finish()
     }
 }
 

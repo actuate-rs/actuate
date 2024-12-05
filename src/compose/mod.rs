@@ -1,4 +1,8 @@
-use crate::{data::Data, use_context, use_ref, Scope, ScopeData, ScopeState};
+use crate::{
+    composer::{Node, Runtime},
+    data::Data,
+    use_context, use_ref, Scope, ScopeData, ScopeState,
+};
 use alloc::borrow::Cow;
 use core::{
     any::TypeId,
@@ -6,6 +10,7 @@ use core::{
     error::Error as StdError,
     mem,
 };
+use std::{cell::Cell, rc::Rc};
 
 mod catch;
 pub use self::catch::{catch, Catch};
@@ -207,6 +212,8 @@ pub(crate) trait AnyCompose {
 
     /// Safety: The caller must ensure `&self` is valid for the lifetime of `state`.
     unsafe fn any_compose(&self, state: &ScopeData);
+
+    fn name(&self) -> Option<Cow<'static, str>>;
 }
 
 impl<C> AnyCompose for C
@@ -226,6 +233,10 @@ where
     }
 
     unsafe fn any_compose(&self, state: &ScopeData) {
+        if typeid::of::<C>() == typeid::of::<()>() {
+            return;
+        }
+
         // Reset the hook index.
         state.hook_idx.set(0);
 
@@ -243,12 +254,7 @@ where
         // Safety: This cell is only accessed by this composable.
         let cell = unsafe { &mut *cell.get() };
 
-        if typeid::of::<C>() == typeid::of::<()>() {
-            return;
-        }
-
-        // Scope for this composable's content.
-        let child_state = use_ref(&cx, ScopeData::default);
+        let child_key_cell = use_ref(&cx, || Cell::new(None));
 
         if cell.is_none()
             || cx.is_changed.take()
@@ -262,33 +268,55 @@ where
                 }
             }
 
-            let mut child = C::compose(cx);
+            let child = C::compose(cx);
+            let child: Box<dyn AnyCompose> = Box::new(child);
+            let mut child: Box<dyn AnyCompose> = unsafe { mem::transmute(child) };
 
             cx.is_parent_changed.set(false);
 
-            *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
-            child_state
-                .contexts
-                .borrow_mut()
-                .values
-                .extend(cx.child_contexts.borrow().values.clone());
-
-            child_state.is_parent_changed.set(true);
+            let rt = Runtime::current();
+            let mut nodes = rt.nodes.borrow_mut();
 
             unsafe {
-                if let Some(ref mut content) = cell {
-                    child.reborrow((**content).as_ptr_mut());
+                if let Some(key) = child_key_cell.get() {
+                    let last = nodes.get_mut(key).unwrap();
+                    child.reborrow(last.compose.borrow_mut().as_ptr_mut());
                 } else {
-                    let boxed: Box<dyn AnyCompose> = Box::new(child);
-                    let boxed: Box<dyn AnyCompose> = mem::transmute(boxed);
-                    *cell = Some(boxed);
+                    let child_key = nodes.insert(Rc::new(Node {
+                        compose: RefCell::new(child),
+                        scope: ScopeData::default(),
+                        children: RefCell::new(Vec::new()),
+                    }));
+
+                    nodes
+                        .get(rt.current_key.get())
+                        .unwrap()
+                        .children
+                        .borrow_mut()
+                        .push(child_key);
+
+                    let child_state = &nodes[child_key].scope;
+
+                    *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
+                    child_state
+                        .contexts
+                        .borrow_mut()
+                        .values
+                        .extend(cx.child_contexts.borrow().values.clone());
+
+                    child_state.is_parent_changed.set(true);
                 }
             }
         } else {
+            let rt = Runtime::current();
+            let nodes = rt.nodes.borrow();
+
+            let child_state = &nodes[child_key_cell.get().unwrap()].scope;
             child_state.is_parent_changed.set(false);
         }
+    }
 
-        let child = cell.as_mut().unwrap();
-        (*child).any_compose(child_state);
+    fn name(&self) -> Option<Cow<'static, str>> {
+        C::name()
     }
 }
