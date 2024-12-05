@@ -69,6 +69,7 @@ impl AnyCompose for ComposePtr {
 pub(crate) struct Node {
     pub(crate) compose: RefCell<ComposePtr>,
     pub(crate) scope: ScopeData<'static>,
+    pub(crate) parent: Option<DefaultKey>,
     pub(crate) children: RefCell<Vec<DefaultKey>>,
 }
 
@@ -194,6 +195,7 @@ impl Composer {
         let root_key = nodes.insert(Rc::new(Node {
             compose: RefCell::new(ComposePtr::Boxed(Box::new(content))),
             scope: ScopeData::default(),
+            parent: None,
             children: RefCell::new(Vec::new()),
         }));
 

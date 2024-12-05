@@ -72,6 +72,7 @@ where
                 let key = nodes.insert(Rc::new(Node {
                     compose: RefCell::new(crate::composer::ComposePtr::Boxed(any_compose)),
                     scope: ScopeData::default(),
+                    parent: Some(rt.current_key.get()),
                     children: RefCell::new(Vec::new()),
                 }));
                 nodes

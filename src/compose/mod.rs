@@ -69,14 +69,6 @@ impl Compose for () {
     }
 }
 
-impl<C: Compose> Compose for &C {
-    fn compose(cx: Scope<Self>) -> impl Compose {
-        unsafe {
-            (**cx.me()).any_compose(&cx);
-        }
-    }
-}
-
 impl<C: Compose> Compose for Option<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let child_key = use_ref(&cx, || Cell::new(None));
@@ -100,6 +92,7 @@ impl<C: Compose> Compose for Option<C> {
                 let key = nodes.insert(Rc::new(Node {
                     compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
                     scope: ScopeData::default(),
+                    parent: Some(rt.current_key.get()),
                     children: RefCell::new(Vec::new()),
                 }));
                 child_key.set(Some(key));
@@ -130,7 +123,13 @@ impl<C: Compose> Compose for Option<C> {
 
 // TODO replace with non-recursive algorithm.
 fn drop_node(nodes: &mut SlotMap<DefaultKey, Rc<Node>>, key: DefaultKey) {
-    let children = nodes[key].children.borrow().clone();
+    let node = nodes[key].clone();
+    if let Some(parent) = node.parent {
+        let parent = nodes.get_mut(parent).unwrap();
+        parent.children.borrow_mut().retain(|&x| x != key);
+    }
+
+    let children = node.children.borrow().clone();
     for key in children {
         drop_node(nodes, key)
     }
@@ -182,6 +181,7 @@ impl<C: Compose> Compose for Result<C, Error> {
                     let key = nodes.insert(Rc::new(Node {
                         compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
                         scope: ScopeData::default(),
+                        parent: Some(rt.current_key.get()),
                         children: RefCell::new(Vec::new()),
                     }));
                     child_key.set(Some(key));
@@ -246,6 +246,7 @@ macro_rules! impl_tuples {
                         let child_key = nodes.insert(Rc::new(Node {
                             compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
                             scope: ScopeData::default(),
+                            parent: Some(rt.current_key.get()),
                             children: RefCell::new(Vec::new()),
                         }));
 
@@ -366,6 +367,7 @@ where
                     let child_key = nodes.insert(Rc::new(Node {
                         compose: RefCell::new(crate::composer::ComposePtr::Boxed(child)),
                         scope: ScopeData::default(),
+                        parent: Some(rt.current_key.get()),
                         children: RefCell::new(Vec::new()),
                     }));
                     child_key_cell.set(Some(child_key));
