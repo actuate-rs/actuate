@@ -1,9 +1,6 @@
 // Counter UI example.
 
-use actuate::{
-    material::{button, headline, label},
-    prelude::*,
-};
+use actuate::prelude::*;
 use bevy::prelude::*;
 
 // Counter composable.

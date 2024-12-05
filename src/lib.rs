@@ -163,6 +163,10 @@ pub mod prelude {
     #[cfg(feature = "executor")]
     #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
     pub use crate::use_task;
+
+    #[cfg(feature = "material")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "material")))]
+    pub use crate::material::{button, headline, label, Button, Modifier, Modify};
 }
 
 #[cfg(feature = "animation")]
