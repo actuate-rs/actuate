@@ -74,7 +74,7 @@ pub(crate) struct Node {
 
 /// Runtime for a [`Composer`].
 #[derive(Clone)]
-pub (crate) struct Runtime {
+pub(crate) struct Runtime {
     /// Local task stored on this runtime.
     pub(crate) tasks: Rc<RefCell<SlotMap<DefaultKey, RuntimeFuture>>>,
 
