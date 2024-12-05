@@ -47,13 +47,11 @@ impl Compose for Counter {
         let count = use_mut(&cx, || cx.me().start);
 
         (
-            spawn(Text::new(format!("High five count: {}", count))),
-            spawn(Text::new("Up high"))
-                .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x += 1)),
-            spawn(Text::new("Down low"))
-                .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x -= 1)),
+            text::headline(format!("High five count: {}", count)),
+            button(text::label("Up high")).on_click(move || SignalMut::update(count, |x| *x += 1)),
+            button(text::label("Down low")).on_click(move || SignalMut::update(count, |x| *x -= 1)),
             if *count == 0 {
-                Some(spawn(Text::new("Gimme five!")))
+                Some(text::label("Gimme five!"))
             } else {
                 None
             },

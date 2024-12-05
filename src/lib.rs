@@ -18,13 +18,11 @@
 //!         let count = use_mut(&cx, || cx.me().start);
 //!
 //!         (
-//!             spawn(Text::new(format!("High five count: {}", count))),
-//!             spawn(Text::new("Up high"))
-//!                 .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x += 1)),
-//!             spawn(Text::new("Down low"))
-//!                 .observe(move |_: Trigger<Pointer<Click>>| SignalMut::update(count, |x| *x -= 1)),
+//!             text::headline(format!("High five count: {}", count)),
+//!             button(text::label("Up high")).on_click(move || SignalMut::update(count, |x| *x += 1)),
+//!             button(text::label("Down low")).on_click(move || SignalMut::update(count, |x| *x -= 1)),
 //!             if *count == 0 {
-//!                 Some(spawn(Text::new("Gimme five!")))
+//!                 Some(text::label("Gimme five!"))
 //!             } else {
 //!                 None
 //!             },
@@ -107,6 +105,7 @@
 //!   (enables the `ecs` feature).
 //! - `ecs`: Enables the `ecs` module for bindings to the [Bevy](https://crates.io/crates/bevy) ECS.
 //! - `executor`: Enables the `executor` module for multi-threaded tasks.
+//! - `material`: Enables the `material` module for Material UI (enables the `ecs` feature).
 //! - `rt` Enables support for the [Tokio](https://crates.io/crates/tokio) runtime with the Executor trait.
 //!   (enables the `executor` feature).
 //! - `tracing`: Enables the `tracing` module for logging.
@@ -163,6 +162,10 @@ pub mod prelude {
     #[cfg(feature = "executor")]
     #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
     pub use crate::use_task;
+
+    #[cfg(feature = "material")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "material")))]
+    pub use crate::material::{button, radio_button, text, Button, Modifier, Modify, RadioButton};
 }
 
 #[cfg(feature = "animation")]
@@ -191,6 +194,11 @@ pub mod ecs;
 #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
 /// Task execution context.
 pub mod executor;
+
+#[cfg(feature = "material")]
+#[cfg_attr(docsrs, doc(cfg(feature = "material")))]
+/// Material UI.
+pub mod material;
 
 /// Clone-on-write value.
 ///
