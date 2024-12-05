@@ -49,6 +49,8 @@ pub struct Runtime {
     pub(crate) current_key: Rc<Cell<DefaultKey>>,
 
     pub(crate) root: DefaultKey,
+
+    pub(crate) pending: Rc<RefCell<Vec<DefaultKey>>>,
 }
 
 impl Runtime {
@@ -160,6 +162,7 @@ impl Composer {
                 nodes: Rc::new(RefCell::new(nodes)),
                 current_key: Rc::new(Cell::new(root_key)),
                 root: root_key,
+                pending: Rc::new(RefCell::new(Vec::new())),
             },
             task_queue,
             update_queue,
@@ -183,8 +186,6 @@ impl Composer {
         );
 
         if !self.is_initial {
-            let mut is_ready = false;
-
             while let Some(key) = self.task_queue.pop() {
                 let waker = Waker::from(Arc::new(TaskWaker {
                     key,
@@ -196,29 +197,31 @@ impl Composer {
                 let mut tasks = self.rt.tasks.borrow_mut();
                 let task = tasks.get_mut(key).unwrap();
                 let _ = task.as_mut().poll(&mut cx);
-
-                is_ready = true;
             }
 
             while let Some(mut update) = self.update_queue.pop() {
                 update();
-                is_ready = true;
             }
 
-            if !is_ready {
+            let key_cell = self.rt.pending.borrow_mut().pop();
+            if let Some(key) = key_cell {
+                self.rt.current_key.set(key);
+
+                let node = self.rt.nodes.borrow().get(key).unwrap().clone();
+
+                // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
+                unsafe { node.compose.borrow().any_compose(&node.scope) };
+            } else {
                 return Err(TryComposeError::Pending);
             }
         } else {
             self.is_initial = false;
+
+            self.rt.current_key.set(self.rt.root);
+
+            // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
+            unsafe { root.compose.borrow().any_compose(&root.scope) };
         }
-
-        #[cfg(feature = "tracing")]
-        tracing::trace!("Start composition");
-
-        self.rt.current_key.set(self.rt.root);
-
-        // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
-        unsafe { root.compose.borrow().any_compose(&root.scope) };
 
         error_cell
             .take()

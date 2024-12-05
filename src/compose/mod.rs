@@ -256,6 +256,8 @@ where
 
         let child_key_cell = use_ref(&cx, || Cell::new(None));
 
+        let rt = Runtime::current();
+
         if cell.is_none()
             || cx.is_changed.take()
             || cx.is_parent_changed.get()
@@ -269,12 +271,12 @@ where
             }
 
             let child = C::compose(cx);
-            let child: Box<dyn AnyCompose> = Box::new(child);
-            let mut child: Box<dyn AnyCompose> = unsafe { mem::transmute(child) };
 
             cx.is_parent_changed.set(false);
 
-            let rt = Runtime::current();
+            let child: Box<dyn AnyCompose> = Box::new(child);
+            let mut child: Box<dyn AnyCompose> = unsafe { mem::transmute(child) };
+
             let mut nodes = rt.nodes.borrow_mut();
 
             unsafe {
@@ -287,6 +289,7 @@ where
                         scope: ScopeData::default(),
                         children: RefCell::new(Vec::new()),
                     }));
+                    child_key_cell.set(Some(child_key));
 
                     nodes
                         .get(rt.current_key.get())
@@ -308,11 +311,16 @@ where
                 }
             }
         } else {
-            let rt = Runtime::current();
             let nodes = rt.nodes.borrow();
 
-            let child_state = &nodes[child_key_cell.get().unwrap()].scope;
-            child_state.is_parent_changed.set(false);
+            if let Some(key) = child_key_cell.get() {
+                let child_state = &nodes[key].scope;
+                child_state.is_parent_changed.set(false);
+            }
+        }
+
+        if let Some(key) = child_key_cell.get() {
+            rt.pending.borrow_mut().push(key);
         }
     }
 
