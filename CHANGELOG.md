@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.15.0...actuate-v0.16.0) - 2024-12-05
+
+### Breaking changes
+
+- Major internal rewrite! (9ef73eb) The new internals allow for more dynamic control over the composition
+  , enabling features like pause and resume of a composition.
+  `Composer::try_compose` will now also skip directly to changed composables, rather than setting change flags.
+  - Removes exported methods for `ScopeData`
+  - The `Runtime` struct is now private to ensure safety
+
+## Features
+
+- `Composer` is now an iterator! This allows for stepping through each composable in the composition.
+- `Composer` also implements `fmt::Debug`:
+
+  ```rs
+  use actuate::prelude::*;
+  use actuate::composer::Composer;
+
+  #[derive(Data)]
+  struct A;
+
+  impl Compose for A {
+      fn compose(cx: Scope<Self>) -> impl Compose {
+          (B, C)
+      }
+  }
+
+  #[derive(Data)]
+  struct B;
+
+  impl Compose for B {
+      fn compose(cx: Scope<Self>) -> impl Compose {}
+  }
+
+  #[derive(Data)]
+  struct C;
+
+  impl Compose for C {
+      fn compose(cx: Scope<Self>) -> impl Compose {}
+  }
+
+  let mut composer = Composer::new(A);
+  composer.try_compose().unwrap();
+
+  assert_eq!(format!("{:?}", composer), "Composer(A(B, C))")
+  ```
+
 ## [0.15.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.14.2...actuate-v0.15.0) - 2024-12-03
 
 ### Breaking changes

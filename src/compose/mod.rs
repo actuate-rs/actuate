@@ -41,7 +41,7 @@ pub use self::memo::{memo, Memo};
 /// until either a [`Memo`] is reached or the composition is complete.
 ///
 /// [`Memo`] is special in that it will only recompose in two cases:
-/// 1. It's provided dependencies have changed (see [`memo`] for more)
+/// 1. It's provided dependencies have changed (see [`memo()`] for more)
 /// 2. Its own state has changed, which will then trigger the above parent-to-child process for its children.
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub trait Compose: Data {
