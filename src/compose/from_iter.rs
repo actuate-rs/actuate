@@ -1,6 +1,9 @@
-use super::AnyCompose;
+use slotmap::DefaultKey;
+
+use super::{AnyCompose, Node, Runtime};
 use crate::{compose::Compose, data::Data, use_ref, Scope, ScopeData, Signal};
 use core::{cell::RefCell, mem};
+use std::rc::Rc;
 
 /// Composable from an iterator, created with [`from_iter`].
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
@@ -29,19 +32,16 @@ where
 
         let mut items: Vec<Option<_>> = cx.me().iter.clone().into_iter().map(Some).collect();
 
+        let rt = Runtime::current();
+        let mut nodes = rt.nodes.borrow_mut();
+
         if items.len() >= states.len() {
             for item in &mut items[states.len()..] {
                 let item = item.take().unwrap();
 
-                let state = ItemState {
-                    item,
-                    compose: None,
-                    scope: ScopeData::default(),
-                };
-
-                let state = Box::new(state);
-                let boxed: Box<()> = unsafe { mem::transmute(state) };
-
+                let state = ItemState { item, key: None };
+                let boxed = Box::new(state);
+                let boxed: Box<()> = unsafe { mem::transmute(boxed) };
                 states.push(AnyItemState {
                     boxed: Some(boxed),
                     drop: |any_state| {
@@ -59,7 +59,7 @@ where
             let state: &mut ItemState<Item> =
                 unsafe { mem::transmute(state.boxed.as_deref_mut().unwrap()) };
 
-            if state.compose.is_none() {
+            if state.key.is_none() {
                 let item_ref: &Item = &state.item;
                 let item_ref: &Item = unsafe { mem::transmute(item_ref) };
                 let compose = (cx.me().make_item)(Signal {
@@ -69,19 +69,31 @@ where
                 let any_compose: Box<dyn AnyCompose> = Box::new(compose);
                 let any_compose: Box<dyn AnyCompose> = unsafe { mem::transmute(any_compose) };
 
-                state.compose = Some(any_compose);
+                let key = nodes.insert(Rc::new(Node {
+                    compose: RefCell::new(crate::composer::ComposePtr::Boxed(any_compose)),
+                    scope: ScopeData::default(),
+                    children: RefCell::new(Vec::new()),
+                }));
+                nodes
+                    .get(rt.current_key.get())
+                    .unwrap()
+                    .children
+                    .borrow_mut()
+                    .push(key);
+
+                state.key = Some(key);
             }
 
-            *state.scope.contexts.borrow_mut() = cx.contexts.borrow().clone();
-            state
-                .scope
+            let node = nodes.get(state.key.unwrap()).unwrap().clone();
+
+            *node.scope.contexts.borrow_mut() = cx.contexts.borrow().clone();
+            node.scope
                 .contexts
                 .borrow_mut()
                 .values
                 .extend(cx.child_contexts.borrow().values.clone());
 
-            let compose = state.compose.as_ref().unwrap();
-            unsafe { compose.any_compose(&state.scope) }
+            rt.pending.borrow_mut().push_back(state.key.unwrap());
         }
     }
 }
@@ -106,8 +118,7 @@ where
 
 struct ItemState<T> {
     item: T,
-    compose: Option<Box<dyn AnyCompose>>,
-    scope: ScopeData<'static>,
+    key: Option<DefaultKey>,
 }
 
 struct AnyItemState {

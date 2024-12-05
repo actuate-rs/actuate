@@ -364,7 +364,7 @@ where
                     child.reborrow(last.compose.borrow_mut().as_ptr_mut());
                 } else {
                     let child_key = nodes.insert(Rc::new(Node {
-                        compose: RefCell::new(crate::composer::ComposePtr::Owned(child)),
+                        compose: RefCell::new(crate::composer::ComposePtr::Boxed(child)),
                         scope: ScopeData::default(),
                         children: RefCell::new(Vec::new()),
                     }));
