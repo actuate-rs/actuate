@@ -2,7 +2,7 @@ use crate::{
     compose::{AnyCompose, CatchContext, Compose},
     ScopeData,
 };
-use alloc::{rc::Rc, sync::Arc, task::Wake};
+use alloc::{collections::VecDeque, rc::Rc, sync::Arc, task::Wake};
 use core::{
     any::TypeId,
     cell::{Cell, RefCell},
@@ -15,7 +15,7 @@ use core::{
 };
 use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
-use std::collections::VecDeque;
+use std::fmt::Debug;
 
 #[cfg(feature = "executor")]
 use tokio::sync::RwLock;
@@ -59,7 +59,7 @@ impl AnyCompose for ComposePtr {
     fn name(&self) -> Option<std::borrow::Cow<'static, str>> {
         match self {
             ComposePtr::Boxed(compose) => compose.name(),
-            ComposePtr::Ptr(_) => None,
+            ComposePtr::Ptr(ptr) => unsafe { (**ptr).name() },
         }
     }
 }
@@ -174,6 +174,39 @@ impl PartialEq for TryComposeError {
 }
 
 /// Composer for composable content.
+///
+/// ```
+/// use actuate::prelude::*;
+/// use actuate::composer::Composer;
+///
+/// #[derive(Data)]
+/// struct A;
+///
+/// impl Compose for A {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         (B, C)
+///     }
+/// }
+///
+/// #[derive(Data)]
+/// struct B;
+///
+/// impl Compose for B {
+///     fn compose(cx: Scope<Self>) -> impl Compose {}
+/// }
+///
+/// #[derive(Data)]
+/// struct C;
+///
+/// impl Compose for C {
+///     fn compose(cx: Scope<Self>) -> impl Compose {}
+/// }
+///
+/// let mut composer = Composer::new(A);
+/// composer.try_compose().unwrap();
+///
+/// assert_eq!(format!("{:?}", composer), "Composer(A(B, C))")
+/// ```
 pub struct Composer {
     rt: Runtime,
     task_queue: Arc<SegQueue<DefaultKey>>,
@@ -328,39 +361,49 @@ impl Iterator for Composer {
 }
 
 impl fmt::Debug for Composer {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("Composer")
-            .field(
-                "nodes",
-                &Debugger {
-                    nodes: &self.rt.nodes.borrow(),
-                    key: self.rt.root,
-                },
-            )
-            .finish()
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut dbg_tuple = f.debug_tuple("Composer");
+
+        dbg_composer(&mut dbg_tuple, &self.rt.nodes.borrow(), self.rt.root);
+
+        dbg_tuple.finish()
     }
 }
 
-struct Debugger<'a> {
+struct Field<'a> {
+    name: &'a str,
     nodes: &'a SlotMap<DefaultKey, Rc<Node>>,
-    key: DefaultKey,
+    children: &'a [DefaultKey],
 }
 
-impl fmt::Debug for Debugger<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let node = &self.nodes[self.key];
-        let name = node.compose.borrow().name().unwrap_or_default();
+impl fmt::Debug for Field<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut dbg_tuple = f.debug_tuple(self.name);
 
-        let mut dbg_tuple = f.debug_tuple(&name);
-
-        for child in &*node.children.borrow() {
-            dbg_tuple.field(&Debugger {
-                nodes: self.nodes,
-                key: *child,
-            });
+        for child_key in self.children {
+            dbg_composer(&mut dbg_tuple, self.nodes, *child_key);
         }
 
         dbg_tuple.finish()
+    }
+}
+
+fn dbg_composer(
+    dbg_tuple: &mut fmt::DebugTuple,
+    nodes: &SlotMap<DefaultKey, Rc<Node>>,
+    key: DefaultKey,
+) {
+    let node = &nodes[key];
+    if let Some(name) = node.compose.borrow().name() {
+        dbg_tuple.field(&Field {
+            name: &name,
+            nodes,
+            children: &*node.children.borrow(),
+        });
+    } else {
+        for child_key in &*node.children.borrow() {
+            dbg_composer(dbg_tuple, nodes, *child_key);
+        }
     }
 }
 

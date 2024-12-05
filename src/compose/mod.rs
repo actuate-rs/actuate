@@ -280,6 +280,10 @@ macro_rules! impl_tuples {
                     rt.pending.borrow_mut().push_back(*child_key);
                 )*
             }
+
+            fn name() -> Option<Cow<'static, str>> {
+                None
+            }
         }
     };
 }
