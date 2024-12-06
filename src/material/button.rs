@@ -1,5 +1,9 @@
-use super::{container, MaterialTheme, Modifier, Modify};
-use crate::{prelude::Compose, use_context, Data, Scope, Signal};
+use super::{container, MaterialTheme};
+use crate::{
+    compose::Compose,
+    ecs::{Modifier, Modify},
+    use_context, Data, Scope, Signal,
+};
 use bevy_color::Color;
 use bevy_ui::{BorderRadius, Node, UiRect, Val};
 
@@ -53,8 +57,6 @@ impl<C: Compose> Compose for Button<'_, C> {
             .cloned()
             .unwrap_or_default();
 
-        let modifier = unsafe { core::mem::transmute(cx.me().modifier.clone()) };
-
         container(unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) })
             .background_color(cx.me().background_color.unwrap_or(theme.primary))
             .border_radius(
@@ -66,7 +68,7 @@ impl<C: Compose> Compose for Button<'_, C> {
                 let mut node = entity.get_mut::<Node>().unwrap();
                 node.height = cx.me().height;
             })
-            .append(modifier)
+            .append(Signal::map(cx.me(), |me| &me.modifier).into())
     }
 }
 

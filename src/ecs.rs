@@ -1,6 +1,6 @@
 use crate::{
     compose::Compose, composer::Composer, data::Data, use_callback, use_context, use_drop,
-    use_provider, use_ref, Scope, ScopeState, Signal,
+    use_provider, use_ref, Cow, Scope, ScopeState, Signal,
 };
 use bevy_app::{App, Plugin};
 use bevy_ecs::{
@@ -19,6 +19,9 @@ use std::{
     rc::Rc,
     sync::{Arc, Mutex},
 };
+
+#[cfg(feature = "picking")]
+use bevy_picking::prelude::*;
 
 macro_rules! impl_trait_for_tuples {
     ($t:tt) => {
@@ -653,4 +656,88 @@ fn use_bundle_inner(cx: ScopeState, spawn: impl FnOnce(&mut World, &mut Option<E
     });
 
     entity
+}
+
+/// ECS bundle modifier.
+#[derive(Clone, Default)]
+pub struct Modifier<'a> {
+    fns: Vec<Rc<dyn Fn(Spawn<'a>) -> Spawn<'a> + 'a>>,
+}
+
+impl<'a> Modifier<'a> {
+    /// Apply this modifier.
+    pub fn apply(&self, spawn: Spawn<'a>) -> Spawn<'a> {
+        self.fns
+            .iter()
+            .fold(spawn, |spawn, modifier| modifier(spawn))
+    }
+
+    /// Append another stack of modifiers to this modifier.
+    pub fn append(&mut self, modifier: Cow<'a, Modifier>) {
+        let modifier: Modifier<'_> = modifier.into_owned();
+        let modifier: Modifier<'a> = unsafe { mem::transmute(modifier) };
+        self.fns.extend(modifier.fns);
+    }
+}
+
+unsafe impl Data for Modifier<'_> {}
+
+/// Modifiable composable.
+pub trait Modify<'a> {
+    /// Get a mutable reference to the modifier of this button.
+    fn modifier(&mut self) -> &mut Modifier<'a>;
+
+    /// Append a modifier to this composable.
+    fn append(mut self, modifier: Cow<'a, Modifier>) -> Self
+    where
+        Self: Sized,
+    {
+        self.modifier().append(modifier);
+        self
+    }
+
+    /// Add a function to run when this composable's bundle is spawned.
+    fn on_insert<F>(mut self, f: F) -> Self
+    where
+        Self: Sized,
+        F: Fn(EntityWorldMut) + 'a,
+    {
+        let f = Rc::new(f);
+        self.modifier().fns.push(Rc::new(move |spawn| {
+            let f = f.clone();
+            spawn.on_insert(move |e| f(e))
+        }));
+        self
+    }
+
+    /// Add an observer to the container of this button.
+    fn observe<F, E, B, Marker>(mut self, observer: F) -> Self
+    where
+        Self: Sized,
+        F: SystemParamFunction<Marker, In = Trigger<'static, E, B>, Out = ()> + Send + Sync + 'a,
+        E: Event,
+        B: Bundle,
+    {
+        let observer_cell = Cell::new(Some(observer));
+        let f: Rc<dyn Fn(Spawn) -> Spawn> = Rc::new(move |spawn| {
+            let observer = observer_cell.take().unwrap();
+            let spawn: Spawn<'a> = unsafe { mem::transmute(spawn) };
+            let spawn = spawn.observe(observer);
+            let spawn: Spawn = unsafe { mem::transmute(spawn) };
+            spawn
+        });
+        let f: Rc<dyn Fn(Spawn) -> Spawn> = unsafe { mem::transmute(f) };
+        self.modifier().fns.push(f);
+        self
+    }
+
+    #[cfg(feature = "picking")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "picking")))]
+    /// Add an click observer to the container of this button.
+    fn on_click(self, f: impl Fn() + Send + Sync + 'a) -> Self
+    where
+        Self: Sized,
+    {
+        self.observe(move |_: Trigger<Pointer<Click>>| f())
+    }
 }

@@ -157,7 +157,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
     pub use crate::ecs::{
         spawn, use_bundle, use_commands, use_world, use_world_once, ActuatePlugin, Composition,
-        Spawn, UseCommands,
+        Modifier, Modify, Spawn, UseCommands,
     };
 
     #[cfg(feature = "executor")]
@@ -166,7 +166,7 @@ pub mod prelude {
 
     #[cfg(feature = "material")]
     #[cfg_attr(docsrs, doc(cfg(feature = "material")))]
-    pub use crate::material::{button, radio_button, text, Button, Modifier, Modify, RadioButton};
+    pub use crate::material::{button, radio_button, text, Button, RadioButton};
 }
 
 #[cfg(feature = "animation")]
