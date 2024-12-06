@@ -2,8 +2,8 @@ use super::{MaterialTheme, Modifier, Modify};
 use crate::{ecs::spawn, prelude::Compose, use_context, Data, Scope, Signal};
 use bevy_color::Color;
 use bevy_ui::{
-    AlignItems, BackgroundColor, BorderRadius, BoxShadow, JustifyContent, Node, Overflow, UiRect,
-    Val,
+    AlignItems, BackgroundColor, BorderRadius, BoxShadow, FlexDirection, JustifyContent, Node,
+    Overflow, UiRect, Val,
 };
 
 /// Create a material UI button.
@@ -11,7 +11,6 @@ pub fn container<'a, C>(content: C) -> Container<'a, C> {
     Container {
         content,
         elevation: 0.,
-        height: Val::Px(40.),
         padding: UiRect::left(Val::Px(24.)).with_right(Val::Px(24.)),
         background_color: None,
         border_radius: BorderRadius::all(Val::Px(12.)),
@@ -23,7 +22,6 @@ pub fn container<'a, C>(content: C) -> Container<'a, C> {
 pub struct Container<'a, C> {
     content: C,
     padding: UiRect,
-    height: Val,
     elevation: f32,
     modifier: Modifier<'a>,
     background_color: Option<Color>,
@@ -68,10 +66,10 @@ impl<C: Compose> Compose for Container<'_, C> {
             .modifier
             .apply(spawn((
                 Node {
+                    flex_direction: FlexDirection::Column,
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     padding: cx.me().padding,
-                    height: cx.me().height,
                     overflow: Overflow::clip(),
                     ..Default::default()
                 },
