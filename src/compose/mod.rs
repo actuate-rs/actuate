@@ -85,11 +85,16 @@ impl<C: Compose> Compose for Option<C> {
 
                 *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
 
-                rt.pending.borrow_mut().insert(Pending {
-                    key,
-                    level: nodes[key].level,
-                    child_idx: nodes[key].child_idx,
-                });
+                let node = nodes[key].clone();
+                let mut indices = Vec::new();
+                let mut parent = node.parent;
+                while let Some(key) = parent {
+                    indices.push(nodes.get(key).unwrap().child_idx);
+                    parent = nodes.get(key).unwrap().parent;
+                }
+                indices.push(node.child_idx);
+
+                rt.pending.borrow_mut().insert(Pending { key, indices });
             } else {
                 let ptr: *const dyn AnyCompose =
                     unsafe { mem::transmute(content as *const dyn AnyCompose) };
@@ -120,11 +125,16 @@ impl<C: Compose> Compose for Option<C> {
                     .values
                     .extend(cx.child_contexts.borrow().values.clone());
 
-                rt.pending.borrow_mut().insert(Pending {
-                    key,
-                    level: nodes[key].level,
-                    child_idx: nodes[key].child_idx,
-                });
+                let node = nodes[key].clone();
+                let mut indices = Vec::new();
+                let mut parent = node.parent;
+                while let Some(key) = parent {
+                    indices.push(nodes.get(key).unwrap().child_idx);
+                    parent = nodes.get(key).unwrap().parent;
+                }
+                indices.push(node.child_idx);
+
+                rt.pending.borrow_mut().insert(Pending { key, indices });
             }
         } else if let Some(key) = child_key.get() {
             child_key.set(None);
@@ -187,11 +197,16 @@ impl<C: Compose> Compose for Result<C, Error> {
 
                     *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
 
-                    rt.pending.borrow_mut().insert(Pending {
-                        key,
-                        level: nodes[key].level,
-                        child_idx: nodes[key].child_idx,
-                    });
+                    let node = nodes[key].clone();
+                    let mut indices = Vec::new();
+                    let mut parent = node.parent;
+                    while let Some(key) = parent {
+                        indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
+                        parent = rt.nodes.borrow().get(key).unwrap().parent;
+                    }
+                    indices.push(node.child_idx);
+
+                    rt.pending.borrow_mut().insert(Pending { key, indices });
                 } else {
                     let ptr: *const dyn AnyCompose =
                         unsafe { mem::transmute(content as *const dyn AnyCompose) };
@@ -221,11 +236,16 @@ impl<C: Compose> Compose for Result<C, Error> {
                         .values
                         .extend(cx.child_contexts.borrow().values.clone());
 
-                    rt.pending.borrow_mut().insert(Pending {
-                        key,
-                        level: nodes[key].level,
-                        child_idx: nodes[key].child_idx,
-                    });
+                    let node = nodes[key].clone();
+                    let mut indices = Vec::new();
+                    let mut parent = node.parent;
+                    while let Some(key) = parent {
+                        indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
+                        parent = rt.nodes.borrow().get(key).unwrap().parent;
+                    }
+                    indices.push(node.child_idx);
+
+                    rt.pending.borrow_mut().insert(Pending { key, indices });
                 }
             }
             Err(error) => {
@@ -301,10 +321,18 @@ macro_rules! impl_tuples {
                         *last.compose.borrow_mut() = crate::composer::ComposePtr::Ptr(ptr);
                     }
 
+                    let node = nodes[*child_key].clone();
+                    let mut indices = Vec::new();
+                    let mut parent = node.parent;
+                    while let Some(key) = parent {
+                        indices.push(nodes.get(key).unwrap().child_idx);
+                        parent = nodes.get(key).unwrap().parent;
+                    }
+                    indices.push(node.child_idx);
+
                     rt.pending.borrow_mut().insert(Pending {
                         key: *child_key,
-                        level: nodes[*child_key].level,
-                        child_idx: nodes[*child_key].child_idx,
+                        indices,
                     });
                 )*
             }
@@ -430,11 +458,16 @@ where
 
         if let Some(key) = child_key_cell.get() {
             let nodes = rt.nodes.borrow();
-            rt.pending.borrow_mut().insert(Pending {
-                key,
-                level: nodes[key].level,
-                child_idx: nodes[key].child_idx,
-            });
+            let node = nodes[key].clone();
+            let mut indices = Vec::new();
+            let mut parent = node.parent;
+            while let Some(key) = parent {
+                indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
+                parent = rt.nodes.borrow().get(key).unwrap().parent;
+            }
+            indices.push(node.child_idx);
+
+            rt.pending.borrow_mut().insert(Pending { key, indices });
         }
     }
 

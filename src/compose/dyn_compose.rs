@@ -46,11 +46,16 @@ impl Compose for DynCompose<'_> {
                 unsafe { compose.reborrow(last.as_ptr_mut()) };
 
                 let key = state.key;
-                rt.pending.borrow_mut().insert(Pending {
-                    key,
-                    level: nodes[key].level,
-                    child_idx: nodes[key].child_idx,
-                });
+                let node = nodes[key].clone();
+                let mut indices = Vec::new();
+                let mut parent = node.parent;
+                while let Some(key) = parent {
+                    indices.push(nodes.get(key).unwrap().child_idx);
+                    parent = nodes.get(key).unwrap().parent;
+                }
+                indices.push(node.child_idx);
+
+                rt.pending.borrow_mut().insert(Pending { key, indices });
 
                 return;
             } else {
@@ -61,11 +66,16 @@ impl Compose for DynCompose<'_> {
         let Some(compose) = unsafe { &mut *cx.me().compose.get() }.take() else {
             if let Some(state) = state.get() {
                 let key = state.key;
-                rt.pending.borrow_mut().insert(Pending {
-                    key,
-                    level: nodes[key].level,
-                    child_idx: nodes[key].child_idx,
-                });
+                let node = nodes[key].clone();
+                let mut indices = Vec::new();
+                let mut parent = node.parent;
+                while let Some(key) = parent {
+                    indices.push(nodes.get(key).unwrap().child_idx);
+                    parent = nodes.get(key).unwrap().parent;
+                }
+                indices.push(node.child_idx);
+
+                rt.pending.borrow_mut().insert(Pending { key, indices });
             }
 
             return;
@@ -100,10 +110,15 @@ impl Compose for DynCompose<'_> {
             .values
             .extend(cx.child_contexts.borrow().values.clone());
 
-        rt.pending.borrow_mut().insert(Pending {
-            key,
-            level: nodes[key].level,
-            child_idx: nodes[key].child_idx,
-        });
+        let node = nodes[key].clone();
+        let mut indices = Vec::new();
+        let mut parent = node.parent;
+        while let Some(key) = parent {
+            indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
+            parent = rt.nodes.borrow().get(key).unwrap().parent;
+        }
+        indices.push(node.child_idx);
+
+        rt.pending.borrow_mut().insert(Pending { key, indices });
     }
 }

@@ -100,11 +100,15 @@ where
 
             let key = state.key.unwrap();
 
-            rt.pending.borrow_mut().insert(Pending {
-                key,
-                level: nodes[key].level,
-                child_idx: nodes[key].child_idx,
-            });
+            let mut indices = Vec::new();
+            let mut parent = node.parent;
+            while let Some(key) = parent {
+                indices.push(nodes.get(key).unwrap().child_idx);
+                parent = nodes.get(key).unwrap().parent;
+            }
+            indices.push(node.child_idx);
+
+            rt.pending.borrow_mut().insert(Pending { key, indices });
         }
     }
 }

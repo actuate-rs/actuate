@@ -6,6 +6,7 @@ use alloc::{collections::BTreeSet, rc::Rc, sync::Arc, task::Wake};
 use core::{
     any::TypeId,
     cell::{Cell, RefCell},
+    cmp::Ordering,
     error::Error,
     fmt,
     future::Future,
@@ -177,25 +178,20 @@ impl PartialEq for TryComposeError {
 #[derive(PartialEq, Eq)]
 pub(crate) struct Pending {
     pub(crate) key: DefaultKey,
-    pub(crate) level: usize,
-    pub(crate) child_idx: usize,
+    pub(crate) indices: Vec<usize>,
 }
 
 impl PartialOrd for Pending {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Pending {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.level.cmp(&other.level) {
-            std::cmp::Ordering::Equal => {}
-            ord => return ord,
-        }
-        match self.child_idx.cmp(&other.child_idx) {
-            std::cmp::Ordering::Equal => self.key.cmp(&other.key),
-            ord => ord,
+    fn cmp(&self, other: &Self) -> Ordering {
+        match other.indices.len().cmp(&self.indices.len()) {
+            Ordering::Equal => self.indices.cmp(&other.indices),
+            ordering => ordering,
         }
     }
 }

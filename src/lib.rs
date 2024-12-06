@@ -475,10 +475,17 @@ impl<'a, T: 'static> SignalMut<'a, T> {
             let rt = Runtime::current();
             let node = rt.nodes.borrow().get(scope_key).unwrap().clone();
 
+            let mut indices = Vec::new();
+            let mut parent = node.parent;
+            while let Some(key) = parent {
+                indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
+                parent = rt.nodes.borrow().get(key).unwrap().parent;
+            }
+            indices.push(node.child_idx);
+
             rt.pending.borrow_mut().insert(Pending {
                 key: scope_key,
-                level: node.level,
-                child_idx: node.child_idx,
+                indices,
             });
 
             f(value)
