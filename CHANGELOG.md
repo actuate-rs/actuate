@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.16.1...actuate-v0.17.0) - 2024-12-06
+
+## Breaking changes
+
+ - Move `Modifier` and `Modify` to ecs module (behind new picking feature) (35b10ea)
+   - These items can be useful for other design systems than Material 3
+ - Call `on_insert` on every insertion of a spawned bundle (this now requires `Fn` instead of `FnOnce`) (533da07)
+
+## Fixes
+
+ - Revert from breadth-first traversal of the composition to depth-first (8b3acd2)
+ - Update styling for `Container` (9cca3a7)
+
 ## [0.16.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.16.0...actuate-v0.16.1) - 2024-12-05
 
 ## Features
