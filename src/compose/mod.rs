@@ -19,6 +19,9 @@ pub use self::catch::{catch, Catch};
 mod dyn_compose;
 pub use self::dyn_compose::{dyn_compose, DynCompose};
 
+mod from_fn;
+pub use self::from_fn::{from_fn, FromFn};
+
 mod from_iter;
 pub use self::from_iter::{from_iter, FromIter};
 

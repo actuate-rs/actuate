@@ -497,6 +497,73 @@ mod tests {
     }
 
     #[test]
+    fn it_composes_depth_first() {
+        let a = Rc::new(Cell::new(0));
+        let out = a.clone();
+
+        let mut composer = Composer::new(compose::from_fn(move |_| {
+            a.set(0);
+
+            let b = a.clone();
+            let e = a.clone();
+
+            (
+                compose::from_fn(move |_| {
+                    b.set(1);
+
+                    let c = b.clone();
+                    let d = b.clone();
+
+                    (
+                        compose::from_fn(move |_| c.set(2)),
+                        compose::from_fn(move |_| d.set(3)),
+                    )
+                }),
+                compose::from_fn(move |_| {
+                    e.set(4);
+
+                    let f = e.clone();
+                    let g = e.clone();
+
+                    (
+                        compose::from_fn(move |_| f.set(5)),
+                        compose::from_fn(move |_| g.set(6)),
+                    )
+                }),
+            )
+        }));
+
+        composer.next().unwrap().unwrap();
+        assert_eq!(out.get(), 0);
+
+        // Compose (1, 4)
+        composer.next().unwrap().unwrap();
+
+        composer.next().unwrap().unwrap();
+        assert_eq!(out.get(), 1);
+
+        // Compose (2, 3)
+        composer.next().unwrap().unwrap();
+        composer.next().unwrap().unwrap();
+        assert_eq!(out.get(), 2);
+
+        composer.next().unwrap().unwrap();
+        assert_eq!(out.get(), 3);
+
+        composer.next().unwrap().unwrap();
+        assert_eq!(out.get(), 4);
+
+        // Compose (5, 6)
+        composer.next().unwrap().unwrap();
+
+        composer.next().unwrap().unwrap();
+        assert_eq!(out.get(), 5);
+
+        composer.next().unwrap().unwrap();
+        assert_eq!(out.get(), 6);
+    }
+
+    #[test]
     fn it_skips_recomposes() {
         #[derive(Data)]
         #[actuate(path = "crate")]
