@@ -1,7 +1,7 @@
-use slotmap::DefaultKey;
 use super::{drop_node, AnyCompose, Node, Pending, Runtime};
 use crate::{compose::Compose, use_ref, Scope, ScopeData};
 use core::{any::TypeId, cell::UnsafeCell, mem};
+use slotmap::DefaultKey;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
