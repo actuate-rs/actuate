@@ -1,9 +1,10 @@
 // HTTP UI example
 
-use actuate::{executor::ExecutorContext, prelude::*};
+use actuate::{executor::ExecutorContext, material::container, prelude::*};
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
+use text::headline;
 
 // Dog breed composable.
 #[derive(Data)]
@@ -14,26 +15,11 @@ struct Breed<'a> {
 
 impl Compose for Breed<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        spawn(Node {
-            flex_direction: FlexDirection::Row,
-            ..default()
-        })
-        .content((
-            spawn((
-                Text::new(cx.me().name),
-                Node {
-                    width: Val::Px(300.0),
-                    ..default()
-                },
-            )),
-            spawn(Node {
-                flex_direction: FlexDirection::Column,
-                ..default()
-            })
-            .content(compose::from_iter(
-                Signal::map(cx.me(), |me| me.families),
-                |family| spawn(Text::from(family.to_string())),
-            )),
+        container((
+            headline(cx.me().name),
+            compose::from_iter(Signal::map(cx.me(), |me| me.families), |family| {
+                text::label(family.to_string())
+            }),
         ))
     }
 }

@@ -74,17 +74,17 @@ path = "examples/core/traits.rs"
 [[example]]
 name = "counter"
 path = "examples/ui/counter.rs"
-required-features = ["ecs", "material"]
+required-features = ["material"]
 
 [[example]]
 name = "http"
 path = "examples/ui/http.rs"
-required-features = ["ecs", "rt"]
+required-features = ["material", "rt"]
 
 [[example]]
 name = "radio"
 path = "examples/ui/radio_button.rs"
-required-features = ["ecs", "material"]
+required-features = ["material"]
 
 [[example]]
 name = "timer"

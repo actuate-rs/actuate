@@ -473,6 +473,7 @@ where
         observer_fns: Vec::new(),
         observer_guard: Arc::new(Mutex::new(true)),
         on_add: Cell::new(None),
+        on_insert: Vec::new(),
     }
 }
 
@@ -490,6 +491,7 @@ pub struct Spawn<'a, C = ()> {
     target: Option<Entity>,
     observer_fns: Vec<ObserverFn<'a>>,
     on_add: Cell<Option<OnAddFn<'a>>>,
+    on_insert: Vec<OnAddFn<'a>>,
     observer_guard: Arc<Mutex<bool>>,
 }
 
@@ -511,6 +513,7 @@ impl<'a, C> Spawn<'a, C> {
             observer_fns: self.observer_fns,
             on_add: self.on_add,
             observer_guard: Arc::new(Mutex::new(false)),
+            on_insert: self.on_insert,
         }
     }
 
@@ -520,6 +523,12 @@ impl<'a, C> Spawn<'a, C> {
         F: FnOnce(EntityWorldMut) + 'a,
     {
         self.on_add.set(Some(Box::new(f)));
+        self
+    }
+
+    /// Add a function to be called on every insert.
+    pub fn on_insert(mut self, f: impl FnOnce(EntityWorldMut) + 'a) -> Self {
+        self.on_insert.push(Box::new(f));
         self
     }
 
