@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.16.0...actuate-v0.16.1) - 2024-12-05
+
+## Features
+
+- Material UI components
+
+  - `Button`
+  - `Container`
+  - `RadioButton`
+  - `text`
+    - `label`
+    - `heading`
+
+- New scheduling algorithm based on `BTreeSet` (2a457a9)
+
 ## [0.16.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.15.0...actuate-v0.16.0) - 2024-12-05
 
 ### Breaking changes
