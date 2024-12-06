@@ -523,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn it_composes_any_compose() {
+    fn it_composes_dyn_compose() {
         #[derive(Data)]
         #[actuate(path = "crate")]
         struct Wrap {
@@ -549,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn it_memoizes_composables() {
+    fn it_composes_memo() {
         #[derive(Data)]
         #[actuate(path = "crate")]
         struct B {

@@ -104,8 +104,8 @@ where
             let mut indices = Vec::new();
             let mut parent = node.parent;
             while let Some(key) = parent {
-                indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
-                parent = rt.nodes.borrow().get(key).unwrap().parent;
+                indices.push(nodes.get(key).unwrap().child_idx);
+                parent = nodes.get(key).unwrap().parent;
             }
             indices.push(node.child_idx);
 
