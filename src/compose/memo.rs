@@ -1,4 +1,4 @@
-use super::{AnyCompose, Node, Runtime};
+use super::{AnyCompose, Node, Pending, Runtime};
 use crate::{compose::Compose, data::Data, use_ref, Scope, ScopeData};
 use alloc::borrow::Cow;
 use core::cell::RefCell;
@@ -38,20 +38,22 @@ where
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let rt = Runtime::current();
+        let mut nodes = rt.nodes.borrow_mut();
 
         let mut is_init = false;
         let child_key = use_ref(&cx, || {
             is_init = true;
 
-            let mut nodes = rt.nodes.borrow_mut();
-
             let ptr: *const dyn AnyCompose =
                 unsafe { mem::transmute(&cx.me().content as *const dyn AnyCompose) };
+            let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
             let child_key = nodes.insert(Rc::new(Node {
                 compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
                 scope: ScopeData::default(),
                 parent: Some(rt.current_key.get()),
                 children: RefCell::new(Vec::new()),
+                level,
+                child_idx: 0,
             }));
 
             nodes
@@ -85,11 +87,19 @@ where
         if let Some(last) = &mut *last {
             if cx.me().dependency != *last {
                 *last = cx.me().dependency.clone();
-                rt.pending.borrow_mut().push_back(*child_key);
+                rt.pending.borrow_mut().insert(Pending {
+                    key: *child_key,
+                    level: nodes[*child_key].level,
+                    child_idx: nodes[*child_key].child_idx,
+                });
             }
         } else {
             *last = Some(cx.me().dependency.clone());
-            rt.pending.borrow_mut().push_back(*child_key);
+            rt.pending.borrow_mut().insert(Pending {
+                key: *child_key,
+                level: nodes[*child_key].level,
+                child_idx: nodes[*child_key].child_idx,
+            });
         }
     }
 

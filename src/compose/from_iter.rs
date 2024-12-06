@@ -1,6 +1,6 @@
 use slotmap::DefaultKey;
 
-use super::{AnyCompose, Node, Runtime};
+use super::{AnyCompose, Node, Pending, Runtime};
 use crate::{compose::Compose, data::Data, use_ref, Scope, ScopeData, Signal};
 use core::{cell::RefCell, mem};
 use std::rc::Rc;
@@ -55,7 +55,9 @@ where
             states.truncate(items.len());
         }
 
-        for state in &mut *states {
+        let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
+
+        for (idx, state) in states.iter_mut().enumerate() {
             let state: &mut ItemState<Item> =
                 unsafe { mem::transmute(state.boxed.as_deref_mut().unwrap()) };
 
@@ -74,6 +76,8 @@ where
                     scope: ScopeData::default(),
                     parent: Some(rt.current_key.get()),
                     children: RefCell::new(Vec::new()),
+                    level,
+                    child_idx: idx,
                 }));
                 nodes
                     .get(rt.current_key.get())
@@ -94,7 +98,13 @@ where
                 .values
                 .extend(cx.child_contexts.borrow().values.clone());
 
-            rt.pending.borrow_mut().push_back(state.key.unwrap());
+            let key = state.key.unwrap();
+
+            rt.pending.borrow_mut().insert(Pending {
+                key: key,
+                level: nodes[key].level,
+                child_idx: nodes[key].child_idx,
+            });
         }
     }
 }

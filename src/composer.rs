@@ -2,7 +2,7 @@ use crate::{
     compose::{AnyCompose, CatchContext, Compose},
     ScopeData,
 };
-use alloc::{collections::VecDeque, rc::Rc, sync::Arc, task::Wake};
+use alloc::{collections::BTreeSet, rc::Rc, sync::Arc, task::Wake};
 use core::{
     any::TypeId,
     cell::{Cell, RefCell},
@@ -15,7 +15,6 @@ use core::{
 };
 use crossbeam_queue::SegQueue;
 use slotmap::{DefaultKey, SlotMap};
-use std::fmt::Debug;
 
 #[cfg(feature = "executor")]
 use tokio::sync::RwLock;
@@ -70,6 +69,8 @@ pub(crate) struct Node {
     pub(crate) scope: ScopeData<'static>,
     pub(crate) parent: Option<DefaultKey>,
     pub(crate) children: RefCell<Vec<DefaultKey>>,
+    pub(crate) level: usize,
+    pub(crate) child_idx: usize,
 }
 
 /// Runtime for a [`Composer`].
@@ -96,7 +97,7 @@ pub(crate) struct Runtime {
 
     pub(crate) root: DefaultKey,
 
-    pub(crate) pending: Rc<RefCell<VecDeque<DefaultKey>>>,
+    pub(crate) pending: Rc<RefCell<BTreeSet<Pending>>>,
 }
 
 impl Runtime {
@@ -173,6 +174,32 @@ impl PartialEq for TryComposeError {
     }
 }
 
+#[derive(PartialEq, Eq)]
+pub(crate) struct Pending {
+    pub(crate) key: DefaultKey,
+    pub(crate) level: usize,
+    pub(crate) child_idx: usize,
+}
+
+impl PartialOrd for Pending {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Pending {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.level.cmp(&other.level) {
+            std::cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        match self.child_idx.cmp(&other.child_idx) {
+            std::cmp::Ordering::Equal => self.key.cmp(&other.key),
+            ord => return ord,
+        }
+    }
+}
+
 /// Composer for composable content.
 ///
 /// ```
@@ -229,6 +256,8 @@ impl Composer {
             scope: ScopeData::default(),
             parent: None,
             children: RefCell::new(Vec::new()),
+            level: 0,
+            child_idx: 0,
         }));
 
         Self {
@@ -242,7 +271,7 @@ impl Composer {
                 nodes: Rc::new(RefCell::new(nodes)),
                 current_key: Rc::new(Cell::new(root_key)),
                 root: root_key,
-                pending: Rc::new(RefCell::new(VecDeque::new())),
+                pending: Rc::new(RefCell::new(BTreeSet::new())),
             },
             task_queue,
             update_queue,
@@ -319,11 +348,11 @@ impl Iterator for Composer {
         );
 
         if !self.is_initial {
-            let key_cell = self.rt.pending.borrow_mut().pop_front();
-            if let Some(key) = key_cell {
-                self.rt.current_key.set(key);
+            let key_cell = self.rt.pending.borrow_mut().pop_first();
+            if let Some(pending) = key_cell {
+                self.rt.current_key.set(pending.key);
 
-                let node = self.rt.nodes.borrow().get(key).unwrap().clone();
+                let node = self.rt.nodes.borrow().get(pending.key).unwrap().clone();
 
                 // Safety: `self.compose` is guaranteed to live as long as `self.scope_state`.
                 unsafe { node.compose.borrow().any_compose(&node.scope) };

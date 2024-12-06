@@ -118,6 +118,7 @@ extern crate alloc;
 
 use ahash::AHasher;
 use alloc::rc::Rc;
+use composer::Pending;
 use core::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
@@ -363,15 +364,13 @@ unsafe impl<T> Data for MapUnchecked<'_, T> {}
 
 impl<C: Compose> Compose for MapUnchecked<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let state = use_ref(&cx, || {
-            let mut state = ScopeData::default();
-            state.contexts = cx.contexts.clone();
-            state
-        });
-
         // Safety: The `Map` is dereferenced every re-compose, so it's guranteed not to point to
         // an invalid memory location (e.g. an `Option` that previously returned `Some` is now `None`).
-        unsafe { (*cx.me().map).any_compose(state) }
+        unsafe { (*cx.me().map).any_compose(cx.state) }
+    }
+
+    fn name() -> Option<std::borrow::Cow<'static, str>> {
+        C::name()
     }
 }
 
@@ -473,7 +472,14 @@ impl<'a, T: 'static> SignalMut<'a, T> {
         let scope_key = me.scope_key;
 
         Self::with(me, move |value| {
-            Runtime::current().pending.borrow_mut().push_back(scope_key);
+            let rt = Runtime::current();
+            let node = rt.nodes.borrow().get(scope_key).unwrap().clone();
+
+            rt.pending.borrow_mut().insert(Pending {
+                key: scope_key,
+                level: node.level,
+                child_idx: node.child_idx,
+            });
 
             f(value)
         })

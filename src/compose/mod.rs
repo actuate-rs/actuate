@@ -1,5 +1,5 @@
 use crate::{
-    composer::{ComposePtr, Node, Runtime},
+    composer::{ComposePtr, Node, Pending, Runtime},
     data::Data,
     use_context, use_ref, Scope, ScopeData, ScopeState,
 };
@@ -85,15 +85,22 @@ impl<C: Compose> Compose for Option<C> {
 
                 *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
 
-                rt.pending.borrow_mut().push_back(key);
+                rt.pending.borrow_mut().insert(Pending {
+                    key,
+                    level: nodes[key].level,
+                    child_idx: nodes[key].child_idx,
+                });
             } else {
                 let ptr: *const dyn AnyCompose =
                     unsafe { mem::transmute(content as *const dyn AnyCompose) };
+                let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
                 let key = nodes.insert(Rc::new(Node {
                     compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
                     scope: ScopeData::default(),
                     parent: Some(rt.current_key.get()),
                     children: RefCell::new(Vec::new()),
+                    level,
+                    child_idx: 0,
                 }));
                 child_key.set(Some(key));
 
@@ -113,7 +120,11 @@ impl<C: Compose> Compose for Option<C> {
                     .values
                     .extend(cx.child_contexts.borrow().values.clone());
 
-                rt.pending.borrow_mut().push_back(key);
+                rt.pending.borrow_mut().insert(Pending {
+                    key,
+                    level: nodes[key].level,
+                    child_idx: nodes[key].child_idx,
+                });
             }
         } else if let Some(key) = child_key.get() {
             child_key.set(None);
@@ -176,7 +187,11 @@ impl<C: Compose> Compose for Result<C, Error> {
 
                     *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
 
-                    rt.pending.borrow_mut().push_back(key);
+                    rt.pending.borrow_mut().insert(Pending {
+                        key,
+                        level: nodes[key].level,
+                        child_idx: nodes[key].child_idx,
+                    });
                 } else {
                     let ptr: *const dyn AnyCompose =
                         unsafe { mem::transmute(content as *const dyn AnyCompose) };
@@ -185,6 +200,8 @@ impl<C: Compose> Compose for Result<C, Error> {
                         scope: ScopeData::default(),
                         parent: Some(rt.current_key.get()),
                         children: RefCell::new(Vec::new()),
+                        level: rt.nodes.borrow().get(rt.current_key.get()).unwrap().level + 1,
+                        child_idx: 0,
                     }));
                     child_key.set(Some(key));
 
@@ -204,7 +221,11 @@ impl<C: Compose> Compose for Result<C, Error> {
                         .values
                         .extend(cx.child_contexts.borrow().values.clone());
 
-                    rt.pending.borrow_mut().push_back(key);
+                    rt.pending.borrow_mut().insert(Pending {
+                        key,
+                        level: nodes[key].level,
+                        child_idx: nodes[key].child_idx,
+                    });
                 }
             }
             Err(error) => {
@@ -235,6 +256,9 @@ macro_rules! impl_tuples {
         impl<$($t: Compose),*> Compose for ($($t,)*) {
             fn compose(cx: Scope<Self>) -> impl Compose {
                 let rt = Runtime::current();
+                let mut nodes = rt.nodes.borrow_mut();
+
+                let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
 
                 $(
                     let mut is_init = false;
@@ -242,14 +266,14 @@ macro_rules! impl_tuples {
                     let child_key = use_ref(&cx, || {
                         is_init = true;
 
-                        let mut nodes = rt.nodes.borrow_mut();
-
                         let ptr: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
                         let child_key = nodes.insert(Rc::new(Node {
                             compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
                             scope: ScopeData::default(),
                             parent: Some(rt.current_key.get()),
                             children: RefCell::new(Vec::new()),
+                            level,
+                            child_idx: $idx,
                         }));
 
                         nodes
@@ -272,12 +296,16 @@ macro_rules! impl_tuples {
                     });
 
                     if !is_init {
-                        let last = rt.nodes.borrow().get(*child_key).unwrap().clone();
+                        let last = nodes.get(*child_key).unwrap().clone();
                         let ptr: *const dyn AnyCompose = unsafe { mem::transmute(&cx.me().$idx as *const dyn AnyCompose) };
                         *last.compose.borrow_mut() = crate::composer::ComposePtr::Ptr(ptr);
                     }
 
-                    rt.pending.borrow_mut().push_back(*child_key);
+                    rt.pending.borrow_mut().insert(Pending {
+                        key: *child_key,
+                        level: nodes[*child_key].level,
+                        child_idx: nodes[*child_key].child_idx,
+                    });
                 )*
             }
 
@@ -370,11 +398,14 @@ where
                     let last = nodes.get_mut(key).unwrap();
                     child.reborrow(last.compose.borrow_mut().as_ptr_mut());
                 } else {
+                    let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
                     let child_key = nodes.insert(Rc::new(Node {
                         compose: RefCell::new(crate::composer::ComposePtr::Boxed(child)),
                         scope: ScopeData::default(),
                         parent: Some(rt.current_key.get()),
                         children: RefCell::new(Vec::new()),
+                        level,
+                        child_idx: 0,
                     }));
                     child_key_cell.set(Some(child_key));
 
@@ -398,7 +429,12 @@ where
         }
 
         if let Some(key) = child_key_cell.get() {
-            rt.pending.borrow_mut().push_back(key);
+            let nodes = rt.nodes.borrow();
+            rt.pending.borrow_mut().insert(Pending {
+                key,
+                level: nodes[key].level,
+                child_idx: nodes[key].child_idx,
+            });
         }
     }
 

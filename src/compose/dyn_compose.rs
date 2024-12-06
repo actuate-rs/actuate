@@ -1,6 +1,6 @@
 use slotmap::DefaultKey;
 
-use super::{drop_node, AnyCompose, Node, Runtime};
+use super::{drop_node, AnyCompose, Node, Pending, Runtime};
 use crate::{compose::Compose, use_ref, Scope, ScopeData};
 use core::{any::TypeId, cell::UnsafeCell, mem};
 use std::{
@@ -45,7 +45,12 @@ impl Compose for DynCompose<'_> {
                 let mut last = nodes[state.key].compose.borrow_mut();
                 unsafe { compose.reborrow(last.as_ptr_mut()) };
 
-                rt.pending.borrow_mut().push_back(state.key);
+                let key = state.key;
+                rt.pending.borrow_mut().insert(Pending {
+                    key: key,
+                    level: nodes[key].level,
+                    child_idx: nodes[key].child_idx,
+                });
 
                 return;
             } else {
@@ -55,7 +60,12 @@ impl Compose for DynCompose<'_> {
 
         let Some(compose) = unsafe { &mut *cx.me().compose.get() }.take() else {
             if let Some(state) = state.get() {
-                rt.pending.borrow_mut().push_back(state.key);
+                let key = state.key;
+                rt.pending.borrow_mut().insert(Pending {
+                    key: key,
+                    level: nodes[key].level,
+                    child_idx: nodes[key].child_idx,
+                });
             }
 
             return;
@@ -63,11 +73,14 @@ impl Compose for DynCompose<'_> {
         let compose: Box<dyn AnyCompose> = unsafe { mem::transmute(compose) };
         let data_id = compose.data_id();
 
+        let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
         let key = nodes.insert(Rc::new(Node {
             compose: RefCell::new(crate::composer::ComposePtr::Boxed(compose)),
             scope: ScopeData::default(),
             parent: Some(rt.current_key.get()),
             children: RefCell::new(Vec::new()),
+            level,
+            child_idx: 0,
         }));
         state.set(Some(DynComposeState { key, data_id }));
 
@@ -87,6 +100,10 @@ impl Compose for DynCompose<'_> {
             .values
             .extend(cx.child_contexts.borrow().values.clone());
 
-        rt.pending.borrow_mut().push_back(key);
+        rt.pending.borrow_mut().insert(Pending {
+            key: key,
+            level: nodes[key].level,
+            child_idx: nodes[key].child_idx,
+        });
     }
 }
