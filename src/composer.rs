@@ -195,7 +195,7 @@ impl Ord for Pending {
         }
         match self.child_idx.cmp(&other.child_idx) {
             std::cmp::Ordering::Equal => self.key.cmp(&other.key),
-            ord => return ord,
+            ord => ord,
         }
     }
 }

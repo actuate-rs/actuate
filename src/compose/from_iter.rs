@@ -101,7 +101,7 @@ where
             let key = state.key.unwrap();
 
             rt.pending.borrow_mut().insert(Pending {
-                key: key,
+                key,
                 level: nodes[key].level,
                 child_idx: nodes[key].child_idx,
             });

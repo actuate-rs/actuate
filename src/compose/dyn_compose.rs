@@ -47,7 +47,7 @@ impl Compose for DynCompose<'_> {
 
                 let key = state.key;
                 rt.pending.borrow_mut().insert(Pending {
-                    key: key,
+                    key,
                     level: nodes[key].level,
                     child_idx: nodes[key].child_idx,
                 });
@@ -62,7 +62,7 @@ impl Compose for DynCompose<'_> {
             if let Some(state) = state.get() {
                 let key = state.key;
                 rt.pending.borrow_mut().insert(Pending {
-                    key: key,
+                    key,
                     level: nodes[key].level,
                     child_idx: nodes[key].child_idx,
                 });
@@ -101,7 +101,7 @@ impl Compose for DynCompose<'_> {
             .extend(cx.child_contexts.borrow().values.clone());
 
         rt.pending.borrow_mut().insert(Pending {
-            key: key,
+            key,
             level: nodes[key].level,
             child_idx: nodes[key].child_idx,
         });
