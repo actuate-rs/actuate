@@ -78,11 +78,12 @@ pub trait Modify<'a> {
     fn on_insert<F>(mut self, f: F) -> Self
     where
         Self: Sized,
-        F: FnOnce(EntityWorldMut) + 'a,
+        F: Fn(EntityWorldMut) + 'a,
     {
-        let f_cell = Cell::new(Some(f));
+        let f = Rc::new(f);
         self.modifier().fns.push(Rc::new(move |spawn| {
-            spawn.on_insert(f_cell.take().unwrap())
+            let f = f.clone();
+            spawn.on_insert(move |e| f(e))
         }));
         self
     }

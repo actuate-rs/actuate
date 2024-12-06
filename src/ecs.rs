@@ -481,6 +481,8 @@ type ObserverFn<'a> = Box<dyn Fn(&mut EntityWorldMut) + 'a>;
 
 type OnAddFn<'a> = Box<dyn FnOnce(EntityWorldMut) + 'a>;
 
+type OnInsertFn<'a> = Box<dyn Fn(EntityWorldMut) + 'a>;
+
 /// Composable to spawn an entity.
 ///
 /// See [`spawn`] for more information.
@@ -491,7 +493,7 @@ pub struct Spawn<'a, C = ()> {
     target: Option<Entity>,
     observer_fns: Vec<ObserverFn<'a>>,
     on_add: Cell<Option<OnAddFn<'a>>>,
-    on_insert: Vec<OnAddFn<'a>>,
+    on_insert: Vec<OnInsertFn<'a>>,
     observer_guard: Arc<Mutex<bool>>,
 }
 
@@ -527,7 +529,7 @@ impl<'a, C> Spawn<'a, C> {
     }
 
     /// Add a function to be called on every insert.
-    pub fn on_insert(mut self, f: impl FnOnce(EntityWorldMut) + 'a) -> Self {
+    pub fn on_insert(mut self, f: impl Fn(EntityWorldMut) + 'a) -> Self {
         self.on_insert.push(Box::new(f));
         self
     }
@@ -588,6 +590,10 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             }
 
             (cx.me().spawn_fn)(world, entity);
+
+            for f in &cx.me().on_insert {
+                f(world.entity_mut(entity.unwrap()));
+            }
 
             if is_initial.get() {
                 let mut entity_mut = world.entity_mut(entity.unwrap());
