@@ -20,6 +20,8 @@ pub fn button<'a, C>(content: C) -> Button<'a, C> {
 }
 
 /// Material UI button.
+#[derive(Clone, Debug, Data)]
+#[actuate(path = "crate")]
 pub struct Button<'a, C> {
     content: C,
     background_color: Option<Color>,
@@ -48,8 +50,6 @@ impl<'a, C> Button<'a, C> {
         self
     }
 }
-
-unsafe impl<C: Data> Data for Button<'_, C> {}
 
 impl<C: Compose> Compose for Button<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {

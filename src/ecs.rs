@@ -12,6 +12,7 @@ use bevy_ecs::{
 };
 use bevy_hierarchy::BuildChildren;
 use bevy_utils::HashMap;
+use core::fmt;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     cell::{Cell, RefCell},
@@ -677,6 +678,12 @@ impl<'a> Modifier<'a> {
         let modifier: Modifier<'_> = modifier.into_owned();
         let modifier: Modifier<'a> = unsafe { mem::transmute(modifier) };
         self.fns.extend(modifier.fns);
+    }
+}
+
+impl fmt::Debug for Modifier<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Modifier").finish()
     }
 }
 

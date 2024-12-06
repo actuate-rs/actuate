@@ -21,7 +21,7 @@ pub fn radio_button<'a>() -> RadioButton<'a> {
 }
 
 /// Material UI radio button.
-#[derive(Data)]
+#[derive(Clone, Debug, Data)]
 #[actuate(path = "crate")]
 pub struct RadioButton<'a> {
     is_enabled: bool,

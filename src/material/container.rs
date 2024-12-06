@@ -24,6 +24,8 @@ pub fn container<'a, C>(content: C) -> Container<'a, C> {
 }
 
 /// Material UI button.
+#[derive(Clone, Debug, Data)]
+#[actuate(path = "crate")]
 pub struct Container<'a, C> {
     content: C,
     padding: UiRect,
@@ -58,8 +60,6 @@ impl<'a, C> Container<'a, C> {
         self
     }
 }
-
-unsafe impl<C: Data> Data for Container<'_, C> {}
 
 impl<C: Compose> Compose for Container<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
