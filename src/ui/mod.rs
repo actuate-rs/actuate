@@ -24,6 +24,8 @@ pub fn scroll_view<'a, C: Compose>(content: C) -> ScrollView<'a, C> {
         content,
         line_size: 30.,
         modifier: Modifier::default(),
+        scroll_x: true,
+        scroll_y: true,
     }
 }
 
@@ -33,6 +35,8 @@ pub fn scroll_view<'a, C: Compose>(content: C) -> ScrollView<'a, C> {
 pub struct ScrollView<'a, C> {
     content: C,
     line_size: f32,
+    scroll_x: bool,
+    scroll_y: bool,
     modifier: Modifier<'a>,
 }
 
@@ -40,6 +44,18 @@ impl<C> ScrollView<'_, C> {
     /// Set the line size to scroll (default: 30).
     pub fn line_size(mut self, size: f32) -> Self {
         self.line_size = size;
+        self
+    }
+
+    /// Enable or disable horizontal scrolling (default: true).
+    pub fn scroll_x(mut self, scroll_x: bool) -> Self {
+        self.scroll_x = scroll_x;
+        self
+    }
+
+    /// Enable or disable vertical scrolling (default: true).
+    pub fn scroll_y(mut self, scroll_y: bool) -> Self {
+        self.scroll_y = scroll_y;
         self
     }
 }
@@ -56,7 +72,6 @@ impl<C: Compose> Compose for ScrollView<'_, C> {
                   mut scrolled_node_query: Query<&mut ScrollPosition>,
                   keyboard_input: Res<ButtonInput<KeyCode>>| {
                 for mouse_wheel_event in mouse_wheel_events.read() {
-                    dbg!(mouse_wheel_event);
                     let (mut dx, mut dy) = match mouse_wheel_event.unit {
                         MouseScrollUnit::Line => (
                             mouse_wheel_event.x * cx.me().line_size,
@@ -65,17 +80,24 @@ impl<C: Compose> Compose for ScrollView<'_, C> {
                         MouseScrollUnit::Pixel => (mouse_wheel_event.x, mouse_wheel_event.y),
                     };
 
-                    if keyboard_input.pressed(KeyCode::ControlLeft)
-                        || keyboard_input.pressed(KeyCode::ControlRight)
-                    {
-                        std::mem::swap(&mut dx, &mut dy)
+                    if cx.me().scroll_x && cx.me().scroll_y {
+                        if keyboard_input.pressed(KeyCode::ControlLeft)
+                            || keyboard_input.pressed(KeyCode::ControlRight)
+                        {
+                            std::mem::swap(&mut dx, &mut dy)
+                        }
                     }
 
                     if *is_hovered {
                         if let Some(entity) = *entity_cell {
                             if let Ok(mut scroll_position) = scrolled_node_query.get_mut(entity) {
-                                scroll_position.offset_x -= dx;
-                                scroll_position.offset_y -= dy;
+                                if cx.me().scroll_x {
+                                    scroll_position.offset_x -= dx;
+                                }
+
+                                if cx.me().scroll_y {
+                                    scroll_position.offset_y -= dy;
+                                }
                             }
                         }
                     }
