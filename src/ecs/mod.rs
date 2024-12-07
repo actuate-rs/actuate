@@ -561,10 +561,35 @@ impl fmt::Debug for Modifier<'_> {
 
 unsafe impl Data for Modifier<'_> {}
 
+macro_rules! make_handler_method {
+    ($($i:ident: $e:ident),*) => {
+        $(
+            #[cfg(feature = "picking")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "picking")))]
+            #[doc = concat!("Add an observer for `", stringify!($e), "` events to this composable's bundle.")]
+            fn $i(self, f: impl Fn() + Send + Sync + 'a) -> Self
+            where
+                Self: Sized,
+            {
+                self.observe(move |_: Trigger<Pointer<$e>>| f())
+            }
+        )*
+    };
+}
+
 /// Modifiable composable.
 pub trait Modify<'a> {
     /// Get a mutable reference to the modifier of this button.
     fn modifier(&mut self) -> &mut Modifier<'a>;
+
+    /// Modify this composable with a function.
+    fn modify(mut self, f: impl Fn(Spawn<'a, ()>) -> Spawn<'a, ()> + 'a) -> Self
+    where
+        Self: Sized,
+    {
+        self.modifier().fns.push(Rc::new(f));
+        self
+    }
 
     /// Append a modifier to this composable.
     fn append(mut self, modifier: Cow<'a, Modifier>) -> Self
@@ -576,21 +601,20 @@ pub trait Modify<'a> {
     }
 
     /// Add a function to run when this composable's bundle is spawned.
-    fn on_insert<F>(mut self, f: F) -> Self
+    fn on_insert<F>(self, f: F) -> Self
     where
         Self: Sized,
         F: Fn(EntityWorldMut) + 'a,
     {
         let f = Rc::new(f);
-        self.modifier().fns.push(Rc::new(move |spawn| {
+        self.modify(move |spawn| {
             let f = f.clone();
             spawn.on_insert(move |e| f(e))
-        }));
-        self
+        })
     }
 
-    /// Add an observer to the container of this button.
-    fn observe<F, E, B, Marker>(mut self, observer: F) -> Self
+    /// Add an observer to this composable's bundle.
+    fn observe<F, E, B, Marker>(self, observer: F) -> Self
     where
         Self: Sized,
         F: SystemParamFunction<Marker, In = Trigger<'static, E, B>, Out = ()> + Send + Sync + 'a,
@@ -598,25 +622,24 @@ pub trait Modify<'a> {
         B: Bundle,
     {
         let observer_cell = Cell::new(Some(observer));
-        let f: Rc<dyn Fn(Spawn) -> Spawn> = Rc::new(move |spawn| {
+        self.modify(move |spawn| {
             let observer = observer_cell.take().unwrap();
-            let spawn: Spawn<'a> = unsafe { mem::transmute(spawn) };
-            let spawn = spawn.observe(observer);
-            let spawn: Spawn = unsafe { mem::transmute(spawn) };
-            spawn
-        });
-        let f: Rc<dyn Fn(Spawn) -> Spawn> = unsafe { mem::transmute(f) };
-        self.modifier().fns.push(f);
-        self
+            spawn.observe(observer)
+        })
     }
 
-    #[cfg(feature = "picking")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "picking")))]
-    /// Add an click observer to the container of this button.
-    fn on_click(self, f: impl Fn() + Send + Sync + 'a) -> Self
-    where
-        Self: Sized,
-    {
-        self.observe(move |_: Trigger<Pointer<Click>>| f())
-    }
+    make_handler_method!(
+        on_mouse_in: Over,
+        on_mouse_out: Out,
+        on_click: Click,
+        on_mouse_down: Down,
+        on_mouse_up: Up,
+        on_drag: Drag,
+        on_drag_start: DragStart,
+        on_drag_end: DragEnd,
+        on_drag_enter: DragEnter,
+        on_drag_over: DragOver,
+        on_drag_drop: DragDrop,
+        on_drag_leave: DragLeave
+    );
 }
