@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.17.2...actuate-v0.18.0) - 2024-12-07
+
+## Breaking changes
+
+- Create `ScrollView` composable and new `ui` module (28628f4, ebb17b0)
+  - The `material` is now located under `ui`
+
+## Features
+
+- Add support for reactive Bevy desktop apps (7c65ba9, 6918000)
+- Add more picking handler methods to `Modify` (64404b3)
+- More advanced typography with new Text composable (825e007)
+- Derive `Clone` for `Spawn` and refactor (6c4e457)
+- Add methods to modify all Node fields
+
 ## [0.17.2](https://github.com/actuate-rs/actuate/compare/actuate-v0.17.1...actuate-v0.17.2) - 2024-12-07
 
 ## Fixes
