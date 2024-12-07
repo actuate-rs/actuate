@@ -1,8 +1,8 @@
-use super::{AnyCompose, Node, Pending, Runtime};
-use crate::{compose::Compose, data::Data, use_ref, Scope, ScopeData};
+use super::{use_node, AnyCompose, Pending, Runtime};
+use crate::{compose::Compose, composer::ComposePtr, data::Data, use_ref, Scope};
 use alloc::borrow::Cow;
 use core::cell::RefCell;
-use std::{mem, rc::Rc};
+use std::mem;
 
 /// Create a new memoized composable.
 ///
@@ -37,57 +37,19 @@ where
     C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        let ptr: *const dyn AnyCompose =
+            unsafe { mem::transmute(&cx.me().content as *const dyn AnyCompose) };
+        let (key, node) = use_node(&cx, ComposePtr::Ptr(ptr), 0);
+
         let rt = Runtime::current();
-        let mut nodes = rt.nodes.borrow_mut();
-
-        let mut is_init = false;
-        let key = *use_ref(&cx, || {
-            is_init = true;
-
-            let ptr: *const dyn AnyCompose =
-                unsafe { mem::transmute(&cx.me().content as *const dyn AnyCompose) };
-            let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
-            let child_key = nodes.insert(Rc::new(Node {
-                compose: RefCell::new(crate::composer::ComposePtr::Ptr(ptr)),
-                scope: ScopeData::default(),
-                parent: Some(rt.current_key.get()),
-                children: RefCell::new(Vec::new()),
-                level,
-                child_idx: 0,
-            }));
-
-            nodes
-                .get(rt.current_key.get())
-                .unwrap()
-                .children
-                .borrow_mut()
-                .push(child_key);
-
-            let child_state = &nodes[child_key].scope;
-
-            *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
-            child_state
-                .contexts
-                .borrow_mut()
-                .values
-                .extend(cx.child_contexts.borrow().values.clone());
-
-            child_key
-        });
-
-        if !is_init {
-            let last = rt.nodes.borrow().get(key).unwrap().clone();
-            let ptr: *const dyn AnyCompose =
-                unsafe { mem::transmute(&cx.me().content as *const dyn AnyCompose) };
-            *last.compose.borrow_mut() = crate::composer::ComposePtr::Ptr(ptr);
-        }
+        let nodes = rt.nodes.borrow();
 
         let last = use_ref(&cx, RefCell::default);
         let mut last = last.borrow_mut();
         if let Some(last) = &mut *last {
             if cx.me().dependency != *last {
                 *last = cx.me().dependency.clone();
-                let node = nodes[key].clone();
+
                 let mut indices = Vec::new();
                 let mut parent = node.parent;
                 while let Some(key) = parent {
