@@ -1,6 +1,8 @@
 use crate::{
-    compose::Compose, composer::Composer, data::Data, use_callback, use_drop, use_provider,
-    use_ref, Cow, Scope, ScopeState, Signal,
+    compose::Compose,
+    composer::{Composer, Pending},
+    data::Data,
+    use_callback, use_drop, use_provider, use_ref, Cow, Scope, ScopeState, Signal,
 };
 use bevy_app::{App, Plugin};
 use bevy_ecs::{
@@ -15,6 +17,8 @@ use core::fmt;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     cell::{Cell, RefCell},
+    cmp::Ordering,
+    collections::BTreeSet,
     mem, ptr,
     rc::Rc,
 };
@@ -176,6 +180,7 @@ impl<C: Compose> Compose for CompositionContent<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         use_provider(&cx, || SpawnContext {
             parent_entity: cx.me().target,
+            keys: RefCell::new(BTreeSet::new()),
         });
 
         unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
@@ -463,8 +468,27 @@ pub fn use_commands(cx: ScopeState) -> &UseCommands {
     })
 }
 
+#[derive(PartialEq, Eq)]
+pub(crate) struct Spawned {
+    pub(crate) key: DefaultKey,
+    pub(crate) indices: Vec<usize>,
+}
+
+impl PartialOrd for Spawned {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Spawned {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.indices.cmp(&other.indices)
+    }
+}
+
 struct SpawnContext {
     parent_entity: Entity,
+    keys: RefCell<BTreeSet<Spawned>>,
 }
 
 /// Use a spawned bundle.
@@ -499,6 +523,7 @@ fn use_bundle_inner(cx: ScopeState, spawn: impl FnOnce(&mut World, &mut Option<E
     use_drop(cx, move || {
         let world = unsafe { RuntimeContext::current().world_mut() };
         world.try_despawn(entity);
+        dbg!("despawn!");
     });
 
     entity

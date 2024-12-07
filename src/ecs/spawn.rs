@@ -1,11 +1,15 @@
-use super::{use_bundle_inner, RuntimeContext, SpawnContext, SystemParamFunction};
+use super::{
+    use_bundle_inner, Pending, RuntimeContext, SpawnContext, Spawned, SystemParamFunction,
+};
 use crate::{
-    compose::Compose, data::Data, use_context, use_drop, use_provider, use_ref, Scope, Signal,
+    compose::Compose, composer::Runtime, data::Data, use_context, use_drop, use_provider, use_ref,
+    Scope, Signal,
 };
 use bevy_ecs::{entity::Entity, prelude::*, world::World};
 use bevy_hierarchy::BuildChildren;
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
+    collections::BTreeSet,
     mem,
     sync::{Arc, Mutex},
 };
@@ -188,23 +192,70 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             }
         });
 
-        use_provider(&cx, || {
+        let child_cx = use_provider(&cx, || {
             if cx.me().target.is_none() {
-                if let Ok(parent_entity) = spawn_cx.map(|cx| cx.parent_entity) {
-                    let world = unsafe { RuntimeContext::current().world_mut() };
-                    world.entity_mut(parent_entity).add_child(entity);
+                if let Ok(spawn_cx) = spawn_cx {
+                    let rt = Runtime::current();
+                    let nodes = rt.nodes.borrow();
+                    let node = nodes[rt.current_key.get()].clone();
+                    let mut indices = Vec::new();
+                    let mut parent = node.parent;
+                    while let Some(key) = parent {
+                        indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
+                        parent = rt.nodes.borrow().get(key).unwrap().parent;
+                    }
+                    indices.push(node.child_idx);
+
+                    spawn_cx.keys.borrow_mut().insert(Spawned {
+                        key: rt.current_key.get(),
+                        indices,
+                    });
+
+                    if let Some(idx) = spawn_cx
+                        .keys
+                        .borrow()
+                        .iter()
+                        .position(|pending| pending.key == rt.current_key.get())
+                    {
+                        let world = unsafe { RuntimeContext::current().world_mut() };
+                        world
+                            .entity_mut(spawn_cx.parent_entity)
+                            .insert_children(idx, &[entity]);
+                    }
                 }
             }
 
             SpawnContext {
                 parent_entity: entity,
+                keys: RefCell::new(BTreeSet::new()),
             }
+        });
+
+        let (node, key) = use_ref(&cx, || {
+            let rt = Runtime::current();
+            let nodes = rt.nodes.borrow();
+            let node = nodes[rt.current_key.get()].clone();
+
+            let mut indices = Vec::new();
+            let mut parent = node.parent;
+            while let Some(key) = parent {
+                indices.push(nodes.get(key).unwrap().child_idx);
+                parent = nodes.get(key).unwrap().parent;
+            }
+            indices.push(node.child_idx);
+            let key = Spawned {
+                key: rt.current_key.get(),
+                indices,
+            };
+            (node, key)
         });
 
         // Use the initial guard.
         let guard = use_ref(&cx, || cx.me().observer_guard.clone());
         use_drop(&cx, move || {
             *guard.lock().unwrap() = false;
+
+            child_cx.keys.borrow_mut().remove(key);
         });
 
         unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
