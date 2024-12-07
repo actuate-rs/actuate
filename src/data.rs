@@ -5,7 +5,7 @@
 //! [`Data`] is a trait that enforces pinned references to compososition state.
 //!
 //! The `#[derive(Data)]` macro can be used to derive the [`Data`] trait for a struct.
-//! This requires the struct's fields that either:
+//! This requires the struct's fields either:
 //! - Implement the [`Data`] trait.
 //! - Are `'static`.
 //! - Are functions that take `'static` arguments and return a type that implements the [`Data`] trait.
@@ -61,7 +61,8 @@ pub use actuate_macros::{data, Data};
 
 /// Composable data.
 ///
-/// For most cases, this trait should be derived with `#[derive(Data)]`.
+/// In most cases, this trait should be derived with `#[derive(Data)]`.
+/// For more information, see the [module-level documentation](crate::data).
 ///
 /// # Safety
 /// This struct must ensure the lifetime of the data it holds cannot escape while composing children.
