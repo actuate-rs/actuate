@@ -70,7 +70,6 @@ pub(crate) struct Node {
     pub(crate) scope: ScopeData<'static>,
     pub(crate) parent: Option<DefaultKey>,
     pub(crate) children: RefCell<Vec<DefaultKey>>,
-    pub(crate) level: usize,
     pub(crate) child_idx: usize,
 }
 
@@ -138,6 +137,28 @@ impl Runtime {
             f()
         }));
     }
+
+    pub fn pending(&self, key: DefaultKey) -> Pending {
+        let nodes = self.nodes.borrow();
+        let node = nodes[key].clone();
+
+        let mut indices = vec![node.child_idx];
+        let mut parent = node.parent;
+
+        while let Some(key) = parent {
+            indices.push(nodes.get(key).unwrap().child_idx);
+            parent = nodes.get(key).unwrap().parent;
+        }
+
+        indices.reverse();
+
+        Pending { key, indices }
+    }
+
+    pub fn queue(&self, key: DefaultKey) {
+        let pending = self.pending(key);
+        self.pending.borrow_mut().insert(pending);
+    }
 }
 
 thread_local! {
@@ -175,7 +196,7 @@ impl PartialEq for TryComposeError {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Pending {
     pub(crate) key: DefaultKey,
     pub(crate) indices: Vec<usize>,
@@ -196,7 +217,9 @@ impl Ord for Pending {
             }
         }
 
-        self.indices.len().cmp(&other.indices.len())
+        let o = self.indices.len().cmp(&other.indices.len());
+
+        o
     }
 }
 
@@ -256,7 +279,6 @@ impl Composer {
             scope: ScopeData::default(),
             parent: None,
             children: RefCell::new(Vec::new()),
-            level: 0,
             child_idx: 0,
         }));
 

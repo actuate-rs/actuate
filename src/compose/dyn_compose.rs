@@ -1,4 +1,4 @@
-use super::{drop_node, AnyCompose, Node, Pending, Runtime};
+use super::{drop_node, AnyCompose, Node, Runtime};
 use crate::{compose::Compose, use_ref, Scope, ScopeData};
 use core::{any::TypeId, cell::UnsafeCell, mem};
 use slotmap::DefaultKey;
@@ -72,7 +72,6 @@ impl Compose for DynCompose<'_> {
         let state: &Cell<Option<DynComposeState>> = use_ref(&cx, || Cell::new(None));
 
         let rt = Runtime::current();
-        let mut nodes = rt.nodes.borrow_mut();
 
         if let Some(state) = state.get() {
             let compose: &mut dyn AnyCompose = unsafe { &mut *cx.me().compose.get() }
@@ -82,40 +81,22 @@ impl Compose for DynCompose<'_> {
             let data_id = compose.data_id();
 
             if data_id == state.data_id {
-                let mut last = nodes[state.key].compose.borrow_mut();
-                unsafe { compose.reborrow(last.as_ptr_mut()) };
-
-                let key = state.key;
-                let node = nodes[key].clone();
-                let mut indices = Vec::new();
-                let mut parent = node.parent;
-                while let Some(key) = parent {
-                    indices.push(nodes.get(key).unwrap().child_idx);
-                    parent = nodes.get(key).unwrap().parent;
+                {
+                    let nodes = rt.nodes.borrow();
+                    let mut last = nodes[state.key].compose.borrow_mut();
+                    unsafe { compose.reborrow(last.as_ptr_mut()) };
                 }
-                indices.push(node.child_idx);
 
-                rt.pending.borrow_mut().insert(Pending { key, indices });
-
-                return;
+                rt.queue(state.key)
             } else {
+                let mut nodes = rt.nodes.borrow_mut();
                 drop_node(&mut nodes, state.key);
             }
         }
 
         let Some(compose) = unsafe { &mut *cx.me().compose.get() }.take() else {
             if let Some(state) = state.get() {
-                let key = state.key;
-                let node = nodes[key].clone();
-                let mut indices = Vec::new();
-                let mut parent = node.parent;
-                while let Some(key) = parent {
-                    indices.push(nodes.get(key).unwrap().child_idx);
-                    parent = nodes.get(key).unwrap().parent;
-                }
-                indices.push(node.child_idx);
-
-                rt.pending.borrow_mut().insert(Pending { key, indices });
+                rt.queue(state.key)
             }
 
             return;
@@ -123,13 +104,12 @@ impl Compose for DynCompose<'_> {
         let compose: Box<dyn AnyCompose> = unsafe { mem::transmute(compose) };
         let data_id = compose.data_id();
 
-        let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
+        let mut nodes = rt.nodes.borrow_mut();
         let key = nodes.insert(Rc::new(Node {
             compose: RefCell::new(crate::composer::ComposePtr::Boxed(compose)),
             scope: ScopeData::default(),
             parent: Some(rt.current_key.get()),
             children: RefCell::new(Vec::new()),
-            level,
             child_idx: 0,
         }));
         state.set(Some(DynComposeState { key, data_id }));
@@ -142,7 +122,6 @@ impl Compose for DynCompose<'_> {
             .push(key);
 
         let child_state = &nodes[key].scope;
-
         *child_state.contexts.borrow_mut() = cx.contexts.borrow().clone();
         child_state
             .contexts
@@ -150,15 +129,8 @@ impl Compose for DynCompose<'_> {
             .values
             .extend(cx.child_contexts.borrow().values.clone());
 
-        let node = nodes[key].clone();
-        let mut indices = Vec::new();
-        let mut parent = node.parent;
-        while let Some(key) = parent {
-            indices.push(nodes.get(key).unwrap().child_idx);
-            parent = nodes.get(key).unwrap().parent;
-        }
-        indices.push(node.child_idx);
+        drop(nodes);
 
-        rt.pending.borrow_mut().insert(Pending { key, indices });
+        rt.queue(key);
     }
 }

@@ -1,6 +1,6 @@
 use slotmap::DefaultKey;
 
-use super::{AnyCompose, Node, Pending, Runtime};
+use super::{AnyCompose, Node, Runtime};
 use crate::{compose::Compose, data::Data, use_ref, Scope, ScopeData, Signal};
 use core::{cell::RefCell, mem};
 use std::rc::Rc;
@@ -33,7 +33,6 @@ where
         let mut items: Vec<Option<_>> = cx.me().iter.clone().into_iter().map(Some).collect();
 
         let rt = Runtime::current();
-        let mut nodes = rt.nodes.borrow_mut();
 
         if items.len() >= states.len() {
             for item in &mut items[states.len()..] {
@@ -55,9 +54,9 @@ where
             states.truncate(items.len());
         }
 
-        let level = nodes.get(rt.current_key.get()).unwrap().level + 1;
-
         for (idx, state) in states.iter_mut().enumerate() {
+            let mut nodes = rt.nodes.borrow_mut();
+
             let state: &mut ItemState<Item> =
                 unsafe { mem::transmute(state.boxed.as_deref_mut().unwrap()) };
 
@@ -76,7 +75,6 @@ where
                     scope: ScopeData::default(),
                     parent: Some(rt.current_key.get()),
                     children: RefCell::new(Vec::new()),
-                    level,
                     child_idx: idx,
                 }));
                 nodes
@@ -98,17 +96,9 @@ where
                 .values
                 .extend(cx.child_contexts.borrow().values.clone());
 
-            let key = state.key.unwrap();
+            drop(nodes);
 
-            let mut indices = Vec::new();
-            let mut parent = node.parent;
-            while let Some(key) = parent {
-                indices.push(nodes.get(key).unwrap().child_idx);
-                parent = nodes.get(key).unwrap().parent;
-            }
-            indices.push(node.child_idx);
-
-            rt.pending.borrow_mut().insert(Pending { key, indices });
+            rt.queue(state.key.unwrap());
         }
     }
 }

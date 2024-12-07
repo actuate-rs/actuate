@@ -1,4 +1,4 @@
-use super::{use_node, AnyCompose, Pending, Runtime};
+use super::{use_node, AnyCompose, Runtime};
 use crate::{compose::Compose, composer::ComposePtr, data::Data, use_ref, Scope};
 use alloc::borrow::Cow;
 use core::cell::RefCell;
@@ -37,41 +37,25 @@ where
     C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        let rt = Runtime::current();
+
         let ptr: *const dyn AnyCompose =
             unsafe { mem::transmute(&cx.me().content as *const dyn AnyCompose) };
-        let (key, node) = use_node(&cx, ComposePtr::Ptr(ptr), 0);
-
-        let rt = Runtime::current();
-        let nodes = rt.nodes.borrow();
+        let (key, _) = use_node(&cx, ComposePtr::Ptr(ptr), 0);
 
         let last = use_ref(&cx, RefCell::default);
         let mut last = last.borrow_mut();
+
         if let Some(last) = &mut *last {
             if cx.me().dependency != *last {
                 *last = cx.me().dependency.clone();
 
-                let mut indices = Vec::new();
-                let mut parent = node.parent;
-                while let Some(key) = parent {
-                    indices.push(nodes.get(key).unwrap().child_idx);
-                    parent = nodes.get(key).unwrap().parent;
-                }
-                indices.push(node.child_idx);
-
-                rt.pending.borrow_mut().insert(Pending { key, indices });
+                rt.queue(key);
             }
         } else {
             *last = Some(cx.me().dependency.clone());
-            let node = nodes[key].clone();
-            let mut indices = Vec::new();
-            let mut parent = node.parent;
-            while let Some(key) = parent {
-                indices.push(nodes.get(key).unwrap().child_idx);
-                parent = nodes.get(key).unwrap().parent;
-            }
-            indices.push(node.child_idx);
 
-            rt.pending.borrow_mut().insert(Pending { key, indices });
+            rt.queue(key);
         }
     }
 

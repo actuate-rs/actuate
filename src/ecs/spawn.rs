@@ -1,4 +1,4 @@
-use super::{use_bundle_inner, Pending, RuntimeContext, SpawnContext, SystemParamFunction};
+use super::{use_bundle_inner, RuntimeContext, SpawnContext, SystemParamFunction};
 use crate::{
     compose::Compose, composer::Runtime, data::Data, use_context, use_drop, use_provider, use_ref,
     Scope, Signal,
@@ -162,6 +162,8 @@ unsafe impl<C: Data> Data for Spawn<'_, C> {}
 
 impl<C: Compose> Compose for Spawn<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        let rt = Runtime::current();
+
         let spawn_cx = use_context::<SpawnContext>(&cx);
 
         let is_initial = use_ref(&cx, || Cell::new(true));
@@ -189,25 +191,12 @@ impl<C: Compose> Compose for Spawn<'_, C> {
                 is_initial.set(false);
             }
         });
+        let key = use_ref(&cx, || rt.pending(rt.current_key.get()));
 
         use_provider(&cx, || {
             if cx.me().target.is_none() {
                 if let Ok(spawn_cx) = spawn_cx {
-                    let rt = Runtime::current();
-                    let nodes = rt.nodes.borrow();
-                    let node = nodes[rt.current_key.get()].clone();
-                    let mut indices = Vec::new();
-                    let mut parent = node.parent;
-                    while let Some(key) = parent {
-                        indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
-                        parent = rt.nodes.borrow().get(key).unwrap().parent;
-                    }
-                    indices.push(node.child_idx);
-
-                    spawn_cx.keys.borrow_mut().insert(Pending {
-                        key: rt.current_key.get(),
-                        indices,
-                    });
+                    spawn_cx.keys.borrow_mut().insert(key.clone());
 
                     if let Some(idx) = spawn_cx
                         .keys
@@ -227,25 +216,6 @@ impl<C: Compose> Compose for Spawn<'_, C> {
                 parent_entity: entity,
                 keys: RefCell::new(BTreeSet::new()),
             }
-        });
-
-        let key = use_ref(&cx, || {
-            let rt = Runtime::current();
-            let nodes = rt.nodes.borrow();
-            let node = nodes[rt.current_key.get()].clone();
-
-            let mut indices = Vec::new();
-            let mut parent = node.parent;
-            while let Some(key) = parent {
-                indices.push(nodes.get(key).unwrap().child_idx);
-                parent = nodes.get(key).unwrap().parent;
-            }
-            indices.push(node.child_idx);
-            let key = Pending {
-                key: rt.current_key.get(),
-                indices,
-            };
-            key
         });
 
         // Use the initial guard.

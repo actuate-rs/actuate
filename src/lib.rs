@@ -119,7 +119,6 @@ extern crate alloc;
 
 use ahash::AHasher;
 use alloc::rc::Rc;
-use composer::Pending;
 use core::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
@@ -474,20 +473,7 @@ impl<'a, T: 'static> SignalMut<'a, T> {
 
         Self::with(me, move |value| {
             let rt = Runtime::current();
-            let node = rt.nodes.borrow().get(scope_key).unwrap().clone();
-
-            let mut indices = Vec::new();
-            let mut parent = node.parent;
-            while let Some(key) = parent {
-                indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
-                parent = rt.nodes.borrow().get(key).unwrap().parent;
-            }
-            indices.push(node.child_idx);
-
-            rt.pending.borrow_mut().insert(Pending {
-                key: scope_key,
-                indices,
-            });
+            rt.queue(scope_key);
 
             f(value)
         })
