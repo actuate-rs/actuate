@@ -136,6 +136,10 @@ impl Runtime {
             let f = f_cell.take().unwrap();
             f()
         }));
+
+        if let Some(waker) = &*self.waker.borrow() {
+            waker.wake_by_ref();
+        }
     }
 
     pub fn pending(&self, key: DefaultKey) -> Pending {
