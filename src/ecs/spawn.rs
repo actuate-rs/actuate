@@ -9,6 +9,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::BTreeSet,
     mem,
+    rc::Rc,
     sync::{Arc, Mutex},
 };
 
@@ -40,7 +41,7 @@ where
     B: Bundle + Clone,
 {
     Spawn {
-        spawn_fn: Arc::new(move |world, cell| {
+        spawn_fn: Rc::new(move |world, cell| {
             if let Some(entity) = cell {
                 world.entity_mut(*entity).insert(bundle.clone());
             } else {
@@ -51,29 +52,28 @@ where
         target: None,
         observer_fns: Vec::new(),
         observer_guard: Arc::new(Mutex::new(true)),
-        on_add: Cell::new(None),
+        on_spawn: Vec::new(),
         on_insert: Vec::new(),
     }
 }
 
-type SpawnFn = Arc<dyn Fn(&mut World, &mut Option<Entity>)>;
+type SpawnFn = Rc<dyn Fn(&mut World, &mut Option<Entity>)>;
 
-type ObserverFn<'a> = Box<dyn Fn(&mut EntityWorldMut) + 'a>;
+type ObserverFn<'a> = Rc<dyn Fn(&mut EntityWorldMut) + 'a>;
 
-type OnAddFn<'a> = Box<dyn FnOnce(EntityWorldMut) + 'a>;
-
-type OnInsertFn<'a> = Box<dyn Fn(EntityWorldMut) + 'a>;
+type OnInsertFn<'a> = Rc<dyn Fn(EntityWorldMut) + 'a>;
 
 /// Composable to spawn an entity.
 ///
 /// See [`spawn`] for more information.
+#[derive(Clone)]
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct Spawn<'a, C = ()> {
     spawn_fn: SpawnFn,
     content: C,
     target: Option<Entity>,
     observer_fns: Vec<ObserverFn<'a>>,
-    on_add: Cell<Option<OnAddFn<'a>>>,
+    on_spawn: Vec<OnInsertFn<'a>>,
     on_insert: Vec<OnInsertFn<'a>>,
     observer_guard: Arc<Mutex<bool>>,
 }
@@ -94,24 +94,21 @@ impl<'a, C> Spawn<'a, C> {
             content,
             target: self.target,
             observer_fns: self.observer_fns,
-            on_add: self.on_add,
             observer_guard: Arc::new(Mutex::new(false)),
+            on_spawn: self.on_spawn,
             on_insert: self.on_insert,
         }
     }
 
-    /// Set a function to be called when this entity is spawned.
-    pub fn on_spawn<F>(self, f: F) -> Self
-    where
-        F: FnOnce(EntityWorldMut) + 'a,
-    {
-        self.on_add.set(Some(Box::new(f)));
+    /// Add a function to be called when this bundle is initially spawned.
+    pub fn on_spawn(mut self, f: impl Fn(EntityWorldMut) + 'a) -> Self {
+        self.on_insert.push(Rc::new(f));
         self
     }
 
     /// Add a function to be called on every insert.
     pub fn on_insert(mut self, f: impl Fn(EntityWorldMut) + 'a) -> Self {
-        self.on_insert.push(Box::new(f));
+        self.on_insert.push(Rc::new(f));
         self
     }
 
@@ -125,7 +122,7 @@ impl<'a, C> Spawn<'a, C> {
         let cell = Cell::new(Some(observer));
         let guard = self.observer_guard.clone();
 
-        self.observer_fns.push(Box::new(move |entity| {
+        self.observer_fns.push(Rc::new(move |entity| {
             let mut observer = cell.take().unwrap();
             let guard = guard.clone();
 
@@ -179,13 +176,13 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             }
 
             if is_initial.get() {
+                for f in &cx.me().on_spawn {
+                    f(world.entity_mut(entity.unwrap()));
+                }
+
                 let mut entity_mut = world.entity_mut(entity.unwrap());
                 for f in &cx.me().observer_fns {
                     f(&mut entity_mut);
-                }
-
-                if let Some(f) = cx.me().on_add.take() {
-                    f(entity_mut);
                 }
 
                 is_initial.set(false);
