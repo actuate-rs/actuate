@@ -8,6 +8,45 @@ use std::{
 };
 
 /// Create a new dynamically-typed composable.
+///
+/// # Examples
+///
+/// ```
+/// #[derive(Data)]
+/// struct A;
+///
+/// impl Compose for A {
+///     fn compose(_cx: Scope<Self>) -> impl Compose {
+///         dbg!("A");
+///     }
+/// }
+///
+/// #[derive(Data)]
+/// struct B;
+///
+/// impl Compose for B {
+///     fn compose(_cx: Scope<Self>) -> impl Compose {
+///         dbg!("B");
+///     }
+/// }
+///
+/// #[derive(Data)]
+/// struct App;
+///
+/// impl Compose for App {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         let count = use_mut(&cx, || 0);
+///
+///         SignalMut::update(count, |x| *x += 1);
+///
+///         if *count == 0 {
+///             dyn_compose(A)
+///         } else {
+///             dyn_compose(B)
+///         }
+///     }
+/// }
+/// ```
 pub fn dyn_compose<'a>(content: impl Compose + 'a) -> DynCompose<'a> {
     DynCompose {
         compose: UnsafeCell::new(Some(Box::new(content))),

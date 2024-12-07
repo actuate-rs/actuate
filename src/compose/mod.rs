@@ -7,11 +7,10 @@ use alloc::borrow::Cow;
 use core::{
     any::TypeId,
     cell::{RefCell, UnsafeCell},
-    error::Error as StdError,
     mem,
 };
 use slotmap::{DefaultKey, SlotMap};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, fmt, rc::Rc};
 
 mod catch;
 pub use self::catch::{catch, Catch};
@@ -166,7 +165,7 @@ fn drop_node(nodes: &mut SlotMap<DefaultKey, Rc<Node>>, key: DefaultKey) {
 /// Composable error.
 ///
 /// This can be handled by a parent composable with [`Catch`].
-#[derive(Data)]
+#[derive(Data, thiserror::Error)]
 #[actuate(path = "crate")]
 pub struct Error {
     make_error: Box<dyn Fn() -> Box<dyn core::error::Error>>,
@@ -174,10 +173,22 @@ pub struct Error {
 
 impl Error {
     /// Create a new composable error.
-    pub fn new(error: impl StdError + Clone + 'static) -> Self {
+    pub fn new(error: impl core::error::Error + Clone + 'static) -> Self {
         Self {
             make_error: Box::new(move || Box::new(error.clone())),
         }
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (self.make_error)().fmt(f)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (self.make_error)().fmt(f)
     }
 }
 
@@ -263,11 +274,11 @@ impl<C: Compose> Compose for Result<C, Error> {
 }
 
 pub(crate) struct CatchContext {
-    f: Box<dyn Fn(Box<dyn StdError>)>,
+    f: Box<dyn Fn(Box<dyn core::error::Error>)>,
 }
 
 impl CatchContext {
-    pub(crate) fn new(f: impl Fn(Box<dyn StdError>) + 'static) -> Self {
+    pub(crate) fn new(f: impl Fn(Box<dyn core::error::Error>) + 'static) -> Self {
         Self { f: Box::new(f) }
     }
 }

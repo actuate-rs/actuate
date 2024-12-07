@@ -6,6 +6,37 @@ use core::{error::Error as StdError, mem};
 ///
 /// If a child returns a `Result<T, actuate::Error>`,
 /// any errors will be caught by this composable by calling `on_error`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actuate::prelude::*;
+///
+/// #[derive(Data)]
+/// struct A;
+///
+/// impl Compose for A {
+///     fn compose(_cx: Scope<Self>) -> impl Compose {
+///         let _: i32 = "".parse().map_err(Error::new)?;
+///
+///         Ok(())
+///     }
+/// }
+///
+/// #[derive(Data)]
+/// struct App;
+///
+/// impl Compose for App {
+///     fn compose(_cx: Scope<Self>) -> impl Compose {
+///         catch(
+///             |error| {
+///                 dbg!(error);
+///             },
+///             A,
+///         )
+///     }
+/// }
+/// ```
 pub fn catch<'a, C: Compose>(
     on_error: impl Fn(Box<dyn StdError>) + 'a,
     content: C,
