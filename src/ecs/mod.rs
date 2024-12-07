@@ -321,11 +321,36 @@ macro_rules! impl_system_param_fn {
 
 impl_trait_for_tuples!(impl_system_param_fn);
 
-/// Use a [`SystemParam`] from the ECS world.
+/// Use one or more [`SystemParam`]s from the ECS world.
 ///
 /// `with_world` will be called on every frame with the latest query.
 ///
 /// Change detection is implemented as a traditional system parameter.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actuate::prelude::*;
+/// use bevy::prelude::*;
+///
+/// // Timer composable.
+/// #[derive(Data)]
+/// struct Timer;
+///
+/// impl Compose for Timer {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         let current_time = use_mut(&cx, Time::default);
+///
+///         // Use the `Time` resource from the ECS world, updating the `current_time`.
+///         use_world(&cx, move |time: Res<Time>| {
+///             SignalMut::set(current_time, *time)
+///         });
+///
+///         // Spawn a `Text` component, updating it when this scope is re-composed.
+///         spawn(Text::new(format!("Elapsed: {:?}", current_time.elapsed())))
+///     }
+/// }
+/// ```
 pub fn use_world<'a, Marker, F>(cx: ScopeState<'a>, mut with_world: F)
 where
     F: SystemParamFunction<Marker, In = (), Out = ()> + 'a,
@@ -397,7 +422,7 @@ macro_rules! impl_system_param_fn_once {
 
 impl_trait_for_tuples!(impl_system_param_fn_once);
 
-/// Use a [`SystemParam`] from the ECS world.
+/// Use one or more [`SystemParam`]s from the ECS world.
 ///
 /// `with_world` will be called once during the first composition.
 pub fn use_world_once<Marker, F>(cx: ScopeState, with_world: F) -> &F::Output
