@@ -3,6 +3,7 @@ use crate::{compose::Compose, data::Data, use_provider, Scope, Signal};
 use core::{error::Error as StdError, mem};
 
 /// Create a composable that catches errors from its children.
+/// This will catch all errors from its descendants, until another `catch` is encountered.
 ///
 /// If a child returns a `Result<T, actuate::Error>`,
 /// any errors will be caught by this composable by calling `on_error`.
@@ -53,16 +54,24 @@ pub fn catch<'a, C: Compose>(
 #[derive(Data)]
 #[actuate(path = "crate")]
 pub struct Catch<'a, C> {
+    /// Content of this composable.
     content: C,
+
+    /// Function to handle errors.
     f: Box<dyn Fn(Box<dyn StdError>) + 'a>,
 }
 
 impl<C: Compose> Compose for Catch<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let f: &dyn Fn(Box<dyn StdError>) = &*cx.me().f;
+
+        // Cast this function to the `'static` lifetime.
+        // Safety: This function has a lifetime of `'a`, which is guaranteed to outlive this composables descendants.
         let f: &dyn Fn(Box<dyn StdError>) = unsafe { mem::transmute(f) };
+
         use_provider(&cx, move || CatchContext { f: Box::new(f) });
 
+        // Safety: The content of this composable is only returned into the composition once.
         unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
     }
 }
