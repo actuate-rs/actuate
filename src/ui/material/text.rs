@@ -8,7 +8,12 @@ use actuate_macros::Data;
 use bevy_text::{TextColor, TextFont};
 use bevy_ui::prelude::Text as UiText;
 
-/// Create a material UI text label.
+/// Create a material UI text body.
+pub fn body<'a>(content: impl Into<String>) -> Text<'a> {
+    text(content).typography(TypographyKind::Body)
+}
+
+/// Create a material UI text headline.
 pub fn headline<'a>(content: impl Into<String>) -> Text<'a> {
     text(content).typography(TypographyKind::Headline)
 }
@@ -16,6 +21,11 @@ pub fn headline<'a>(content: impl Into<String>) -> Text<'a> {
 /// Create a material UI text label.
 pub fn label<'a>(content: impl Into<String>) -> Text<'a> {
     text(content).typography(TypographyKind::Label)
+}
+
+/// Create a material UI text title.
+pub fn title<'a>(content: impl Into<String>) -> Text<'a> {
+    text(content).typography(TypographyKind::Title)
 }
 
 /// Create a material UI text label.

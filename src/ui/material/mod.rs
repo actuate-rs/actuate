@@ -78,20 +78,32 @@ impl Index<TypographyStyleKind> for TypographyToken {
 /// Typography style kind.
 #[derive(Clone, Copy)]
 pub enum TypographyKind {
+    /// Body typography.
+    Body,
+
     /// Headline typography.
     Headline,
 
     /// Label typography.
     Label,
+
+    /// Title typography.
+    Title,
 }
 
 /// Typography for a [`MaterialTheme`].
 pub struct Typography {
-    /// Label font size.
+    /// Body typography.
+    pub body: TypographyToken,
+
+    /// Headline typography.
     pub headline: TypographyToken,
 
-    /// Label font size.
+    /// Label typography.
     pub label: TypographyToken,
+
+    /// Title typography.
+    pub title: TypographyToken,
 }
 
 impl Index<TypographyKind> for Typography {
@@ -99,8 +111,10 @@ impl Index<TypographyKind> for Typography {
 
     fn index(&self, index: TypographyKind) -> &Self::Output {
         match index {
+            TypographyKind::Body => &self.body,
             TypographyKind::Headline => &self.headline,
             TypographyKind::Label => &self.label,
+            TypographyKind::Title => &self.title,
         }
     }
 }
@@ -123,6 +137,23 @@ impl Default for MaterialTheme {
                 text: Color::BLACK,
             },
             typography: Typography {
+                body: TypographyToken {
+                    small: TypographyStyle {
+                        font_size: 12.,
+                        font_weight: 400.,
+                        line_height: 16.,
+                    },
+                    medium: TypographyStyle {
+                        font_size: 14.,
+                        font_weight: 400.,
+                        line_height: 20.,
+                    },
+                    large: TypographyStyle {
+                        font_size: 16.,
+                        font_weight: 400.,
+                        line_height: 24.,
+                    },
+                },
                 headline: TypographyToken {
                     small: TypographyStyle {
                         font_size: 24.,
@@ -155,6 +186,23 @@ impl Default for MaterialTheme {
                         font_size: 14.,
                         font_weight: 500.,
                         line_height: 20.,
+                    },
+                },
+                title: TypographyToken {
+                    small: TypographyStyle {
+                        font_size: 14.,
+                        font_weight: 500.,
+                        line_height: 20.,
+                    },
+                    medium: TypographyStyle {
+                        font_size: 16.,
+                        font_weight: 500.,
+                        line_height: 24.,
+                    },
+                    large: TypographyStyle {
+                        font_size: 22.,
+                        font_weight: 400.,
+                        line_height: 28.,
                     },
                 },
             },
