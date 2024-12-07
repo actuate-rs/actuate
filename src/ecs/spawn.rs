@@ -1,6 +1,4 @@
-use super::{
-    use_bundle_inner, Pending, RuntimeContext, SpawnContext, Spawned, SystemParamFunction,
-};
+use super::{use_bundle_inner, Pending, RuntimeContext, SpawnContext, SystemParamFunction};
 use crate::{
     compose::Compose, composer::Runtime, data::Data, use_context, use_drop, use_provider, use_ref,
     Scope, Signal,
@@ -192,7 +190,7 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             }
         });
 
-        let child_cx = use_provider(&cx, || {
+        use_provider(&cx, || {
             if cx.me().target.is_none() {
                 if let Ok(spawn_cx) = spawn_cx {
                     let rt = Runtime::current();
@@ -206,7 +204,7 @@ impl<C: Compose> Compose for Spawn<'_, C> {
                     }
                     indices.push(node.child_idx);
 
-                    spawn_cx.keys.borrow_mut().insert(Spawned {
+                    spawn_cx.keys.borrow_mut().insert(Pending {
                         key: rt.current_key.get(),
                         indices,
                     });
@@ -231,7 +229,7 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             }
         });
 
-        let (node, key) = use_ref(&cx, || {
+        let key = use_ref(&cx, || {
             let rt = Runtime::current();
             let nodes = rt.nodes.borrow();
             let node = nodes[rt.current_key.get()].clone();
@@ -243,11 +241,11 @@ impl<C: Compose> Compose for Spawn<'_, C> {
                 parent = nodes.get(key).unwrap().parent;
             }
             indices.push(node.child_idx);
-            let key = Spawned {
+            let key = Pending {
                 key: rt.current_key.get(),
                 indices,
             };
-            (node, key)
+            key
         });
 
         // Use the initial guard.
@@ -255,7 +253,9 @@ impl<C: Compose> Compose for Spawn<'_, C> {
         use_drop(&cx, move || {
             *guard.lock().unwrap() = false;
 
-            child_cx.keys.borrow_mut().remove(key);
+            if let Ok(spawn_cx) = spawn_cx {
+                spawn_cx.keys.borrow_mut().remove(&key);
+            }
         });
 
         unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
