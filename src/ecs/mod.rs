@@ -586,7 +586,7 @@ macro_rules! ui_methods {
     };
 }
 
-macro_rules! make_handler_method {
+macro_rules! handler_methods {
     ($($i:ident: $e:ident),*) => {
         $(
             #[cfg(feature = "picking")]
@@ -715,7 +715,7 @@ pub trait Modify<'a> {
         })
     }
 
-    make_handler_method!(
+    handler_methods!(
         on_mouse_in: Over,
         on_mouse_out: Out,
         on_click: Click,

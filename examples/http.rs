@@ -45,7 +45,7 @@ impl Compose for BreedList {
                 .await
                 .unwrap();
 
-            SignalMut::update(breeds, |breeds| *breeds = json.message);
+            SignalMut::set(breeds, json.message);
         });
 
         // Render the currently loaded breeds.
