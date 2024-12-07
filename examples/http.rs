@@ -1,6 +1,6 @@
 // HTTP UI example
 
-use actuate::{executor::ExecutorContext, material::container, prelude::*};
+use actuate::{executor::ExecutorContext, prelude::*};
 use bevy::{prelude::*, winit::WinitSettings};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -49,16 +49,11 @@ impl Compose for BreedList {
         });
 
         // Render the currently loaded breeds.
-        spawn(Node {
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(30.),
-            overflow: Overflow::scroll_y(),
-            ..default()
-        })
-        .content(compose::from_iter(breeds, |breed| Breed {
+        scroll_view(compose::from_iter(breeds, |breed| Breed {
             name: breed.0,
             families: breed.1,
         }))
+        .flex_gap(Val::Px(30.))
     }
 }
 
@@ -86,5 +81,12 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d::default());
 
     // Spawn a composition with a `BreedList`, adding it to the Actuate runtime.
-    commands.spawn((Node::default(), Composition::new(Example)));
+    commands.spawn((
+        Node {
+            width: Val::Percent(100.),
+            height: Val::Percent(100.),
+            ..default()
+        },
+        Composition::new(Example),
+    ));
 }

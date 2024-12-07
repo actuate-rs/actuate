@@ -164,10 +164,14 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "executor")))]
     pub use crate::use_task;
 
+    #[cfg(feature = "ui")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+    pub use crate::ui::{scroll_view, ScrollView};
+
     #[cfg(feature = "material")]
     #[cfg_attr(docsrs, doc(cfg(feature = "material")))]
-    pub use crate::material::{
-        button, radio_button, text, Button, MaterialTheme, RadioButton, TypographyKind,
+    pub use crate::ui::material::{
+        button, container, radio_button, text, Button, MaterialTheme, RadioButton, TypographyKind,
         TypographyStyleKind,
     };
 }
@@ -199,10 +203,10 @@ pub mod ecs;
 /// Task execution context.
 pub mod executor;
 
-#[cfg(feature = "material")]
-#[cfg_attr(docsrs, doc(cfg(feature = "material")))]
-/// Material UI.
-pub mod material;
+#[cfg(feature = "ui")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+/// User interface components.
+pub mod ui;
 
 /// Clone-on-write value.
 ///

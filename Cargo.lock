@@ -72,6 +72,7 @@ dependencies = [
  "bevy_color",
  "bevy_ecs",
  "bevy_hierarchy",
+ "bevy_input",
  "bevy_math",
  "bevy_picking",
  "bevy_text",

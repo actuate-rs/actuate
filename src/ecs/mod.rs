@@ -25,6 +25,9 @@ use std::{
     task::{Context, Wake, Waker},
 };
 
+#[cfg(feature = "ui")]
+use bevy_ui::{FlexDirection, Node, Val};
+
 #[cfg(feature = "picking")]
 use bevy_picking::prelude::*;
 
@@ -610,6 +613,27 @@ pub trait Modify<'a> {
         self.modify(move |spawn| {
             let f = f.clone();
             spawn.on_insert(move |e| f(e))
+        })
+    }
+
+    #[cfg(feature = "ui")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+    /// Set the flex gap of this composable's spawned [`Node`].
+    ///
+    /// This will set the `column_gap` for a `FlexDirection::Row` or `FlexDirection::RowReverse`
+    /// and the `row_gap` for a `FlexDirection::Column` or `FlexDirection::ColumnReverse`.
+    fn flex_gap(self, gap: Val) -> Self
+    where
+        Self: Sized,
+    {
+        self.modify(move |spawn| {
+            spawn.on_insert(move |mut entity| {
+                let mut node = entity.get_mut::<Node>().unwrap();
+                match node.flex_direction {
+                    FlexDirection::Row | FlexDirection::RowReverse => node.column_gap = gap,
+                    FlexDirection::Column | FlexDirection::ColumnReverse => node.row_gap = gap,
+                }
+            })
         })
     }
 
