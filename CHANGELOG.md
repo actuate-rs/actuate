@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2](https://github.com/actuate-rs/actuate/compare/actuate-v0.17.1...actuate-v0.17.2) - 2024-12-07
+
+## Fixes
+
+- Update pending composable ordering and track child index in `Spawn` composable (fdf89ed)
+- Reverse node IDs and refactor internals (42e1971)
+
+## Documentation
+
+- Add docs to `spawn` constructor and split up ecs module (9c06bfe)
+- Move examples for `catch` and `dyn_compose` to rustdocs (9502a4b)
+- Move traits example to data module and add docs, reorganize examples (67ec922)
+- Update Data docs (829c6d9)
+
 ## [0.17.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.17.0...actuate-v0.17.1) - 2024-12-06
 
 ## Features
