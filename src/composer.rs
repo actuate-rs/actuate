@@ -189,10 +189,14 @@ impl PartialOrd for Pending {
 
 impl Ord for Pending {
     fn cmp(&self, other: &Self) -> Ordering {
-        match other.indices.len().cmp(&self.indices.len()) {
-            Ordering::Equal => self.indices.cmp(&other.indices),
-            ordering => ordering,
+        for (a, b) in self.indices.iter().zip(other.indices.iter()) {
+            match a.cmp(b) {
+                Ordering::Equal => {}
+                x => return x,
+            }
         }
+
+        self.indices.len().cmp(&other.indices.len())
     }
 }
 

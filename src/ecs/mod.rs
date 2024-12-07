@@ -1,6 +1,8 @@
 use crate::{
-    compose::Compose, composer::Composer, data::Data, use_callback, use_drop, use_provider,
-    use_ref, Cow, Scope, ScopeState, Signal,
+    compose::Compose,
+    composer::{Composer, Pending},
+    data::Data,
+    use_callback, use_drop, use_provider, use_ref, Cow, Scope, ScopeState, Signal,
 };
 use bevy_app::{App, Plugin};
 use bevy_ecs::{
@@ -15,6 +17,7 @@ use core::fmt;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     cell::{Cell, RefCell},
+    collections::BTreeSet,
     mem, ptr,
     rc::Rc,
 };
@@ -176,6 +179,7 @@ impl<C: Compose> Compose for CompositionContent<C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         use_provider(&cx, || SpawnContext {
             parent_entity: cx.me().target,
+            keys: RefCell::new(BTreeSet::new()),
         });
 
         unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
@@ -465,6 +469,7 @@ pub fn use_commands(cx: ScopeState) -> &UseCommands {
 
 struct SpawnContext {
     parent_entity: Entity,
+    keys: RefCell<BTreeSet<Pending>>,
 }
 
 /// Use a spawned bundle.
