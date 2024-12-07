@@ -2,6 +2,7 @@
 
 use actuate::prelude::*;
 use bevy::prelude::*;
+use bevy_winit::WinitSettings;
 
 // Counter composable.
 #[derive(Data)]
@@ -44,6 +45,7 @@ fn setup(mut commands: Commands) {
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, ActuatePlugin))
+        .insert_resource(WinitSettings::desktop_app())
         .add_systems(Startup, setup)
         .run();
 }

@@ -13,6 +13,7 @@ use bevy_ecs::{
     world::{CommandQueue, World},
 };
 use bevy_utils::HashMap;
+use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WakeUp};
 use core::fmt;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
@@ -20,6 +21,8 @@ use std::{
     collections::BTreeSet,
     mem, ptr,
     rc::Rc,
+    sync::Arc,
+    task::{Context, Wake, Waker},
 };
 
 #[cfg(feature = "picking")]
@@ -186,6 +189,16 @@ impl<C: Compose> Compose for CompositionContent<C> {
     }
 }
 
+struct RuntimeWaker {
+    proxy: EventLoopProxy<WakeUp>,
+}
+
+impl Wake for RuntimeWaker {
+    fn wake(self: Arc<Self>) {
+        self.proxy.send_event(WakeUp).unwrap();
+    }
+}
+
 fn compose(world: &mut World) {
     RUNTIME_CONTEXT.with(|runtime_cx| {
         let mut cell = runtime_cx.borrow_mut();
@@ -217,11 +230,20 @@ fn compose(world: &mut World) {
     rt.commands.borrow_mut().apply(world);
     drop(rt);
 
+    let proxy = (*world
+        .get_resource::<EventLoopProxyWrapper<WakeUp>>()
+        .unwrap())
+    .clone();
     let rt = &mut *world.non_send_resource_mut::<Runtime>();
     let mut composers = rt.composers.borrow_mut();
     for rt_composer in composers.values_mut() {
+        let waker = Waker::from(Arc::new(RuntimeWaker {
+            proxy: proxy.clone(),
+        }));
+        let mut cx = Context::from_waker(&waker);
+
         // TODO handle composition error.
-        let _ = rt_composer.composer.try_compose();
+        let _ = rt_composer.composer.poll_compose(&mut cx);
     }
 }
 

@@ -78,6 +78,7 @@ dependencies = [
  "bevy_time",
  "bevy_ui",
  "bevy_utils",
+ "bevy_winit",
  "crossbeam-queue",
  "futures",
  "hashbrown 0.15.2",

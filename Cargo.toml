@@ -8,7 +8,7 @@ repository = "https://github.com/actuate-rs/actuate"
 
 [features]
 animation = ["ecs", "dep:bevy_math", "dep:bevy_time", "dep:tokio"]
-ecs = ["dep:bevy_app", "dep:bevy_ecs", "dep:bevy_hierarchy", "dep:bevy_utils"]
+ecs = ["std", "dep:bevy_app", "dep:bevy_ecs", "dep:bevy_hierarchy", "dep:bevy_utils", "dep:bevy_winit"]
 executor = ["std", "dep:tokio"]
 material = ["ecs", "picking", "dep:bevy_color", "dep:bevy_text", "dep:bevy_ui"]
 picking = ["dep:bevy_picking"]
@@ -37,6 +37,7 @@ bevy_text = { version = "0.15.0", optional = true }
 bevy_time = { version = "0.15.0", optional = true }
 bevy_ui = { version = "0.15.0", optional = true }
 bevy_utils = { version = "0.15.0", optional = true }
+bevy_winit = { version = "0.15.0", optional = true }
 crossbeam-queue = { version = "0.3.11", default-features = false, features = ["alloc"] }
 futures = "0.3.31"
 hashbrown = "0.15.2"
