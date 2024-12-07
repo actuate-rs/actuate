@@ -12,6 +12,8 @@ use std::{
 /// # Examples
 ///
 /// ```
+/// use actuate::prelude::*;
+///
 /// #[derive(Data)]
 /// struct A;
 ///

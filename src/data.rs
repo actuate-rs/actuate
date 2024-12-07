@@ -1,3 +1,59 @@
+//! Data trait and macros.
+//!
+//! # Data
+//!
+//! [`Data`] is a trait that enforces pinned references to compososition state.
+//!
+//! The `#[derive(Data)]` macro can be used to derive the [`Data`] trait for a struct.
+//! This requires the struct's fields that either:
+//! - Implement the [`Data`] trait.
+//! - Are `'static`.
+//! - Are functions that take `'static` arguments and return a type that implements the [`Data`] trait.
+//!
+//! # Trait objects
+//!
+//! Trait objects can also borrow from state:
+//!
+//! ```no_run
+//! use actuate::prelude::*;
+//!
+//! #[data]
+//! trait MyTrait: Data {
+//!     fn run(&self);
+//! }
+//!
+//! #[derive(Data)]
+//! struct A<'a> {
+//!     my_trait: Box<dyn MyTrait + 'a>,
+//! }
+//!
+//! impl Compose for A<'_> {
+//!     fn compose(cx: Scope<Self>) -> impl Compose {
+//!         cx.me().my_trait.run();
+//!     }
+//! }
+//!
+//! #[derive(Data)]
+//! struct X;
+//!
+//! impl MyTrait for X {
+//!     fn run(&self) {
+//!         dbg!("X");
+//!     }
+//! }
+//!
+//! #[derive(Data)]
+//! struct App;
+//!
+//! impl Compose for App {
+//!     fn compose(_cx: Scope<Self>) -> impl Compose {
+//!         A {
+//!             my_trait: Box::new(X),
+//!         }
+//!     }
+//! }
+//! ```
+
 use crate::{compose::DynCompose, HashMap};
 use core::{error::Error, future::Future, pin::Pin};
 

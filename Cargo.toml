@@ -57,29 +57,17 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[example]]
-name = "composer"
-path = "examples/core/composer.rs"
-
-[[example]]
-name = "traits"
-path = "examples/core/traits.rs"
-
-[[example]]
 name = "counter"
-path = "examples/ui/counter.rs"
 required-features = ["material"]
 
 [[example]]
 name = "http"
-path = "examples/ui/http.rs"
 required-features = ["material", "rt"]
 
 [[example]]
-name = "radio"
-path = "examples/ui/radio_button.rs"
+name = "radio_button"
 required-features = ["material"]
 
 [[example]]
 name = "timer"
-path = "examples/ui/timer.rs"
 required-features = ["ecs"]
