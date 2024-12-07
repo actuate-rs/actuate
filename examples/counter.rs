@@ -1,8 +1,7 @@
 // Counter UI example.
 
 use actuate::prelude::*;
-use bevy::prelude::*;
-use bevy_winit::WinitSettings;
+use bevy::{prelude::*, winit::WinitSettings};
 
 // Counter composable.
 #[derive(Data)]

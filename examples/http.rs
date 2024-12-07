@@ -1,10 +1,9 @@
 // HTTP UI example
 
 use actuate::{executor::ExecutorContext, material::container, prelude::*};
-use bevy::prelude::*;
+use bevy::{prelude::*, winit::WinitSettings};
 use serde::Deserialize;
 use std::collections::HashMap;
-use text::headline;
 
 // Dog breed composable.
 #[derive(Data)]
@@ -16,7 +15,7 @@ struct Breed<'a> {
 impl Compose for Breed<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         container((
-            headline(cx.me().name),
+            text::headline(cx.me().name),
             compose::from_iter(Signal::map(cx.me(), |me| me.families), |family| {
                 text::label(family.to_string())
             }),
@@ -78,6 +77,7 @@ impl Compose for Example {
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, ActuatePlugin))
+        .insert_resource(WinitSettings::desktop_app())
         .add_systems(Startup, setup)
         .run();
 }
