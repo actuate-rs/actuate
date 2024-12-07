@@ -221,7 +221,7 @@ impl<C: Compose> Compose for Spawn<'_, C> {
             *guard.lock().unwrap() = false;
 
             if let Ok(spawn_cx) = spawn_cx {
-                spawn_cx.keys.borrow_mut().remove(&key);
+                spawn_cx.keys.borrow_mut().remove(key);
             }
         });
 

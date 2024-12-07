@@ -26,7 +26,7 @@ use std::{
 };
 
 #[cfg(feature = "ui")]
-use bevy_ui::{FlexDirection, Node, Val};
+use bevy_ui::prelude::*;
 
 #[cfg(feature = "picking")]
 use bevy_picking::prelude::*;
@@ -564,6 +564,28 @@ impl fmt::Debug for Modifier<'_> {
 
 unsafe impl Data for Modifier<'_> {}
 
+macro_rules! ui_methods {
+    ($($i:ident: $t:path),*) => {
+        $(
+            #[cfg(feature = "ui")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "ui")))]
+            #[doc = concat!("Set the `", stringify!($i), "` of this composable's spawned [`Node`].")]
+            fn $i(self, $i: $t) -> Self
+            where
+                Self: Sized,
+            {
+                self.modify(move |spawn| {
+                    let $i = $i.clone();
+                    spawn.on_insert(move |mut entity| {
+                        let mut node = entity.get_mut::<Node>().unwrap();
+                        node.$i = $i.clone();
+                    })
+                })
+            }
+        )*
+    };
+}
+
 macro_rules! make_handler_method {
     ($($i:ident: $e:ident),*) => {
         $(
@@ -636,6 +658,47 @@ pub trait Modify<'a> {
             })
         })
     }
+
+    ui_methods!(
+        display: Display,
+        position_type: PositionType,
+        overflow: Overflow,
+        overflow_clip_margin: OverflowClipMargin,
+        left: Val,
+        right: Val,
+        top: Val,
+        bottom: Val,
+        width: Val,
+        height: Val,
+        min_width: Val,
+        min_height: Val,
+        max_width: Val,
+        max_height: Val,
+        aspect_ratio: Option<f32>,
+        align_items: AlignItems,
+        justify_items: JustifyItems,
+        align_self: AlignSelf,
+        justify_self: JustifySelf,
+        align_content: AlignContent,
+        justify_content: JustifyContent,
+        margin: UiRect,
+        padding: UiRect,
+        border: UiRect,
+        flex_direction: FlexDirection,
+        flex_wrap: FlexWrap,
+        flex_grow: f32,
+        flex_shrink: f32,
+        flex_basis: Val,
+        row_gap: Val,
+        column_gap: Val,
+        grid_auto_flow: GridAutoFlow,
+        grid_template_rows: Vec<RepeatedGridTrack>,
+        grid_template_columns: Vec<RepeatedGridTrack>,
+        grid_auto_rows: Vec<GridTrack>,
+        grid_auto_columns: Vec<GridTrack>,
+        grid_row: GridPlacement,
+        grid_column: GridPlacement
+    );
 
     /// Add an observer to this composable's bundle.
     fn observe<F, E, B, Marker>(self, observer: F) -> Self

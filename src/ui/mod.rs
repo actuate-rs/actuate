@@ -80,12 +80,12 @@ impl<C: Compose> Compose for ScrollView<'_, C> {
                         MouseScrollUnit::Pixel => (mouse_wheel_event.x, mouse_wheel_event.y),
                     };
 
-                    if cx.me().scroll_x && cx.me().scroll_y {
-                        if keyboard_input.pressed(KeyCode::ControlLeft)
-                            || keyboard_input.pressed(KeyCode::ControlRight)
-                        {
-                            std::mem::swap(&mut dx, &mut dy)
-                        }
+                    if cx.me().scroll_x
+                        && cx.me().scroll_y
+                        && (keyboard_input.pressed(KeyCode::ControlLeft)
+                            || keyboard_input.pressed(KeyCode::ControlRight))
+                    {
+                        std::mem::swap(&mut dx, &mut dy)
                     }
 
                     if *is_hovered {
