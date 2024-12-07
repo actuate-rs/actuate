@@ -1,5 +1,5 @@
 use crate::{
-    composer::{ComposePtr, Node, Pending, Runtime},
+    composer::{ComposePtr, Node, Runtime},
     data::Data,
     use_context, use_ref, Scope, ScopeData, ScopeState,
 };
@@ -183,11 +183,11 @@ impl<C: Compose> Compose for Result<C, Error> {
         let child_key = use_ref(&cx, || Cell::new(None));
 
         let rt = Runtime::current();
-        let mut nodes = rt.nodes.borrow_mut();
 
         match &*cx.me() {
             Ok(content) => {
                 if let Some(key) = child_key.get() {
+                    let mut nodes = rt.nodes.borrow_mut();
                     let last = nodes.get_mut(key).unwrap();
 
                     let ptr = content as *const dyn AnyCompose;
@@ -195,17 +195,11 @@ impl<C: Compose> Compose for Result<C, Error> {
 
                     *last.compose.borrow_mut() = ComposePtr::Ptr(ptr);
 
-                    let node = nodes[key].clone();
-                    let mut indices = Vec::new();
-                    let mut parent = node.parent;
-                    while let Some(key) = parent {
-                        indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
-                        parent = rt.nodes.borrow().get(key).unwrap().parent;
-                    }
-                    indices.push(node.child_idx);
+                    drop(nodes);
 
-                    rt.pending.borrow_mut().insert(Pending { key, indices });
+                    rt.queue(key);
                 } else {
+                    let mut nodes = rt.nodes.borrow_mut();
                     let ptr: *const dyn AnyCompose =
                         unsafe { mem::transmute(content as *const dyn AnyCompose) };
                     let key = nodes.insert(Rc::new(Node {
@@ -233,19 +227,14 @@ impl<C: Compose> Compose for Result<C, Error> {
                         .values
                         .extend(cx.child_contexts.borrow().values.clone());
 
-                    let node = nodes[key].clone();
-                    let mut indices = Vec::new();
-                    let mut parent = node.parent;
-                    while let Some(key) = parent {
-                        indices.push(rt.nodes.borrow().get(key).unwrap().child_idx);
-                        parent = rt.nodes.borrow().get(key).unwrap().parent;
-                    }
-                    indices.push(node.child_idx);
+                    drop(nodes);
 
-                    rt.pending.borrow_mut().insert(Pending { key, indices });
+                    rt.queue(key);
                 }
             }
             Err(error) => {
+                let mut nodes = rt.nodes.borrow_mut();
+
                 if let Some(key) = child_key.get() {
                     drop_node(&mut nodes, key);
                 }

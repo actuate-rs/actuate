@@ -217,9 +217,7 @@ impl Ord for Pending {
             }
         }
 
-        let o = self.indices.len().cmp(&other.indices.len());
-
-        o
+        self.indices.len().cmp(&other.indices.len())
     }
 }
 
