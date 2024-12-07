@@ -166,7 +166,10 @@ pub mod prelude {
 
     #[cfg(feature = "material")]
     #[cfg_attr(docsrs, doc(cfg(feature = "material")))]
-    pub use crate::material::{button, radio_button, text, Button, RadioButton};
+    pub use crate::material::{
+        button, radio_button, text, Button, MaterialTheme, RadioButton, TypographyKind,
+        TypographyStyleKind,
+    };
 }
 
 #[cfg(feature = "animation")]

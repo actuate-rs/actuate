@@ -84,7 +84,7 @@ impl Compose for RadioButton<'_> {
                     ..Default::default()
                 },
                 BorderRadius::MAX,
-                BorderColor(theme.primary),
+                BorderColor(theme.colors.primary),
                 BoxShadow {
                     color: Color::srgba(0., 0., 0., 0.12 * cx.me().elevation),
                     x_offset: Val::Px(0.),
@@ -103,7 +103,7 @@ impl Compose for RadioButton<'_> {
 
                         ..Default::default()
                     },
-                    BackgroundColor(theme.primary),
+                    BackgroundColor(theme.colors.primary),
                     BorderRadius::MAX,
                 )))
             } else {

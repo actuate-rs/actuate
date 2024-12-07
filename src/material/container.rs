@@ -79,7 +79,11 @@ impl<C: Compose> Compose for Container<'_, C> {
                     ..Default::default()
                 },
                 cx.me().border_radius,
-                BackgroundColor(cx.me().background_color.unwrap_or(theme.surface_container)),
+                BackgroundColor(
+                    cx.me()
+                        .background_color
+                        .unwrap_or(theme.colors.surface_container),
+                ),
                 BoxShadow {
                     color: Color::srgba(0., 0., 0., 0.12 * cx.me().elevation),
                     x_offset: Val::Px(0.),

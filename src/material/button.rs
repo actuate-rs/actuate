@@ -58,7 +58,7 @@ impl<C: Compose> Compose for Button<'_, C> {
             .unwrap_or_default();
 
         container(unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) })
-            .background_color(cx.me().background_color.unwrap_or(theme.primary))
+            .background_color(cx.me().background_color.unwrap_or(theme.colors.primary))
             .border_radius(
                 BorderRadius::all(Val::Px(10.))
                     .with_left(Val::Px(20.))
