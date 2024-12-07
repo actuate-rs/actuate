@@ -117,6 +117,7 @@ To add this crate to your project:
 ```
 cargo add actuate --features full
 ```
+For more feature flags, see the crate documentation for [features](https://docs.rs/actuate/latest/actuate/#features).
 
 ## Inspiration
 This crate is inspired by [Xilem](https://github.com/linebender/xilem) and uses a similar approach to type-safe reactivity. The main difference with this crate is the concept of scopes, components store their state in their own scope and updates to that scope re-render the component.
