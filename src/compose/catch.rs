@@ -1,6 +1,6 @@
 use super::CatchContext;
 use crate::{compose::Compose, data::Data, use_provider, Scope, Signal};
-use core::{error::Error as StdError, mem};
+use core::mem;
 
 /// Create a composable that catches errors from its children.
 /// This will catch all errors from its descendants, until another `catch` is encountered.
@@ -39,7 +39,7 @@ use core::{error::Error as StdError, mem};
 /// }
 /// ```
 pub fn catch<'a, C: Compose>(
-    on_error: impl Fn(Box<dyn StdError>) + 'a,
+    on_error: impl Fn(Box<dyn core::error::Error>) + 'a,
     content: C,
 ) -> Catch<'a, C> {
     Catch {
@@ -58,16 +58,16 @@ pub struct Catch<'a, C> {
     content: C,
 
     /// Function to handle errors.
-    f: Box<dyn Fn(Box<dyn StdError>) + 'a>,
+    f: Box<dyn Fn(Box<dyn core::error::Error>) + 'a>,
 }
 
 impl<C: Compose> Compose for Catch<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let f: &dyn Fn(Box<dyn StdError>) = &*cx.me().f;
+        let f: &dyn Fn(Box<dyn core::error::Error>) = &*cx.me().f;
 
         // Cast this function to the `'static` lifetime.
         // Safety: This function has a lifetime of `'a`, which is guaranteed to outlive this composables descendants.
-        let f: &dyn Fn(Box<dyn StdError>) = unsafe { mem::transmute(f) };
+        let f: &dyn Fn(Box<dyn core::error::Error>) = unsafe { mem::transmute(f) };
 
         use_provider(&cx, move || CatchContext { f: Box::new(f) });
 
