@@ -75,7 +75,7 @@ impl Index<TypographyStyleKind> for TypographyToken {
     }
 }
 
-/// Typography style kind.
+/// Typography kind.
 #[derive(Clone, Copy)]
 pub enum TypographyKind {
     /// Body typography.

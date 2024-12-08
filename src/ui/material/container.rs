@@ -11,7 +11,7 @@ use bevy_ui::{
     Overflow, UiRect, Val,
 };
 
-/// Create a material UI button.
+/// Create a material UI container.
 pub fn container<'a, C>(content: C) -> Container<'a, C> {
     Container {
         content,
@@ -23,7 +23,9 @@ pub fn container<'a, C>(content: C) -> Container<'a, C> {
     }
 }
 
-/// Material UI button.
+/// Material UI container.
+///
+/// For more see [`container`].
 #[derive(Clone, Debug, Data)]
 #[actuate(path = "crate")]
 pub struct Container<'a, C> {
