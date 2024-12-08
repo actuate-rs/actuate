@@ -1,3 +1,10 @@
+#![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(
+    html_logo_url = "https://avatars.githubusercontent.com/u/161107368",
+    html_favicon_url = "https://avatars.githubusercontent.com/u/161107368"
+)]
+
 //! # Actuate
 //! A high-performance and borrow-checker friendly framework for declarative programming in Rust.
 //! This crate provides a generic library that lets you define reactive components
@@ -112,9 +119,6 @@
 //! - `tracing`: Enables the logging through the `tracing` crate.
 //! - `ui`: Enables the `ui` module for user interface components.
 //! - `full`: Enables all features above.
-
-#![deny(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
 
