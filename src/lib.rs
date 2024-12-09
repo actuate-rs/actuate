@@ -54,7 +54,7 @@
 //!
 //! impl Compose for User<'_> {
 //!     fn compose(cx: Scope<Self>) -> impl Compose {
-//!         spawn(Text::new(cx.me().name.to_string()))
+//!         text::headline(cx.me().name.to_string())
 //!     }
 //! }
 //!
