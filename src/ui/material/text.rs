@@ -1,4 +1,4 @@
-use super::{MaterialTheme, TypographyKind, TypographyStyleKind};
+use super::{Theme, TypographyKind, TypographyStyleKind};
 use crate::{
     ecs::{spawn, Modifier, Modify},
     prelude::Compose,
@@ -64,7 +64,7 @@ impl Text<'_> {
 
 impl Compose for Text<'_> {
     fn compose(cx: crate::Scope<Self>) -> impl Compose {
-        let theme = use_context::<MaterialTheme>(&cx)
+        let theme = use_context::<Theme>(&cx)
             .cloned()
             .unwrap_or_default();
 

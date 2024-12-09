@@ -48,12 +48,14 @@ impl Compose for BreedList {
             SignalMut::set(breeds, json.message);
         });
 
-        // Render the currently loaded breeds.
-        scroll_view(compose::from_iter((*breeds).clone(), |breed| Breed {
-            name: breed.0.clone(),
-            families: breed.1.clone(),
-        }))
-        .flex_gap(Val::Px(30.))
+        material_ui(
+            // Render the currently loaded breeds.
+            scroll_view(compose::from_iter((*breeds).clone(), |breed| Breed {
+                name: breed.0.clone(),
+                families: breed.1.clone(),
+            }))
+            .flex_gap(Val::Px(30.)),
+        )
     }
 }
 

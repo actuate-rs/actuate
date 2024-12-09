@@ -176,8 +176,8 @@ pub mod prelude {
     #[cfg(feature = "material")]
     #[cfg_attr(docsrs, doc(cfg(feature = "material")))]
     pub use crate::ui::material::{
-        button, container, radio_button, text, Button, MaterialTheme, RadioButton, TypographyKind,
-        TypographyStyleKind,
+        button, container, material_ui, radio_button, text, Button, MaterialUi, RadioButton, Theme,
+        TypographyKind, TypographyStyleKind,
     };
 }
 

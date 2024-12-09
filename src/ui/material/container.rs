@@ -1,4 +1,4 @@
-use super::MaterialTheme;
+use super::Theme;
 use crate::{
     compose::Compose,
     ecs::spawn,
@@ -67,7 +67,7 @@ impl<'a, C> Container<'a, C> {
 
 impl<C: Compose> Compose for Container<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let theme = use_context::<MaterialTheme>(&cx)
+        let theme = use_context::<Theme>(&cx)
             .cloned()
             .unwrap_or_default();
 

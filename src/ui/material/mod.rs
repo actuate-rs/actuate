@@ -1,6 +1,5 @@
-use std::ops::Index;
-
 use bevy_color::Color;
+use std::ops::Index;
 
 mod button;
 pub use self::button::{button, Button};
@@ -11,11 +10,18 @@ pub use self::container::{container, Container};
 mod radio;
 pub use self::radio::{radio_button, RadioButton};
 
+mod ui;
+pub use self::ui::{material_ui, MaterialUi};
+
 /// Text composables.
 pub mod text;
 
 /// Colors for a [`MaterialTheme`].
+#[derive(Clone, PartialEq)]
 pub struct Colors {
+    /// Background color.
+    pub background: Color,
+
     /// Primary color.
     pub primary: Color,
 
@@ -27,6 +33,7 @@ pub struct Colors {
 }
 
 /// Typography style.
+#[derive(Clone, PartialEq)]
 pub struct TypographyStyle {
     /// Font size.
     pub font_size: f32,
@@ -39,7 +46,7 @@ pub struct TypographyStyle {
 }
 
 /// Typography style kind.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TypographyStyleKind {
     /// Small typography style.
     Small,
@@ -52,6 +59,7 @@ pub enum TypographyStyleKind {
 }
 
 /// Typography design token.
+#[derive(Clone, PartialEq)]
 pub struct TypographyToken {
     /// Small typography style.
     pub small: TypographyStyle,
@@ -92,6 +100,7 @@ pub enum TypographyKind {
 }
 
 /// Typography for a [`MaterialTheme`].
+#[derive(Clone, PartialEq)]
 pub struct Typography {
     /// Body typography.
     pub body: TypographyToken,
@@ -120,7 +129,8 @@ impl Index<TypographyKind> for Typography {
 }
 
 /// Material UI theme.
-pub struct MaterialTheme {
+#[derive(Clone, PartialEq)]
+pub struct Theme {
     /// Theme colors.
     pub colors: Colors,
 
@@ -128,10 +138,11 @@ pub struct MaterialTheme {
     pub typography: Typography,
 }
 
-impl Default for MaterialTheme {
+impl Default for Theme {
     fn default() -> Self {
         Self {
             colors: Colors {
+                background: Color::WHITE,
                 primary: Color::srgb_u8(103, 80, 164),
                 surface_container: Color::srgb_u8(230, 224, 233),
                 text: Color::BLACK,

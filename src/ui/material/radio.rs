@@ -1,4 +1,4 @@
-use super::MaterialTheme;
+use super::Theme;
 use crate::{
     compose::Compose,
     ecs::spawn,
@@ -66,7 +66,7 @@ impl RadioButton<'_> {
 
 impl Compose for RadioButton<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let theme = use_context::<MaterialTheme>(&cx)
+        let theme = use_context::<Theme>(&cx)
             .cloned()
             .unwrap_or_default();
 

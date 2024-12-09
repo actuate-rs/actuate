@@ -1,4 +1,4 @@
-use super::{container, MaterialTheme};
+use super::{container, Theme};
 use crate::{
     compose::Compose,
     ecs::{Modifier, Modify},
@@ -53,7 +53,7 @@ impl<'a, C> Button<'a, C> {
 
 impl<C: Compose> Compose for Button<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let theme = use_context::<MaterialTheme>(&cx)
+        let theme = use_context::<Theme>(&cx)
             .cloned()
             .unwrap_or_default();
 
