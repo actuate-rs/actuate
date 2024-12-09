@@ -13,7 +13,7 @@ impl Compose for Counter {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let count = use_mut(&cx, || cx.me().start);
 
-        (
+        material_ui((
             text::headline(format!("High five count: {}", count)),
             button(text::label("Up high")).on_click(move || SignalMut::update(count, |x| *x += 1)),
             button(text::label("Down low")).on_click(move || SignalMut::update(count, |x| *x -= 1)),
@@ -22,7 +22,9 @@ impl Compose for Counter {
             } else {
                 None
             },
-        )
+        ))
+        .align_items(AlignItems::Center)
+        .justify_content(JustifyContent::Center)
     }
 }
 
@@ -32,9 +34,8 @@ fn setup(mut commands: Commands) {
     // Spawn a composition with a `Counter`, adding it to the Actuate runtime.
     commands.spawn((
         Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            row_gap: Val::Px(10.),
+            width: Val::Percent(100.),
+            height: Val::Percent(100.),
             ..default()
         },
         Composition::new(Counter { start: 0 }),
