@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.19.0...actuate-v0.19.1) - 2024-12-09
+
+## Features
+
+- Add `use_effect` hook (5ae0a51)
+  - `fn use_effect<D, T>(cx: ScopeState, dependency: D, effect: impl FnOnce(&D))`
+
+## Fixes
+
+- Remove `AnyItemState` in `from_iter` composable to pass stacked borrows check in miri (2360814)
+
+## Documentation
+
+- Add docs for `from_fn` and `from_iter` composables (5c379e1)
+
 ## [0.19.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.18.1...actuate-v0.19.0) - 2024-12-08
 
 ## Breaking changes
