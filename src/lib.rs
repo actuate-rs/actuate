@@ -917,6 +917,26 @@ where
     }
 }
 
+/// Use an effect that will run whenever the provided dependency is changed.
+pub fn use_effect<D, T>(cx: ScopeState, dependency: D, effect: impl FnOnce(&D))
+where
+    D: PartialEq + Send + 'static,
+{
+    let mut dependency_cell = Some(dependency);
+
+    let last_mut = use_mut(cx, || dependency_cell.take().unwrap());
+
+    if let Some(dependency) = dependency_cell.take() {
+        if dependency != *last_mut {
+            effect(&dependency);
+
+            SignalMut::set(last_mut, dependency);
+        }
+    } else {
+        effect(&last_mut);
+    }
+}
+
 /// Use a memoized value of type `T` with a dependency of type `D`.
 ///
 /// `make_value` will update the returned value whenver `dependency` is changed.
