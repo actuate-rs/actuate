@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.18.1...actuate-v0.19.0) - 2024-12-08
+
+## Breaking changes
+
+- Require `'static` items in `from_iter` composable
+  - This prevents edge cases where an item may have been removed from a collection, but references still exist down the tree.
+
+## Documentation
+
+- Add logo to rustdocs (702b1e0)
+- Update material docs (3084286)
+- Update link to `core::error::Error` in `Catch` composable (b664206)
+
 ## [0.18.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.18.0...actuate-v0.18.1) - 2024-12-07
 
 ## Fixes
