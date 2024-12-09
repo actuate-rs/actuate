@@ -55,7 +55,7 @@
 //! ```
 
 use crate::{compose::DynCompose, HashMap};
-use core::{error::Error, future::Future, pin::Pin};
+use core::{error::Error, future::Future, ops::Range, pin::Pin};
 
 pub use actuate_macros::{data, Data};
 
@@ -113,6 +113,8 @@ unsafe impl<T: Data> Data for Option<T> {}
 unsafe impl<T: Data, U: Data> Data for Result<T, U> {}
 
 unsafe impl<T: Data> Data for Pin<T> {}
+
+unsafe impl<T: 'static> Data for Range<T> {}
 
 unsafe impl Data for Box<dyn Error> {}
 

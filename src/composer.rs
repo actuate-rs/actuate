@@ -644,6 +644,32 @@ mod tests {
     }
 
     #[test]
+    fn it_composes_from_iter() {
+        #[derive(Data)]
+        #[actuate(path = "crate")]
+        struct Wrap {
+            x: Rc<Cell<i32>>,
+        }
+
+        impl Compose for Wrap {
+            fn compose(cx: crate::Scope<Self>) -> impl Compose {
+                compose::from_iter(0..2, move |_| Counter {
+                    x: cx.me().x.clone(),
+                })
+            }
+        }
+
+        let x = Rc::new(Cell::new(0));
+        let mut composer = Composer::new(Wrap { x: x.clone() });
+
+        composer.try_compose().unwrap();
+        assert_eq!(x.get(), 2);
+
+        composer.try_compose().unwrap();
+        assert_eq!(x.get(), 4);
+    }
+
+    #[test]
     fn it_composes_memo() {
         #[derive(Data)]
         #[actuate(path = "crate")]
