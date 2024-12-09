@@ -106,7 +106,7 @@ unsafe impl<T: Data> Data for Vec<T> {}
 
 unsafe impl<T: Data, U: Data, S: 'static> Data for HashMap<T, U, S> {}
 
-unsafe impl<T: Data> Data for &T {}
+unsafe impl<T: 'static> Data for &T {}
 
 unsafe impl<T: Data> Data for Option<T> {}
 

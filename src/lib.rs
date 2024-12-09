@@ -1004,6 +1004,52 @@ pub fn use_drop<'a>(cx: ScopeState<'a>, f: impl FnOnce() + 'a) {
 /// Use a local task that runs on the current thread.
 ///
 /// This will run on the window event loop, polling the task until it completes.
+///
+/// # Examples
+///
+/// Sending child state to parents.
+///
+/// ```
+/// use actuate::prelude::*;
+/// use tokio::sync::mpsc;
+/// use std::cell::Cell;
+///
+/// #[derive(Data)]
+/// struct Child<'a> {
+///     idx: usize,
+///     tx: &'a mpsc::UnboundedSender<usize>,
+/// }
+///
+/// impl Compose for Child<'_> {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         cx.me().tx.send(cx.me().idx).unwrap();  
+///     }
+/// }
+///
+/// #[derive(Data)]
+/// struct App;
+///
+/// impl Compose for App {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         let (tx, ref rx_cell) = use_ref(&cx, || {
+///         let (tx, rx) = mpsc::unbounded_channel();
+///             (tx, Cell::new(Some(rx)))
+///         });
+///
+///         use_local_task(&cx, move || async move {
+///             let mut rx = rx_cell.take().unwrap();
+///             while let Some(id) = rx.recv().await {
+///                 dbg!("Composed: {}", id);
+///             }
+///         });
+///
+///         (
+///             Child { idx: 0, tx },
+///             Child { idx: 1, tx }
+///         )
+///    }
+/// }
+/// ```
 pub fn use_local_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + 'a,
