@@ -23,7 +23,7 @@ where
 /// Memoized composable.
 ///
 /// See [`memo`] for more.
-#[derive(Data)]
+#[derive(Clone, Data)]
 #[actuate(path = "crate")]
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct Memo<T, C> {

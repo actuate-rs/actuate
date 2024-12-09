@@ -44,7 +44,7 @@ where
 {
     FromIter {
         iter,
-        make_item: Box::new(make_item),
+        make_item: Rc::new(make_item),
     }
 }
 
@@ -54,7 +54,20 @@ where
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
-    make_item: Box<dyn Fn(Signal<'a, Item>) -> C + 'a>,
+    make_item: Rc<dyn Fn(Signal<'a, Item>) -> C + 'a>,
+}
+
+impl<I, Item, C> Clone for FromIter<'_, I, Item, C>
+where
+    I: Clone,
+    C: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            iter: self.iter.clone(),
+            make_item: self.make_item.clone(),
+        }
+    }
 }
 
 unsafe impl<I, Item, C> Data for FromIter<'_, I, Item, C>

@@ -49,6 +49,15 @@ pub struct FromFn<F, C> {
     _marker: PhantomData<C>,
 }
 
+impl<F: Clone, C> Clone for FromFn<F, C> {
+    fn clone(&self) -> Self {
+        Self {
+            f: self.f.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
 unsafe impl<F, C> Data for FromFn<F, C>
 where
     F: Fn(ScopeState) -> C,
