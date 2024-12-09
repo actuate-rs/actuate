@@ -111,7 +111,6 @@ impl<C: Compose> Compose for ScrollView<'_, C> {
         modifier
             .apply(
                 spawn(Node {
-                    height: Val::Percent(100.),
                     flex_direction: FlexDirection::Column,
                     overflow: Overflow::scroll_y(),
                     ..Default::default()

@@ -66,9 +66,7 @@ impl RadioButton<'_> {
 
 impl Compose for RadioButton<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let theme = use_context::<Theme>(&cx)
-            .cloned()
-            .unwrap_or_default();
+        let theme = use_context::<Theme>(&cx).cloned().unwrap_or_default();
 
         let size = Val::Px(cx.me().outer_radius * 2.);
         let inner_size = Val::Px(cx.me().inner_radius * 2.);

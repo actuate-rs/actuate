@@ -53,9 +53,7 @@ impl<'a, C> Button<'a, C> {
 
 impl<C: Compose> Compose for Button<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let theme = use_context::<Theme>(&cx)
-            .cloned()
-            .unwrap_or_default();
+        let theme = use_context::<Theme>(&cx).cloned().unwrap_or_default();
 
         container(unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) })
             .background_color(cx.me().background_color.unwrap_or(theme.colors.primary))

@@ -67,9 +67,7 @@ impl<'a, C> Container<'a, C> {
 
 impl<C: Compose> Compose for Container<'_, C> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let theme = use_context::<Theme>(&cx)
-            .cloned()
-            .unwrap_or_default();
+        let theme = use_context::<Theme>(&cx).cloned().unwrap_or_default();
 
         cx.me()
             .modifier

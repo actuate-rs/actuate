@@ -64,9 +64,7 @@ impl Text<'_> {
 
 impl Compose for Text<'_> {
     fn compose(cx: crate::Scope<Self>) -> impl Compose {
-        let theme = use_context::<Theme>(&cx)
-            .cloned()
-            .unwrap_or_default();
+        let theme = use_context::<Theme>(&cx).cloned().unwrap_or_default();
 
         let style = &theme.typography[cx.me().typography][cx.me().typography_style];
 

@@ -54,8 +54,10 @@ impl Compose for BreedList {
                 name: breed.0.clone(),
                 families: breed.1.clone(),
             }))
+            .max_width(Val::Px(400.))
             .flex_gap(Val::Px(30.)),
         )
+        .align_items(AlignItems::Center)
     }
 }
 
