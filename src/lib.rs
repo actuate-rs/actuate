@@ -151,7 +151,7 @@ pub mod prelude {
         compose::{self, catch, dyn_compose, memo, Compose, DynCompose, Error, Memo},
         data::{data, Data},
         use_callback, use_context, use_drop, use_local_task, use_memo, use_mut, use_provider,
-        use_ref, Cow, Map, RefMap, Scope, ScopeState, Signal, SignalMut,
+        use_ref, Cow, Generational, Map, RefMap, Scope, ScopeState, Signal, SignalMut,
     };
 
     #[cfg(feature = "animation")]
@@ -482,11 +482,6 @@ pub struct SignalMut<'a, T> {
 }
 
 impl<'a, T: 'static> SignalMut<'a, T> {
-    /// Get the current generation of this value.
-    pub fn generation(me: Self) -> u64 {
-        unsafe { &*me.generation }.get()
-    }
-
     /// Queue an update to this value, triggering an update to the component owning this value.
     pub fn update(me: Self, f: impl FnOnce(&mut T) + Send + 'static) {
         let scope_key = me.scope_key;
@@ -830,90 +825,36 @@ pub fn use_provider<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() ->
     })
 }
 
-/// Memoize a value, caching it until the dependency changes.
-/// This can be used to diff expensive values by pointer equality.
+/// Generational reference.
+/// This can be used to compare expensive values by pointer equality.
 ///
-/// This trait is implemented for `T: PartialEq + 'static` by default.
-/// As well as:
+/// This trait is implemented for:
 /// - [`Signal`]
-/// - [`SignalMut`]
 /// - [`Map`]
-/// - [`RefMap`]
-/// - [`Cow`]
-pub trait Memoize {
-    /// Inner value to store and compare.
-    type Value: PartialEq + 'static;
-
-    /// Return the inner value for memoization.
-    fn memoized(self) -> Self::Value;
+/// - [`SignalMut`]
+pub trait Generational {
+    /// Get the current generation of this value.
+    fn generation(self) -> u64;
 }
 
-impl<T: PartialEq + 'static> Memoize for T {
-    type Value = T;
-
-    fn memoized(self) -> Self::Value {
-        self
-    }
-}
-
-impl<T> Memoize for Signal<'_, T> {
-    type Value = u64;
-
-    fn memoized(self) -> Self::Value {
+impl<T> Generational for Signal<'_, T> {
+    fn generation(self) -> u64 {
+        // Safety: This pointer is valid for `'a`.
         unsafe { &*self.generation }.get()
     }
 }
 
-impl<T> Memoize for Map<'_, T> {
-    type Value = u64;
-
-    fn memoized(self) -> Self::Value {
+impl<T> Generational for Map<'_, T> {
+    fn generation(self) -> u64 {
+        // Safety: This pointer is valid for `'a`.
         unsafe { &*self.generation }.get()
     }
 }
 
-impl<T: Clone + PartialEq + 'static> Memoize for RefMap<'_, T> {
-    type Value = MemoizedCow<T>;
-
-    fn memoized(self) -> Self::Value {
-        match self {
-            RefMap::Ref(r) => MemoizedCow::Owned(r.clone()),
-            RefMap::Signal(r) => MemoizedCow::Generation(r.memoized()),
-            RefMap::Map(map) => MemoizedCow::Generation(map.memoized()),
-        }
-    }
-}
-
-impl<T> Memoize for SignalMut<'_, T> {
-    type Value = u64;
-
-    fn memoized(self) -> Self::Value {
+impl<T> Generational for SignalMut<'_, T> {
+    fn generation(self) -> u64 {
+        // Safety: This pointer is valid for `'a`.
         unsafe { &*self.generation }.get()
-    }
-}
-
-/// Memoized value for [`Cow`].
-///
-/// For more see [`Memoize`].
-#[derive(PartialEq)]
-pub enum MemoizedCow<T> {
-    /// Generation of a borrowed value.
-    Generation(u64),
-    /// Owned value.
-    Owned(T),
-}
-
-impl<T> Memoize for Cow<'_, T>
-where
-    T: Clone + PartialEq + 'static,
-{
-    type Value = MemoizedCow<T>;
-
-    fn memoized(self) -> Self::Value {
-        match self {
-            Cow::Borrowed(value) => value.memoized(),
-            Cow::Owned(owned) => MemoizedCow::Owned(owned),
-        }
     }
 }
 
