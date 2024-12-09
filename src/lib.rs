@@ -194,9 +194,9 @@ use self::compose::{AnyCompose, Compose};
 pub mod composer;
 use self::composer::Runtime;
 
-/// Data trait and derive macro.
+/// Data trait and macros.
 pub mod data;
-pub use crate::data::Data;
+use crate::data::Data;
 
 #[cfg(feature = "ecs")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ecs")))]
