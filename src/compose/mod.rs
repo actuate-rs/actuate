@@ -246,12 +246,12 @@ impl<C: Compose> Compose for Result<C, Error> {
 }
 
 pub(crate) struct CatchContext {
-    f: Box<dyn Fn(Box<dyn core::error::Error>)>,
+    f: Rc<dyn Fn(Box<dyn core::error::Error>)>,
 }
 
 impl CatchContext {
     pub(crate) fn new(f: impl Fn(Box<dyn core::error::Error>) + 'static) -> Self {
-        Self { f: Box::new(f) }
+        Self { f: Rc::new(f) }
     }
 }
 

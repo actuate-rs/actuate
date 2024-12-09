@@ -1,6 +1,7 @@
 use super::CatchContext;
 use crate::{compose::Compose, data::Data, use_provider, Scope, Signal};
 use core::mem;
+use std::rc::Rc;
 
 /// Create a composable that catches errors from its children.
 /// This will catch all errors from its descendants, until another `catch` is encountered.
@@ -44,21 +45,21 @@ pub fn catch<'a, C: Compose>(
 ) -> Catch<'a, C> {
     Catch {
         content,
-        f: Box::new(on_error),
+        f: Rc::new(on_error),
     }
 }
 
 /// Error catch composable.
 ///
 /// See [`catch`] for more.
-#[derive(Data)]
+#[derive(Clone, Data)]
 #[actuate(path = "crate")]
 pub struct Catch<'a, C> {
     /// Content of this composable.
     content: C,
 
     /// Function to handle errors.
-    f: Box<dyn Fn(Box<dyn core::error::Error>) + 'a>,
+    f: Rc<dyn Fn(Box<dyn core::error::Error>) + 'a>,
 }
 
 impl<C: Compose> Compose for Catch<'_, C> {
@@ -67,9 +68,9 @@ impl<C: Compose> Compose for Catch<'_, C> {
 
         // Cast this function to the `'static` lifetime.
         // Safety: This function has a lifetime of `'a`, which is guaranteed to outlive this composables descendants.
-        let f: &dyn Fn(Box<dyn core::error::Error>) = unsafe { mem::transmute(f) };
+        let f: Rc<dyn Fn(Box<dyn core::error::Error>)> = unsafe { mem::transmute(f) };
 
-        use_provider(&cx, move || CatchContext { f: Box::new(f) });
+        use_provider(&cx, move || CatchContext { f: f.clone() });
 
         // Safety: The content of this composable is only returned into the composition once.
         unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) }
