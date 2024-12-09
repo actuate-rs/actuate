@@ -7,16 +7,16 @@ use std::collections::HashMap;
 
 // Dog breed composable.
 #[derive(Data)]
-struct Breed<'a> {
-    name: &'a String,
-    families: &'a Vec<String>,
+struct Breed {
+    name: String,
+    families: Vec<String>,
 }
 
-impl Compose for Breed<'_> {
+impl Compose for Breed {
     fn compose(cx: Scope<Self>) -> impl Compose {
         container((
-            text::headline(cx.me().name),
-            compose::from_iter(Signal::map(cx.me(), |me| me.families), |family| {
+            text::headline(cx.me().name.to_owned()),
+            compose::from_iter(cx.me().families.clone(), |family| {
                 text::label(family.to_string())
             }),
         ))
@@ -49,9 +49,9 @@ impl Compose for BreedList {
         });
 
         // Render the currently loaded breeds.
-        scroll_view(compose::from_iter(breeds, |breed| Breed {
-            name: breed.0,
-            families: breed.1,
+        scroll_view(compose::from_iter((*breeds).clone(), |breed| Breed {
+            name: breed.0.clone(),
+            families: breed.1.clone(),
         }))
         .flex_gap(Val::Px(30.))
     }

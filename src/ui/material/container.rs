@@ -16,7 +16,9 @@ pub fn container<'a, C>(content: C) -> Container<'a, C> {
     Container {
         content,
         elevation: 0.,
-        padding: UiRect::left(Val::Px(24.)).with_right(Val::Px(24.)),
+        padding: UiRect::all(Val::Px(12.))
+            .with_left(Val::Px(24.))
+            .with_right(Val::Px(24.)),
         background_color: None,
         border_radius: BorderRadius::all(Val::Px(12.)),
         modifier: Modifier::default(),

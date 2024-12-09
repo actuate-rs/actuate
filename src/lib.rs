@@ -226,6 +226,14 @@ pub enum Cow<'a, T> {
 }
 
 impl<T> Cow<'_, T> {
+    /// Clone this value to an owned value.
+    pub fn to_owned(&self) -> T
+    where
+        T: Clone,
+    {
+        self.clone().into_owned()
+    }
+
     /// Convert or clone this value to an owned value.
     pub fn into_owned(self) -> T
     where
