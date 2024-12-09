@@ -2,6 +2,36 @@ use crate::{compose::Compose, Data, Scope, ScopeState};
 use std::marker::PhantomData;
 
 /// Create a composable from a function.
+///
+/// This will create a composable from a function that takes a [`ScopeState`] and returns some composable content.
+///
+/// # Examples
+///
+/// ```
+/// use actuate::prelude::*;
+///
+/// #[derive(Data)]
+/// struct User {
+///     id: i32,
+/// }
+///
+/// impl Compose for User {
+///     fn compose(cx: Scope<Self>) -> impl Compose {}
+/// }
+///
+/// #[derive(Data)]
+/// struct App;
+///
+/// impl Compose for App {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         compose::from_fn(|| {
+///             dbg!("Composing User");
+///
+///             User { id: 0 }
+///         })
+///     }
+/// }
+/// ```
 pub fn from_fn<F, C>(f: F) -> FromFn<F, C>
 where
     F: Fn(ScopeState) -> C,

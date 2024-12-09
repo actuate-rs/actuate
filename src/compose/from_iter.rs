@@ -7,6 +7,32 @@ use slotmap::DefaultKey;
 /// Create a composable from an iterator.
 ///
 /// `make_item` will be called for each item to produce a composable.
+///
+/// # Examples
+///
+/// ```
+/// use actuate::prelude::*;
+///
+/// #[derive(Data)]
+/// struct User {
+///     id: i32,
+/// }
+///
+/// impl Compose for User {
+///     fn compose(cx: Scope<Self>) -> impl Compose {}
+/// }
+///
+/// #[derive(Data)]
+/// struct App;
+///
+/// impl Compose for App {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         compose::from_iter(0..10, |id| {
+///             User { id: *id }
+///         })
+///     }
+/// }
+/// ```
 pub fn from_iter<'a, I, C>(
     iter: I,
     make_item: impl Fn(Signal<'a, I::Item>) -> C + 'a,
@@ -22,7 +48,9 @@ where
     }
 }
 
-/// Composable from an iterator, created with [`from_iter`].
+/// Composable from an iterator.
+///
+/// For more see [`from_iter`].
 #[must_use = "Composables do nothing unless composed or returned from other composables."]
 pub struct FromIter<'a, I, Item, C> {
     iter: I,
