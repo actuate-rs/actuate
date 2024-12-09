@@ -1054,6 +1054,67 @@ unsafe impl Send for TaskFuture {}
 /// Use a multi-threaded task that runs on a separate thread.
 ///
 /// This will run on the current [`Executor`](`crate::executor::Executor`), polling the task until it completes.
+///
+/// # Examples
+///
+/// ```
+/// use actuate::prelude::*;
+/// use bevy::prelude::*;
+/// use serde::Deserialize;
+/// use std::collections::HashMap;
+///
+/// // Dog breed composable.
+/// #[derive(Data)]
+/// struct Breed {
+///     name: String,
+///     families: Vec<String>,
+/// }
+///
+/// impl Compose for Breed {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         container((
+///             text::headline(cx.me().name.to_owned()),
+///             compose::from_iter(cx.me().families.clone(), |family| {
+///                 text::label(family.to_string())
+///             }),
+///         ))
+///     }
+/// }
+///
+/// #[derive(Deserialize)]
+/// struct Response {
+///     message: HashMap<String, Vec<String>>,
+/// }
+///
+/// // Dog breed list composable.
+/// #[derive(Data)]
+/// struct BreedList;
+///
+/// impl Compose for BreedList {
+///     fn compose(cx: Scope<Self>) -> impl Compose {
+///         let breeds = use_mut(&cx, HashMap::new);
+///
+///         // Spawn a task that loads dog breeds from an HTTP API.
+///         use_task(&cx, move || async move {
+///             let json: Response = reqwest::get("https://dog.ceo/api/breeds/list/all")
+///                 .await
+///                 .unwrap()
+///                 .json()
+///                 .await
+///                 .unwrap();
+///
+///             SignalMut::set(breeds, json.message);
+///         });
+///
+///         // Render the currently loaded breeds.
+///         scroll_view(compose::from_iter((*breeds).clone(), |breed| Breed {
+///             name: breed.0.clone(),
+///             families: breed.1.clone(),
+///         }))
+///         .flex_gap(Val::Px(30.))
+///     }
+/// }
+/// ```
 pub fn use_task<'a, F>(cx: ScopeState<'a>, make_task: impl FnOnce() -> F)
 where
     F: Future<Output = ()> + Send + 'a,
