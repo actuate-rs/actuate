@@ -4,13 +4,13 @@ use crate::{
     use_context, use_ref, Scope, ScopeData, ScopeState,
 };
 use alloc::borrow::Cow;
+use alloc::rc::Rc;
 use core::{
     any::TypeId,
-    cell::{RefCell, UnsafeCell},
-    mem,
+    cell::{Cell, RefCell, UnsafeCell},
+    fmt, mem,
 };
 use slotmap::{DefaultKey, SlotMap};
-use std::{cell::Cell, fmt, rc::Rc};
 
 mod catch;
 pub use self::catch::{catch, Catch};

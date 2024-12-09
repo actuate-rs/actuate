@@ -1,5 +1,5 @@
 use crate::{compose::Compose, Data, Scope, ScopeState};
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 /// Create a composable from a function.
 ///

@@ -1,8 +1,7 @@
 use super::{use_node, AnyCompose, Runtime};
 use crate::{compose::Compose, composer::ComposePtr, data::Data, use_ref, Scope};
 use alloc::borrow::Cow;
-use core::cell::RefCell;
-use std::mem;
+use core::{cell::RefCell, mem};
 
 /// Create a new memoized composable.
 ///

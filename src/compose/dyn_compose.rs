@@ -1,11 +1,12 @@
 use super::{drop_node, AnyCompose, Node, Runtime};
 use crate::{compose::Compose, use_ref, Scope, ScopeData};
-use core::{any::TypeId, cell::UnsafeCell, mem};
-use slotmap::DefaultKey;
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
+use alloc::rc::Rc;
+use core::{
+    any::TypeId,
+    cell::{Cell, RefCell, UnsafeCell},
+    mem,
 };
+use slotmap::DefaultKey;
 
 /// Create a new dynamically-typed composable.
 ///

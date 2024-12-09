@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Run cargo test
+  # Build core features
   core:
     name: Build core
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 use super::CatchContext;
 use crate::{compose::Compose, data::Data, use_provider, Scope, Signal};
+use alloc::rc::Rc;
 use core::mem;
-use std::rc::Rc;
 
 /// Create a composable that catches errors from its children.
 /// This will catch all errors from its descendants, until another `catch` is encountered.
