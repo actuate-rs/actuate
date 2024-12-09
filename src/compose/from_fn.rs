@@ -24,9 +24,7 @@ use std::marker::PhantomData;
 ///
 /// impl Compose for App {
 ///     fn compose(cx: Scope<Self>) -> impl Compose {
-///         compose::from_fn(|| {
-///             dbg!("Composing User");
-///
+///         compose::from_fn(|_cx| {
 ///             User { id: 0 }
 ///         })
 ///     }

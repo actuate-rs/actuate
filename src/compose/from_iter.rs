@@ -72,7 +72,7 @@ where
     C: Compose,
 {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let states: &RefCell<Vec<AnyItemState>> = use_ref(&cx, || RefCell::new(Vec::new()));
+        let states: &RefCell<Vec<ItemState<Item>>> = use_ref(&cx, || RefCell::new(Vec::new()));
         let mut states = states.borrow_mut();
 
         let mut items: Vec<Option<_>> = cx.me().iter.clone().into_iter().map(Some).collect();
@@ -84,16 +84,7 @@ where
                 let item = item.take().unwrap();
 
                 let state = ItemState { item, key: None };
-                let boxed = Box::new(state);
-                let boxed: Box<()> = unsafe { mem::transmute(boxed) };
-                states.push(AnyItemState {
-                    boxed: Some(boxed),
-                    drop: |any_state| {
-                        let state: Box<ItemState<Item>> =
-                            unsafe { mem::transmute(any_state.boxed.take().unwrap()) };
-                        drop(state);
-                    },
-                });
+                states.push(state);
             }
         } else {
             states.truncate(items.len());
@@ -101,9 +92,6 @@ where
 
         for (idx, state) in states.iter_mut().enumerate() {
             let mut nodes = rt.nodes.borrow_mut();
-
-            let state: &mut ItemState<Item> =
-                unsafe { mem::transmute(state.boxed.as_deref_mut().unwrap()) };
 
             if state.key.is_none() {
                 let item_ref: &Item = &state.item;
@@ -151,15 +139,4 @@ where
 struct ItemState<T> {
     item: T,
     key: Option<DefaultKey>,
-}
-
-struct AnyItemState {
-    boxed: Option<Box<()>>,
-    drop: fn(&mut Self),
-}
-
-impl Drop for AnyItemState {
-    fn drop(&mut self) {
-        (self.drop)(self)
-    }
 }
