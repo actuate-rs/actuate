@@ -169,6 +169,13 @@ impl<C: Compose> Compose for Spawn<'_, C> {
                 *entity = Some(target);
             }
 
+            // Check if this entity has been removed externally.
+            if let Some(entity) = entity {
+                if world.get_entity(*entity).is_err() {
+                    return;
+                }
+            }
+
             (cx.me().spawn_fn)(world, entity);
 
             for f in &cx.me().on_insert {
