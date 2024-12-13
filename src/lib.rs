@@ -25,9 +25,9 @@
 //!         let count = use_mut(&cx, || cx.me().start);
 //!
 //!         material_ui((
-//!         text::headline(format!("High five count: {}", count)),
-//!         button(text::label("Up high")).on_click(move || SignalMut::update(count, |x| *x += 1)),
-//!         button(text::label("Down low")).on_click(move || SignalMut::update(count, |x| *x -= 1)),
+//!             text::headline(format!("High five count: {}", count)),
+//!             button(text::label("Up high")).on_click(move || SignalMut::update(count, |x| *x += 1)),
+//!             button(text::label("Down low")).on_click(move || SignalMut::update(count, |x| *x -= 1)),
 //!             if *count == 0 {
 //!                 Some(text::label("Gimme five!"))
 //!             } else {
