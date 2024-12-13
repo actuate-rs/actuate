@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0](https://github.com/actuate-rs/actuate/compare/actuate-v0.19.1...actuate-v0.20.0) - 2024-12-13
+
+## Breaking changes
+
+- Fix `Data` impl for `&T` (63d89ed)
+- Remove Data from root exports (677b160)
+- Replace `Memoize` trait with more specific `Generational` trait (febe238)
+
+## Features
+
+- Impl `Data` for Rc<dyn Fn(..)> and derive `Clone` for `Catch` composable (e038307)
+- Impl `Clone` for `from_fn`, `from_iter`, and `memo` composables (21c016f)
+- Add `material_ui` composable (5dad9a3)
+
+## Fixes
+
+- Replace `std` deps with `core` (68d44a2)
+- Simplify styling in `scroll_view` composable and update `http` example (f90e4c4)
+- Check for removed entities in Spawn composable (c23e158)
+
+## Documentation
+
+- Add docs to `use_local_task` (63d89ed)
+- Add docs to `use_task` (7ddbe84)
+- Update counter example (3b79bb1)
+- Update borrowing docs (efcdfe3)
+
 ## [0.19.1](https://github.com/actuate-rs/actuate/compare/actuate-v0.19.0...actuate-v0.19.1) - 2024-12-09
 
 ## Features
