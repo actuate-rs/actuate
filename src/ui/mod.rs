@@ -68,7 +68,7 @@ impl<C: Compose> Compose for ScrollView<'_, C> {
 
         use_world(
             &cx,
-            move |mut mouse_wheel_events: EventReader<MouseWheel>,
+            move |mut mouse_wheel_events: MessageReader<MouseWheel>,
                   mut scrolled_node_query: Query<&mut ScrollPosition>,
                   keyboard_input: Res<ButtonInput<KeyCode>>| {
                 for mouse_wheel_event in mouse_wheel_events.read() {
@@ -92,11 +92,11 @@ impl<C: Compose> Compose for ScrollView<'_, C> {
                         if let Some(entity) = *entity_cell {
                             if let Ok(mut scroll_position) = scrolled_node_query.get_mut(entity) {
                                 if cx.me().scroll_x {
-                                    scroll_position.offset_x -= dx;
+                                    scroll_position.x -= dx;
                                 }
 
                                 if cx.me().scroll_y {
-                                    scroll_position.offset_y -= dy;
+                                    scroll_position.y -= dy;
                                 }
                             }
                         }
@@ -116,8 +116,8 @@ impl<C: Compose> Compose for ScrollView<'_, C> {
                     ..Default::default()
                 })
                 .on_spawn(move |entity| SignalMut::set(entity_cell, Some(entity.id())))
-                .observe(move |_: Trigger<Pointer<Over>>| SignalMut::set(is_hovered, true))
-                .observe(move |_: Trigger<Pointer<Out>>| SignalMut::set(is_hovered, false)),
+                .observe(move |_: On<Pointer<Over>>| SignalMut::set(is_hovered, true))
+                .observe(move |_: On<Pointer<Out>>| SignalMut::set(is_hovered, false)),
             )
             .content(unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) })
     }

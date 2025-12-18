@@ -86,13 +86,13 @@ impl<C: Compose> Compose for Container<'_, C> {
                         .background_color
                         .unwrap_or(theme.colors.surface_container),
                 ),
-                BoxShadow {
-                    color: Color::srgba(0., 0., 0., 0.12 * cx.me().elevation),
-                    x_offset: Val::Px(0.),
-                    y_offset: Val::Px(1.),
-                    spread_radius: Val::Px(0.),
-                    blur_radius: Val::Px(3. * cx.me().elevation),
-                },
+                BoxShadow::new(
+                    Color::srgba(0., 0., 0., 0.12 * cx.me().elevation),
+                    Val::Px(0.),
+                    Val::Px(1.),
+                    Val::Px(0.),
+                    Val::Px(3. * cx.me().elevation),
+                ),
             )))
             .content(unsafe { Signal::map_unchecked(cx.me(), |me| &me.content) })
     }

@@ -302,7 +302,11 @@ where
     }
 }
 
-fn use_node(cx: ScopeState, compose_ptr: ComposePtr, child_idx: usize) -> (DefaultKey, &Rc<Node>) {
+fn use_node(
+    cx: ScopeState<'_>,
+    compose_ptr: ComposePtr,
+    child_idx: usize,
+) -> (DefaultKey, &Rc<Node>) {
     let mut compose_ptr_cell = Some(compose_ptr);
 
     let (key, node) = use_ref(cx, || {

@@ -6,15 +6,15 @@ use crate::{
 };
 use bevy_app::{App, Plugin};
 use bevy_ecs::{
-    component::{Component, ComponentHooks, StorageType},
+    component::{Component, Mutable, StorageType},
     entity::Entity,
     prelude::*,
     system::{SystemParam, SystemParamItem, SystemState},
     world::{CommandQueue, World},
 };
-use bevy_utils::HashMap;
 use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WakeUp};
 use core::fmt;
+use hashbrown::HashMap;
 use slotmap::{DefaultKey, SlotMap};
 use std::{
     cell::{Cell, RefCell},
@@ -153,24 +153,26 @@ where
 {
     const STORAGE_TYPE: StorageType = StorageType::SparseSet;
 
-    fn register_component_hooks(hooks: &mut ComponentHooks) {
-        hooks.on_insert(|mut world, entity, _| {
+    type Mutability = Mutable;
+
+    fn on_insert() -> Option<bevy_ecs::lifecycle::ComponentHook> {
+        Some(|mut world, cx| {
             world.commands().queue(move |world: &mut World| {
-                let mut composition = world.get_mut::<Composition<C>>(entity).unwrap();
+                let mut composition = world.get_mut::<Composition<C>>(cx.entity).unwrap();
 
                 let content = composition.content.take().unwrap();
-                let target = composition.target.unwrap_or(entity);
+                let target = composition.target.unwrap_or(cx.entity);
 
                 let rt = world.non_send_resource_mut::<Runtime>();
 
                 rt.composers.borrow_mut().insert(
-                    entity,
+                    cx.entity,
                     RuntimeComposer {
                         composer: Composer::new(CompositionContent { content, target }),
                     },
                 );
-            });
-        });
+            })
+        })
     }
 }
 
@@ -322,21 +324,21 @@ macro_rules! impl_system_param_fn {
         }
 
         #[allow(non_snake_case)]
-        impl<E: Event, B: Bundle, Out, Func, $($t: SystemParam + 'static),*> SystemParamFunction<fn(Trigger<E, B>, $($t,)*) -> Out> for Func
+        impl<E: Event, B: Bundle, Out, Func, $($t: SystemParam + 'static),*> SystemParamFunction<fn(On<E, B>, $($t,)*) -> Out> for Func
         where
         for <'a> &'a mut Func:
-                FnMut(Trigger<E, B>, $($t),*) -> Out +
-                FnMut(Trigger<E, B>, $(SystemParamItem<$t>),*) -> Out, Out: 'static
+                FnMut(On<E, B>, $($t),*) -> Out +
+                FnMut(On<E, B>, $(SystemParamItem<$t>),*) -> Out, Out: 'static
         {
-            type In = Trigger<'static, E, B>;
+            type In = On<'static,  'static,E, B>;
             type Out = Out;
             type Param = ($($t,)*);
             #[inline]
-            fn run(&mut self, input: Trigger<E, B>, param_value: SystemParamItem< ($($t,)*)>) -> Out {
+            fn run(&mut self, input: On<E, B>, param_value: SystemParamItem< ($($t,)*)>) -> Out {
                 #[allow(clippy::too_many_arguments)]
                 fn call_inner<E: Event, B: Bundle, Out, $($t,)*>(
-                    mut f: impl FnMut(Trigger<E, B>, $($t,)*)->Out,
-                    input: Trigger<E, B>,
+                    mut f: impl FnMut(On<E, B>, $($t,)*)->Out,
+                    input: On<E, B>,
                     $($t: $t,)*
                 )->Out{
                     f(input, $($t,)*)
@@ -454,7 +456,7 @@ impl_trait_for_tuples!(impl_system_param_fn_once);
 /// Use one or more [`SystemParam`]s from the ECS world.
 ///
 /// `with_world` will be called once during the first composition.
-pub fn use_world_once<Marker, F>(cx: ScopeState, with_world: F) -> &F::Output
+pub fn use_world_once<Marker, F>(cx: ScopeState<'_>, with_world: F) -> &F::Output
 where
     F: SystemParamFunctionOnce<Marker>,
 {
@@ -485,7 +487,7 @@ impl UseCommands {
 }
 
 /// Use access to the current [`Command`] queue.
-pub fn use_commands(cx: ScopeState) -> &UseCommands {
+pub fn use_commands(cx: ScopeState<'_>) -> &UseCommands {
     use_ref(cx, || {
         let commands = RuntimeContext::current().inner.borrow().commands.clone();
         UseCommands { commands }
@@ -500,7 +502,7 @@ struct SpawnContext {
 /// Use a spawned bundle.
 ///
 /// `make_bundle` is called once to create the bundle.
-pub fn use_bundle<B: Bundle>(cx: ScopeState, make_bundle: impl FnOnce() -> B) -> Entity {
+pub fn use_bundle<B: Bundle>(cx: ScopeState<'_>, make_bundle: impl FnOnce() -> B) -> Entity {
     use_bundle_inner(cx, |world, cell| {
         let bundle = make_bundle();
         if let Some(entity) = cell {
@@ -511,7 +513,10 @@ pub fn use_bundle<B: Bundle>(cx: ScopeState, make_bundle: impl FnOnce() -> B) ->
     })
 }
 
-fn use_bundle_inner(cx: ScopeState, spawn: impl FnOnce(&mut World, &mut Option<Entity>)) -> Entity {
+fn use_bundle_inner(
+    cx: ScopeState<'_>,
+    spawn: impl FnOnce(&mut World, &mut Option<Entity>),
+) -> Entity {
     let mut f_cell = Some(spawn);
     let entity = *use_ref(cx, || {
         let world = unsafe { RuntimeContext::current().world_mut() };
@@ -528,7 +533,7 @@ fn use_bundle_inner(cx: ScopeState, spawn: impl FnOnce(&mut World, &mut Option<E
 
     use_drop(cx, move || {
         let world = unsafe { RuntimeContext::current().world_mut() };
-        world.try_despawn(entity);
+        world.try_despawn(entity).ok();
     });
 
     entity
@@ -596,7 +601,7 @@ macro_rules! handler_methods {
             where
                 Self: Sized,
             {
-                self.observe(move |_: Trigger<Pointer<$e>>| f())
+                self.observe(move |_: On<Pointer<$e>>| f())
             }
         )*
     };
@@ -704,8 +709,11 @@ pub trait Modify<'a> {
     fn observe<F, E, B, Marker>(self, observer: F) -> Self
     where
         Self: Sized,
-        F: SystemParamFunction<Marker, In = Trigger<'static, E, B>, Out = ()> + Send + Sync + 'a,
-        E: Event,
+        F: SystemParamFunction<Marker, In = On<'static, 'static, E, B>, Out = ()>
+            + Send
+            + Sync
+            + 'a,
+        E: EntityEvent,
         B: Bundle,
     {
         let observer_cell = Cell::new(Some(observer));
@@ -719,8 +727,8 @@ pub trait Modify<'a> {
         on_mouse_in: Over,
         on_mouse_out: Out,
         on_click: Click,
-        on_mouse_down: Down,
-        on_mouse_up: Up,
+        on_mouse_down: Press,
+        on_mouse_up: Release,
         on_drag: Drag,
         on_drag_start: DragStart,
         on_drag_end: DragEnd,

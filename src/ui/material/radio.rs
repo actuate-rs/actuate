@@ -82,14 +82,14 @@ impl Compose for RadioButton<'_> {
                     ..Default::default()
                 },
                 BorderRadius::MAX,
-                BorderColor(theme.colors.primary),
-                BoxShadow {
-                    color: Color::srgba(0., 0., 0., 0.12 * cx.me().elevation),
-                    x_offset: Val::Px(0.),
-                    y_offset: Val::Px(1.),
-                    spread_radius: Val::Px(0.),
-                    blur_radius: Val::Px(3. * cx.me().elevation),
-                },
+                BorderColor::all(theme.colors.primary),
+                BoxShadow::new(
+                    Color::srgba(0., 0., 0., 0.12 * cx.me().elevation),
+                    Val::Px(0.),
+                    Val::Px(1.),
+                    Val::Px(0.),
+                    Val::Px(3. * cx.me().elevation),
+                ),
             )))
             .content(if cx.me().is_enabled {
                 Some(spawn((

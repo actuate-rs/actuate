@@ -4,7 +4,6 @@ use crate::{
     Scope, Signal,
 };
 use bevy_ecs::{entity::Entity, prelude::*, world::World};
-use bevy_hierarchy::BuildChildren;
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeSet,
@@ -115,8 +114,11 @@ impl<'a, C> Spawn<'a, C> {
     /// Add an observer to the spawned entity.
     pub fn observe<F, E, B, Marker>(mut self, observer: F) -> Self
     where
-        F: SystemParamFunction<Marker, In = Trigger<'static, E, B>, Out = ()> + Send + Sync + 'a,
-        E: Event,
+        F: SystemParamFunction<Marker, In = On<'static, 'static, E, B>, Out = ()>
+            + Send
+            + Sync
+            + 'a,
+        E: EntityEvent,
         B: Bundle,
     {
         let cell = Cell::new(Some(observer));
@@ -128,7 +130,7 @@ impl<'a, C> Spawn<'a, C> {
 
             type SpawnObserveFn<'a, F, E, B, Marker> = Box<
                 dyn FnMut(
-                        Trigger<'_, E, B>,
+                        On<'_, '_, E, B>,
                         ParamSet<'_, '_, (<F as SystemParamFunction<Marker>>::Param,)>,
                     ) + Send
                     + Sync
@@ -142,7 +144,7 @@ impl<'a, C> Spawn<'a, C> {
                 }
 
                 // Safety: The event will be accessed under a shortened lifetime.
-                let trigger: Trigger<'static, E, B> = unsafe { mem::transmute(trigger) };
+                let trigger: On<'static, 'static, E, B> = unsafe { mem::transmute(trigger) };
                 observer.run(trigger, params.p0())
             });
 

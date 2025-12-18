@@ -21,9 +21,10 @@ struct State<T> {
 }
 
 /// Use an animated value.
-pub fn use_animated<T>(cx: ScopeState, make_initial: impl FnOnce() -> T) -> UseAnimated<T>
+pub fn use_animated<T>(cx: ScopeState<'_>, make_initial: impl FnOnce() -> T) -> UseAnimated<'_, T>
 where
     T: VectorSpace + Send + 'static,
+    T::Scalar: From<f32>,
 {
     let start_cell = use_world_once(cx, |time: Res<Time>| Cell::new(Some(time.elapsed_secs())));
 
@@ -63,9 +64,10 @@ where
                 if elapsed < state.duration.as_secs_f32() {
                     SignalMut::set(
                         out,
-                        state
-                            .from
-                            .lerp(state.to, elapsed / state.duration.as_secs_f32()),
+                        state.from.lerp(
+                            state.to,
+                            T::Scalar::from(elapsed / state.duration.as_secs_f32()),
+                        ),
                     );
                 } else {
                     SignalMut::set(out, state.to);

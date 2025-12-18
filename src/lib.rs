@@ -88,8 +88,7 @@
 //! ```
 //!
 //! ## Features
-//! - `std`: Enables features that use Rust's standard library (default).
-//!    With this feature disabled Actuate can be used in `#![no_std]` environments.
+//! - `std`: Enables features that use Rust's standard library (default). With this feature disabled Actuate can be used in `#![no_std]` environments.
 //! - `animation`: Enables the `animation` module for animating values from the [Bevy](https://crates.io/crates/bevy) ECS.
 //!   (enables the `ecs` feature).
 //! - `ecs`: Enables the `ecs` module for bindings to the [Bevy](https://crates.io/crates/bevy) ECS.
@@ -669,7 +668,7 @@ impl<'a, C> Deref for Scope<'a, C> {
 /// Use an immutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_ref<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> &T {
+pub fn use_ref<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> &T {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -692,7 +691,7 @@ struct MutState<T> {
 /// Use a mutable reference to a value of type `T`.
 ///
 /// `make_value` will only be called once to initialize this value.
-pub fn use_mut<T: 'static>(cx: ScopeState, make_value: impl FnOnce() -> T) -> SignalMut<'_, T> {
+pub fn use_mut<T: 'static>(cx: ScopeState<'_>, make_value: impl FnOnce() -> T) -> SignalMut<'_, T> {
     let hooks = unsafe { &mut *cx.hooks.get() };
 
     let idx = cx.hook_idx.get();
@@ -778,7 +777,7 @@ impl<T> fmt::Display for ContextError<T> {
 ///
 /// This context must have already been provided by a parent composable with [`use_provider`],
 /// otherwise this function will return a [`ContextError`].
-pub fn use_context<T: 'static>(cx: ScopeState) -> Result<&Rc<T>, ContextError<T>> {
+pub fn use_context<T: 'static>(cx: ScopeState<'_>) -> Result<&Rc<T>, ContextError<T>> {
     let result = use_ref(cx, || {
         let Some(any) = cx.contexts.borrow().values.get(&TypeId::of::<T>()).cloned() else {
             return Err(ContextError {
@@ -841,7 +840,7 @@ impl<T> Generational for SignalMut<'_, T> {
 }
 
 /// Use an effect that will run whenever the provided dependency is changed.
-pub fn use_effect<D, T>(cx: ScopeState, dependency: D, effect: impl FnOnce(&D))
+pub fn use_effect<D, T>(cx: ScopeState<'_>, dependency: D, effect: impl FnOnce(&D))
 where
     D: PartialEq + Send + 'static,
 {
@@ -863,7 +862,11 @@ where
 /// Use a memoized value of type `T` with a dependency of type `D`.
 ///
 /// `make_value` will update the returned value whenver `dependency` is changed.
-pub fn use_memo<D, T>(cx: ScopeState, dependency: D, make_value: impl FnOnce() -> T) -> Signal<T>
+pub fn use_memo<D, T>(
+    cx: ScopeState<'_>,
+    dependency: D,
+    make_value: impl FnOnce() -> T,
+) -> Signal<'_, T>
 where
     D: PartialEq + Send + 'static,
     T: Send + 'static,

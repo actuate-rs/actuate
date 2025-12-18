@@ -1,6 +1,6 @@
 [package]
 name = "actuate"
-version = "0.20.1"
+version = "0.21.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A reactive user-interface framework"
@@ -8,7 +8,7 @@ repository = "https://github.com/actuate-rs/actuate"
 
 [features]
 animation = ["ecs", "dep:bevy_math", "dep:bevy_time", "dep:tokio"]
-ecs = ["std", "dep:bevy_app", "dep:bevy_ecs", "dep:bevy_hierarchy", "dep:bevy_utils", "dep:bevy_winit"]
+ecs = ["std", "dep:bevy_app", "dep:bevy_ecs", "dep:bevy_utils", "dep:bevy_winit"]
 executor = ["std", "dep:tokio"]
 material = ["ecs", "ui", "picking", "dep:bevy_color", "dep:bevy_input", "dep:bevy_text"]
 picking = ["dep:bevy_picking"]
@@ -28,18 +28,17 @@ members = [
 [dependencies]
 actuate-macros = { version = "0.2.0", path = "macros" }
 ahash = { version = "0.8.11", default-features = false }
-bevy_app = { version = "0.15.0", optional = true }
-bevy_color = { version = "0.15.0", optional = true }
-bevy_ecs = { version = "0.15.0", optional = true }
-bevy_hierarchy = { version = "0.15.0", optional = true }
-bevy_input = { version = "0.15.0", optional = true }
-bevy_math = { version = "0.15.0", optional = true }
-bevy_picking = { version = "0.15.0", optional = true }
-bevy_text = { version = "0.15.0", optional = true }
-bevy_time = { version = "0.15.0", optional = true }
-bevy_ui = { version = "0.15.0", optional = true }
-bevy_utils = { version = "0.15.0", optional = true }
-bevy_winit = { version = "0.15.0", optional = true }
+bevy_app = { version = "0.17.3", optional = true }
+bevy_color = { version = "0.17.3", optional = true }
+bevy_ecs = { version = "0.17.3", optional = true }
+bevy_input = { version = "0.17.3", optional = true }
+bevy_math = { version = "0.17.3", optional = true }
+bevy_picking = { version = "0.17.3", optional = true }
+bevy_text = { version = "0.17.3", optional = true }
+bevy_time = { version = "0.17.3", optional = true }
+bevy_ui = { version = "0.17.3", optional = true }
+bevy_utils = { version = "0.17.3", optional = true }
+bevy_winit = { version = "0.17.3", optional = true }
 crossbeam-queue = { version = "0.3.11", default-features = false, features = ["alloc"] }
 futures = "0.3.31"
 hashbrown = "0.15.2"
@@ -50,7 +49,7 @@ tokio = { version = "1.41.1", features = ["sync"], optional = true }
 typeid = "1.0.2"
 
 [dev-dependencies]
-bevy = { version = "0.15.0" }
+bevy = { version = "0.17.3" }
 reqwest = { version = "0.12.9", features = ["json"] }
 serde = { version = "1.0.215", features = ["derive"] }
 tracing-subscriber = "0.3.18"
